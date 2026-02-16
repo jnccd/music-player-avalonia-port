@@ -23,65 +23,47 @@ public partial class MainView : UserControl
         var path = canvas.Children.OfType<Path>().FirstOrDefault(x => x.Name == "MyPath")!;
         var width = canvas.Bounds.Width;
         var height = canvas.Bounds.Height;
-        var valList = new List<float>();
-        var curVal = 30f;
-        var curValPrime = 0.0f;
-        for (int i = 0; i < canvas.Width; i++)
-        {
-            curValPrime += curVal switch
-            {
-                < 1 => Random.Shared.Next(1, 2),
-                <= 4 => Random.Shared.Next(-1, 2),
-                > 4 => Random.Shared.Next(-1, 1),
-                _ => 0
-            };
-            curVal += curValPrime;
-            valList.Add(curVal);
-        }
+        var margin = 10;
+
         Task.Run(() =>
         {
+            bool dispatchComplete = false;
             while (true)
             {
                 stopwatch.Restart();
+                dispatchComplete = false;
+                float[] fftData = audioLibWrapper.GetCurrentFftSpectrumData();
                 Dispatcher.UIThread.Post(() =>
                 {
                     width = canvas.Bounds.Width;
                     height = canvas.Bounds.Height;
+                    var fftDataSpace = width - margin * 2;
                     var geometry = new StreamGeometry();
                     using (var context = geometry.Open())
                     {
-                        context.BeginFigure(new Point(width - 10, height - 10), true);
-                        context.LineTo(new Point(width, height - 10));
+                        context.BeginFigure(new Point(width - margin, height - margin), true);
+                        context.LineTo(new Point(width, height - margin));
                         context.LineTo(new Point(width, height));
                         context.LineTo(new Point(0, height));
-                        context.LineTo(new Point(0, height - 10));
-                        context.LineTo(new Point(10, height - 10));
-                        for (int i = 10; i < width - 10; i++)
+                        context.LineTo(new Point(0, height - margin));
+                        context.LineTo(new Point(10, height - margin));
+                        for (int i = margin; i < width - margin; i++)
                         {
-                            var sampledListVal = i - 10 < valList.Count ? valList[i - 10] : 0;
-                            context.LineTo(new Point(i, height - 10 - sampledListVal));
+                            var sampledListVal = fftData[(int)((i - margin) / fftDataSpace * fftData.Length)];
+                            context.LineTo(new Point(i, height - margin - sampledListVal));
                         }
                         context.EndFigure(true);
                     }
-                    curValPrime += curVal switch
-                    {
-                        < 1 => Random.Shared.Next(1, 2),
-                        <= 4 => Random.Shared.Next(-1, 3),
-                        > 4 => Random.Shared.Next(-1, 1),
-                        _ => 0
-                    };
-                    curValPrime *= 0.99f;
-                    curVal += curValPrime;
-                    if (canvas.Bounds.Width >= valList.Count)
-                        valList.Add(curVal);
-                    if (canvas.Bounds.Width <= valList.Count)
-                        valList.RemoveAt(0);
 
                     path.Data = geometry;
+                    dispatchComplete = true;
                 });
+                while (!dispatchComplete) { Task.Delay(1).Wait(); }
 
                 frameCounter++;
-                var sleepTime = 16 - (int)stopwatch.ElapsedMilliseconds;
+                var frameTime = stopwatch.ElapsedMilliseconds;
+                Console.WriteLine($"Frame {frameCounter}: {frameTime} ms");
+                var sleepTime = 16 - (int)frameTime;
                 Task.Delay(sleepTime > 0 ? sleepTime : 0).Wait();
             }
         });

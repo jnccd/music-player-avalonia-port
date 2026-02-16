@@ -10,7 +10,9 @@ using SoundFlow.Interfaces;
 using SoundFlow.Metadata.Models;
 using SoundFlow.Providers;
 using SoundFlow.Structs;
+using SoundFlow.Visualization;
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -20,7 +22,6 @@ namespace MusicPlayerAvaloniaPort;
 
 public class AudioLibWrapper
 {
-    private static readonly AudioFormat Format = AudioFormat.DvdHq;
     private static readonly AudioEngine Engine = new MiniAudioEngine();
     private static readonly DeviceConfig DeviceConfig = new MiniAudioDeviceConfig
     {
@@ -38,10 +39,15 @@ public class AudioLibWrapper
             Usage = WasapiUsage.ProAudio // Use ProAudio mode for lower latency on Windows
         }
     };
+    private static readonly AudioFormat PlaybackDeviceFormat = AudioFormat.DvdHq;
     DeviceInfo playbackDeviceInfo;
     AudioPlaybackDevice playbackDevice;
-    StreamDataProvider? dataProvider = null;
     SoundPlayer? soundPlayer = null;
+    StreamDataProvider? playerDataProvider = null;
+    StreamDataProvider? analyzeDataProvider = null;
+    readonly ArrayPool<float> analyzeSamplePool = ArrayPool<float>.Shared;
+    const int ANALYZE_BUFFER_SIZE = 16384;
+    SpectrumAnalyzer spectrumAnalyzer = new SpectrumAnalyzer(PlaybackDeviceFormat, ANALYZE_BUFFER_SIZE);
 
     public AudioLibWrapper()
     {
@@ -50,14 +56,16 @@ public class AudioLibWrapper
             throw new InvalidOperationException("No default playback device found.");
         }
         playbackDeviceInfo = Engine.PlaybackDevices.FirstOrDefault(d => d.IsDefault);
-        playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, Format, DeviceConfig);
+        playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, PlaybackDeviceFormat, DeviceConfig);
         playbackDevice.Start();
     }
 
     public void PlaySong(string songPath)
     {
-        dataProvider?.Dispose();
-        dataProvider = new StreamDataProvider(Engine, new FileStream(songPath, FileMode.Open, FileAccess.Read), new ReadOptions { ReadTags = false });
+        playerDataProvider?.Dispose();
+        playerDataProvider = new StreamDataProvider(Engine, new FileStream(songPath, FileMode.Open, FileAccess.Read), new ReadOptions { ReadTags = false });
+        analyzeDataProvider?.Dispose();
+        analyzeDataProvider = new StreamDataProvider(Engine, new FileStream(songPath, FileMode.Open, FileAccess.Read), new ReadOptions { ReadTags = false });
 
         if (soundPlayer != null)
         {
@@ -65,8 +73,23 @@ public class AudioLibWrapper
 
             soundPlayer.Dispose();
         }
-        soundPlayer = new SoundPlayer(Engine, Format, dataProvider);
+        soundPlayer = new SoundPlayer(Engine, PlaybackDeviceFormat, playerDataProvider);
         playbackDevice.MasterMixer.AddComponent(soundPlayer);
         soundPlayer.Play();
+    }
+
+    public float[] GetCurrentFftSpectrumData()
+    {
+        analyzeDataProvider?.Seek(playerDataProvider!.Position); // Sync positions to get the same audio data for analysis
+
+        var sampleBuffer = analyzeSamplePool.Rent(ANALYZE_BUFFER_SIZE);
+        var sampleBufferSpan = sampleBuffer.AsSpan();
+
+        _ = analyzeDataProvider!.ReadBytes(sampleBufferSpan);
+        spectrumAnalyzer.Process(sampleBufferSpan, PlaybackDeviceFormat.Channels);
+        var re = spectrumAnalyzer.SpectrumData.ToArray();
+
+        analyzeSamplePool.Return(sampleBuffer);
+        return re;
     }
 }
