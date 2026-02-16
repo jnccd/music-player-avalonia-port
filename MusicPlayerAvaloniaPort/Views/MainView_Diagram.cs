@@ -20,50 +20,52 @@ public partial class MainView : UserControl
         Stopwatch stopwatch = new Stopwatch();
 
         var canvas = this.GetLogicalDescendants().OfType<Canvas>().FirstOrDefault(x => x.Name == "DiagramCanvas")!;
-        var path = canvas.Children.OfType<Path>().FirstOrDefault(x => x.Name == "MyPath")!;
         var width = canvas.Bounds.Width;
         var height = canvas.Bounds.Height;
         var margin = 10;
+        var fftDataSpace = width - margin * 2;
+
+        var path = canvas.Children.OfType<Path>().FirstOrDefault(x => x.Name == "MyPath")!;
+        var geometry = new PathGeometry();
+        var figure = new PathFigure() { IsClosed = true, IsFilled = true };
+        Dispatcher.UIThread.Post(() =>
+        {
+            path.Data = geometry;
+            geometry.Figures?.Add(figure);
+            figure.StartPoint = new Point(width - margin, height - margin);
+            figure.Segments!.Add(new LineSegment() { Point = new Point(width, height - margin) });
+            figure.Segments!.Add(new LineSegment() { Point = new Point(width, height) });
+            figure.Segments!.Add(new LineSegment() { Point = new Point(0, height) });
+            figure.Segments!.Add(new LineSegment() { Point = new Point(0, height - margin) });
+            figure.Segments!.Add(new LineSegment() { Point = new Point(margin, height - margin) });
+            for (int i = margin; i < width - margin; i++)
+            {
+                figure.Segments!.Add(new LineSegment() { Point = new Point(i, height - margin) });
+            }
+        });
 
         Task.Run(() =>
         {
-            bool dispatchComplete = false;
             while (true)
             {
                 stopwatch.Restart();
-                dispatchComplete = false;
                 float[] fftData = audioLibWrapper.GetCurrentFftSpectrumData();
                 Dispatcher.UIThread.Post(() =>
                 {
                     width = canvas.Bounds.Width;
                     height = canvas.Bounds.Height;
-                    var fftDataSpace = width - margin * 2;
-                    var geometry = new StreamGeometry();
-                    using (var context = geometry.Open())
+                    fftDataSpace = width - margin * 2;
+                    for (int i = margin; i < width - margin; i++)
                     {
-                        context.BeginFigure(new Point(width - margin, height - margin), true);
-                        context.LineTo(new Point(width, height - margin));
-                        context.LineTo(new Point(width, height));
-                        context.LineTo(new Point(0, height));
-                        context.LineTo(new Point(0, height - margin));
-                        context.LineTo(new Point(10, height - margin));
-                        for (int i = margin; i < width - margin; i++)
-                        {
-                            var sampledListVal = fftData[(int)((i - margin) / fftDataSpace * fftData.Length / 4)] / 200 * height;
-                            context.LineTo(new Point(i, height - margin - sampledListVal));
-                        }
-                        context.EndFigure(true);
+                        var sampledListVal = fftData[(int)((i - margin) / fftDataSpace * fftData.Length / 4)] / 200 * height;
+                        (figure.Segments![i - margin + 5] as LineSegment)!.Point = new Point(i, height - margin - sampledListVal);
                     }
-
-                    path.Data = geometry;
-                    dispatchComplete = true;
                 });
-                while (!dispatchComplete) { Task.Delay(1).Wait(); }
 
                 frameCounter++;
                 var frameTime = stopwatch.ElapsedMilliseconds;
                 var sleepTime = 16 - (int)frameTime;
-                Task.Delay(sleepTime > 0 ? sleepTime : 0).Wait();
+                Task.Delay(16).Wait();
             }
         });
     }

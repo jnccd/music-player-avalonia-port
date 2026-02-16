@@ -83,7 +83,7 @@ public partial class MainView : UserControl
                 frameCounter++;
                 lastTime = globalStopwatch.Elapsed;
                 var sleepTime = 14 - (int)stopwatch.ElapsedMilliseconds;
-                Task.Delay(sleepTime > 0 ? sleepTime : 0).Wait();
+                Task.Delay(16).Wait();
             }
         });
     }
