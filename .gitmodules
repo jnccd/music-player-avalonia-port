@@ -1,0 +1,3 @@
+[submodule "SoundFlow"]
+	path = SoundFlow
+	url = https://github.com/jnccd/SoundFlow
