@@ -49,7 +49,7 @@ public partial class MainView : UserControl
                         context.LineTo(new Point(10, height - margin));
                         for (int i = margin; i < width - margin; i++)
                         {
-                            var sampledListVal = fftData[(int)((i - margin) / fftDataSpace * fftData.Length)];
+                            var sampledListVal = fftData[(int)((i - margin) / fftDataSpace * fftData.Length / 4)] / 200 * height;
                             context.LineTo(new Point(i, height - margin - sampledListVal));
                         }
                         context.EndFigure(true);
@@ -62,7 +62,6 @@ public partial class MainView : UserControl
 
                 frameCounter++;
                 var frameTime = stopwatch.ElapsedMilliseconds;
-                Console.WriteLine($"Frame {frameCounter}: {frameTime} ms");
                 var sleepTime = 16 - (int)frameTime;
                 Task.Delay(sleepTime > 0 ? sleepTime : 0).Wait();
             }
