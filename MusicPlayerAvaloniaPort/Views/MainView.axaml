@@ -1,0 +1,210 @@
+<UserControl
+    x:Class="MusicPlayerAvaloniaPort.MainView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:helpers="clr-namespace:MusicPlayerAvaloniaPort.Converters;assembly=MusicPlayerAvaloniaPort"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:sys="clr-namespace:System;assembly=mscorlib"
+    xmlns:vm="using:MusicPlayerAvaloniaPort.ViewModels"
+    x:DataType="vm:MainViewModel"
+    Background="Transparent"
+    PointerMoved="MainView_PointerMoved"
+    PointerPressed="MainView_PointerPressed"
+    PointerReleased="MainView_PointerReleased"
+    PointerWheelChanged="MainView_PointerWheelChanged"
+    mc:Ignorable="d">
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="PrimaryColor" Color="#007B82" />
+        <SolidColorBrush x:Key="PrimaryColorBrighter" Color="#66AFB4" />
+        <sys:Double x:Key="VolumeBarHeight">10</sys:Double>
+        <sys:Double x:Key="BottomGridIconSize">24</sys:Double>
+
+        <helpers:AddMultiplyConverter x:Key="AddMultiplyConverter" />
+    </UserControl.Resources>
+    <Border BorderBrush="#0AE3E3E3" BorderThickness="1">
+        <Grid
+            Name="RootGrid"
+            Margin="32,12"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
+            ColumnDefinitions="*"
+            ColumnSpacing="8"
+            RowDefinitions="50, *, 40"
+            RowSpacing="8">
+            <Grid.Effect>
+                <DropShadowEffect
+                    BlurRadius="1"
+                    OffsetX="5"
+                    OffsetY="5"
+                    Opacity="0.5"
+                    Color="Black" />
+            </Grid.Effect>
+            <Grid Grid.Row="0" ColumnDefinitions="*, 24, 32, 6, 100">
+                <Canvas
+                    Name="TitleCanvas"
+                    Grid.Column="0"
+                    Height="50"
+                    HorizontalAlignment="Stretch">
+                    <Canvas.OpacityMask>
+                        <LinearGradientBrush StartPoint="0%,50%" EndPoint="100%,50%">
+                            <GradientStop Offset="0.0" Color="rgba(255, 255, 255, 0)" />
+                            <!--  Fully transparent at the start  -->
+                            <GradientStop Offset="0.2" Color="rgb(255, 255, 255)" />
+                            <!--  Fully opaque after 10%  -->
+                            <GradientStop Offset="0.8" Color="rgb(255, 255, 255)" />
+                            <!--  Fully opaque until 90%  -->
+                            <GradientStop Offset="1.0" Color="rgba(255, 255, 255, 0)" />
+                            <!--  Fully transparent at the end  -->
+                        </LinearGradientBrush>
+                    </Canvas.OpacityMask>
+                    <TextBlock
+                        Name="TitleCanvasText1"
+                        Canvas.Left="0"
+                        FontFamily="BigNoodleTitling"
+                        FontSize="35">
+                        PANAM - 大貫妙子 (Taeko Onuki) – Summer Connection (Official Audio)
+                    </TextBlock>
+                    <TextBlock
+                        Name="TitleCanvasText2"
+                        Canvas.Left="90"
+                        FontFamily="BigNoodleTitling"
+                        FontSize="35">
+                        PANAM - 大貫妙子 (Taeko Onuki) – Summer Connection (Official Audio)
+                    </TextBlock>
+                </Canvas>
+                <Rectangle Grid.Column="1" Fill="Transparent" />
+                <Image
+                    Grid.Column="2"
+                    Width="32"
+                    Height="32"
+                    Source="/Assets/volume.png" />
+                <Rectangle Grid.Column="3" Fill="Transparent" />
+                <StackPanel
+                    Name="VolumeBarStackPanel"
+                    Grid.Column="4"
+                    Margin="0,0,-6,0"
+                    VerticalAlignment="Center"
+                    PointerPressed="VolumeBarStackPanel_PointerPressed"
+                    Spacing="0">
+                    <Rectangle
+                        Name="VolumeBarRectangle"
+                        Height="{StaticResource VolumeBarHeight}"
+                        MinWidth="20"
+                        Margin="4,0"
+                        HorizontalAlignment="Stretch"
+                        Fill="White">
+                        <Rectangle.RenderTransform>
+                            <TranslateTransform X="0" Y="{StaticResource VolumeBarHeight}" />
+                        </Rectangle.RenderTransform>
+                    </Rectangle>
+                    <Rectangle
+                        Name="VolumeBarRectangle1"
+                        Width="50"
+                        Height="{StaticResource VolumeBarHeight}"
+                        MinWidth="20"
+                        Margin="4,0"
+                        HorizontalAlignment="Left"
+                        Fill="{StaticResource PrimaryColorBrighter}">
+                        <Rectangle.RenderTransform>
+                            <TranslateTransform X="0" Y="0" />
+                        </Rectangle.RenderTransform>
+                    </Rectangle>
+                    <Rectangle
+                        Name="VolumeBarRectangle2"
+                        Width="40"
+                        Height="{StaticResource VolumeBarHeight}"
+                        MinWidth="20"
+                        Margin="4,0"
+                        HorizontalAlignment="Left"
+                        Fill="{StaticResource PrimaryColor}">
+                        <Rectangle.RenderTransform>
+                            <TranslateTransform X="0" Y="{Binding Source={StaticResource VolumeBarHeight}, Converter={StaticResource AddMultiplyConverter}, ConverterParameter='0,-1'}" />
+                        </Rectangle.RenderTransform>
+                    </Rectangle>
+                </StackPanel>
+            </Grid>
+            <Canvas
+                Name="DiagramCanvas"
+                Grid.Row="1"
+                Margin="12,0"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch">
+                <Path
+                    Name="MyPath"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    Fill="{StaticResource PrimaryColor}" />
+            </Canvas>
+            <Grid
+                Grid.Row="2"
+                Margin="-8,0"
+                ColumnDefinitions="36, *, 36, 36, 36">
+                <Button
+                    Name="ButtonPlayPause"
+                    Grid.Column="0"
+                    Background="Transparent">
+                    <Image
+                        Width="{StaticResource BottomGridIconSize}"
+                        Height="{StaticResource BottomGridIconSize}"
+                        Source="/Assets/play.png" />
+                </Button>
+                <StackPanel
+                    Name="DurationBarStackPanel"
+                    Grid.Column="1"
+                    VerticalAlignment="Center"
+                    PointerPressed="DurationBarStackPanel_PointerPressed"
+                    Spacing="0">
+                    <Rectangle
+                        Name="DurationBarRectangle"
+                        Height="4"
+                        MinWidth="20"
+                        Margin="4,0"
+                        HorizontalAlignment="Stretch"
+                        Fill="White" />
+                    <Rectangle
+                        Name="DurationBarDurationRectangle"
+                        Width="50"
+                        Height="4"
+                        MinWidth="20"
+                        Margin="4,0"
+                        HorizontalAlignment="Left"
+                        Fill="{StaticResource PrimaryColor}">
+                        <Rectangle.RenderTransform>
+                            <TranslateTransform X="0" Y="-4" />
+                        </Rectangle.RenderTransform>
+                    </Rectangle>
+                </StackPanel>
+                <Button
+                    Name="ButtonUpvote"
+                    Grid.Column="2"
+                    Background="Transparent"
+                    Click="ButtonUpvote_Click">
+                    <Image
+                        Width="{StaticResource BottomGridIconSize}"
+                        Height="{StaticResource BottomGridIconSize}"
+                        Source="/Assets/Upvote.png" />
+                </Button>
+                <Button
+                    Name="ButtonOptions"
+                    Grid.Column="3"
+                    Background="Transparent">
+                    <Image
+                        Width="{StaticResource BottomGridIconSize}"
+                        Height="{StaticResource BottomGridIconSize}"
+                        Source="/Assets/Options.png" />
+                </Button>
+                <Button
+                    Name="ButtonClose"
+                    Grid.Column="4"
+                    Background="Transparent"
+                    Click="ButtonClose_Click">
+                    <Image
+                        Width="{StaticResource BottomGridIconSize}"
+                        Height="{StaticResource BottomGridIconSize}"
+                        Source="/Assets/Close.png" />
+                </Button>
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>
