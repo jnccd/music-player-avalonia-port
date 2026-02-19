@@ -14,33 +14,49 @@ namespace MusicPlayerAvaloniaPort;
 
 public partial class MainView : UserControl
 {
+    int diagramThickness = 10;
+
+    void UpdateDiagramScaling()
+    {
+        var canvas = this.GetLogicalDescendants().OfType<Canvas>().FirstOrDefault(x => x.Name == "DiagramCanvas")!;
+        var path = canvas.Children.OfType<Path>().FirstOrDefault(x => x.Name == "MyPath")!;
+        var geometry = (path.Data as PathGeometry)!;
+        var figure = geometry?.Figures?[0];
+        if (figure == null) return;
+
+        var canvasWidth = canvas.Bounds.Width;
+        var canvasHeight = canvas.Bounds.Height;
+        figure.StartPoint = new Point(canvasWidth, canvasHeight - diagramThickness);
+        figure.Segments![0] = new LineSegment() { Point = new Point(canvasWidth, canvasHeight) };
+        figure.Segments![1] = new LineSegment() { Point = new Point(0, canvasHeight) };
+        figure.Segments![2] = new LineSegment() { Point = new Point(0, canvasHeight - diagramThickness) };
+    }
+
     void RunDiagramUpdater()
     {
         int frameCounter = 0;
         Stopwatch stopwatch = new Stopwatch();
 
         var canvas = this.GetLogicalDescendants().OfType<Canvas>().FirstOrDefault(x => x.Name == "DiagramCanvas")!;
-        var width = canvas.Bounds.Width;
-        var height = canvas.Bounds.Height;
-        var margin = 10;
-        var fftDataSpace = width - margin * 2;
+        var canvasWidth = canvas.Bounds.Width;
+        var canvasHeight = canvas.Bounds.Height;
+        var fftDataSpace = canvasWidth - diagramThickness * 2;
 
         var path = canvas.Children.OfType<Path>().FirstOrDefault(x => x.Name == "MyPath")!;
         var geometry = new PathGeometry();
         var figure = new PathFigure() { IsClosed = true, IsFilled = true };
+        var numBorderSegments = 3;
         Dispatcher.UIThread.Post(() =>
         {
             path.Data = geometry;
             geometry.Figures?.Add(figure);
-            figure.StartPoint = new Point(width - margin, height - margin);
-            figure.Segments!.Add(new LineSegment() { Point = new Point(width, height - margin) });
-            figure.Segments!.Add(new LineSegment() { Point = new Point(width, height) });
-            figure.Segments!.Add(new LineSegment() { Point = new Point(0, height) });
-            figure.Segments!.Add(new LineSegment() { Point = new Point(0, height - margin) });
-            figure.Segments!.Add(new LineSegment() { Point = new Point(margin, height - margin) });
-            for (int i = margin; i < width - margin; i++)
+            figure.StartPoint = new Point(canvasWidth, canvasHeight - diagramThickness);
+            figure.Segments!.Add(new LineSegment() { Point = new Point(canvasWidth, canvasHeight) });
+            figure.Segments!.Add(new LineSegment() { Point = new Point(0, canvasHeight) });
+            figure.Segments!.Add(new LineSegment() { Point = new Point(0, canvasHeight - diagramThickness) });
+            for (int i = 0; i < canvasWidth; i++)
             {
-                figure.Segments!.Add(new LineSegment() { Point = new Point(i, height - margin) });
+                figure.Segments!.Add(new LineSegment() { Point = new Point(i, canvasHeight - diagramThickness) });
             }
         });
 
@@ -52,13 +68,21 @@ public partial class MainView : UserControl
                 float[] fftData = audioLibWrapper.GetCurrentFftSpectrumData();
                 Dispatcher.UIThread.Post(() =>
                 {
-                    width = canvas.Bounds.Width;
-                    height = canvas.Bounds.Height;
-                    fftDataSpace = width - margin * 2;
-                    for (int i = margin; i < width - margin; i++)
+                    canvasWidth = canvas.Bounds.Width;
+                    canvasHeight = canvas.Bounds.Height;
+                    fftDataSpace = canvasWidth;
+                    while (figure.Segments?.Count - 1 < fftDataSpace + numBorderSegments)
                     {
-                        var sampledListVal = fftData[(int)((i - margin) / fftDataSpace * fftData.Length / 4)] / 200 * height;
-                        (figure.Segments![i - margin + 5] as LineSegment)!.Point = new Point(i, height - margin - sampledListVal);
+                        figure.Segments!.Add(new LineSegment() { Point = new Point(diagramThickness + figure.Segments.Count, canvasHeight - diagramThickness) });
+                    }
+                    while (figure.Segments?.Count - 1 > fftDataSpace + numBorderSegments)
+                    {
+                        figure.Segments!.RemoveAt(figure.Segments.Count - 1);
+                    }
+                    for (int i = 0; i < canvasWidth; i++)
+                    {
+                        var sampledListVal = fftData[(int)(i / fftDataSpace * fftData.Length / 4)] / 200 * canvasHeight;
+                        (figure.Segments![i + numBorderSegments] as LineSegment)!.Point = new Point(i, canvasHeight - diagramThickness - sampledListVal);
                     }
                 });
 

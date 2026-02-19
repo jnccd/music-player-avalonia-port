@@ -74,6 +74,11 @@ public partial class MainView : UserControl
         effect?.OffsetY = 5 * (this.VisualRoot?.RenderScaling ?? 1);
     }
 
+    private void MainView_SizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        UpdateDiagramScaling();
+    }
+
     private void MainView_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
     {
         if (e.Delta.Y > 0)

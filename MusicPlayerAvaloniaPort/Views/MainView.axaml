@@ -13,6 +13,7 @@
     PointerPressed="MainView_PointerPressed"
     PointerReleased="MainView_PointerReleased"
     PointerWheelChanged="MainView_PointerWheelChanged"
+    SizeChanged="MainView_SizeChanged"
     mc:Ignorable="d">
     <UserControl.Resources>
         <SolidColorBrush x:Key="PrimaryColor" Color="#007B82" />
