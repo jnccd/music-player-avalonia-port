@@ -1,18 +1,19 @@
 {
-  description = "Nix Dev shell for Avalonia .NET Desktop/Android development";
+  description = "Nix Dev shell for Avalonia .NET Desktop development";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+    numtide-utils.url = "github:numtide/flake-utils";
+    jnccd-utils.url = "github:jnccd/nix-utils";
+  };
 
-  outputs = { self, nixpkgs }:
-    let
-      system = "x86_64-linux";
-      pkgs = import nixpkgs {inherit system;};
-    in {
-      devShells.${system} = {
-        default = with pkgs;
-          mkShell {
-            packages = [ icu dotnet-sdk_10 dotnet-ef ];
-          }
-      };
-    };
+  outputs = { self, nixpkgs, ... }@inputs:
+    (inputs.numtide-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ]
+      (system: {
+        devShells.default = inputs.jnccd-utils.lib.mkUnfrozenDotnetShell {
+          inherit system nixpkgs;
+          dotnetVersion = "10.0";
+          includeAndroidSdk = false;
+        };
+      }));
 }
