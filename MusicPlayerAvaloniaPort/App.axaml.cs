@@ -6,6 +6,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using MusicPlayerAvaloniaPort.Configuration;
+using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.ViewModels;
 
 namespace MusicPlayerAvaloniaPort;
