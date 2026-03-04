@@ -14,6 +14,7 @@ using SoundFlow.Visualization;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -44,13 +45,25 @@ public class AudioLibWrapper
     AudioPlaybackDevice playbackDevice;
     SoundPlayer? soundPlayer = null;
     StreamDataProvider? playerDataProvider = null;
-    StreamDataProvider? analyzeDataProvider = null;
-    readonly ArrayPool<float> analyzeSamplePool = ArrayPool<float>.Shared;
-    const int ANALYZE_BUFFER_SIZE = 16384;
-    SpectrumAnalyzer spectrumAnalyzer = new SpectrumAnalyzer(PlaybackDeviceFormat, ANALYZE_BUFFER_SIZE);
+    readonly ArrayPool<float> arrayPool = ArrayPool<float>.Shared;
+
+    // Sample Reader Thread
+    const int SAMPLE_BUFFER_SIZE = 1024;
+    StreamDataProvider? sampleReaderDataProvider = null;
+    float[]? globalSampleArray = null;
+    int globalSampleArrayWriteHead = 0;
+    Task? SampleReaderThread = null;
+    bool CancelReading = false;
+
+    // FFT Vars
+    const int FFT_BUFFER_SIZE = 16384 / 4;
+    SpectrumAnalyzer spectrumAnalyzer = new SpectrumAnalyzer(PlaybackDeviceFormat, FFT_BUFFER_SIZE);
+    float[] fftZeroResult;
 
     public AudioLibWrapper()
     {
+        fftZeroResult = arrayPool.Rent(FFT_BUFFER_SIZE);
+
         if (Engine.PlaybackDevices.Length == 0)
         {
             throw new InvalidOperationException("No default playback device found.");
@@ -64,32 +77,62 @@ public class AudioLibWrapper
     {
         playerDataProvider?.Dispose();
         playerDataProvider = new StreamDataProvider(Engine, new FileStream(songPath, FileMode.Open, FileAccess.Read), new ReadOptions { ReadTags = false });
-        analyzeDataProvider?.Dispose();
-        analyzeDataProvider = new StreamDataProvider(Engine, new FileStream(songPath, FileMode.Open, FileAccess.Read), new ReadOptions { ReadTags = false });
+        sampleReaderDataProvider?.Dispose();
+        sampleReaderDataProvider = new StreamDataProvider(Engine, new FileStream(songPath, FileMode.Open, FileAccess.Read), new ReadOptions { ReadTags = false });
 
         if (soundPlayer != null)
         {
             playbackDevice.MasterMixer.RemoveComponent(soundPlayer);
-
             soundPlayer.Dispose();
         }
         soundPlayer = new SoundPlayer(Engine, PlaybackDeviceFormat, playerDataProvider);
         playbackDevice.MasterMixer.AddComponent(soundPlayer);
         soundPlayer.Play();
+
+        if (SampleReaderThread != null)
+        {
+            CancelReading = true;
+            SampleReaderThread.Wait();
+        }
+        CancelReading = false;
+        Debug.WriteLine($"{DateTime.Now:HH:mm:ss.ffff} Starting Reading!");
+        SampleReaderThread = Task.Run(() =>
+        {
+            if (globalSampleArray != null) arrayPool.Return(globalSampleArray);
+            globalSampleArray = arrayPool.Rent(playerDataProvider.Length > 0 ? playerDataProvider.Length / 4 : 48000 * 60 * 5);
+            globalSampleArrayWriteHead = 0;
+
+            var sampleBuffer = arrayPool.Rent(SAMPLE_BUFFER_SIZE);
+            var sampleBufferSpan = sampleBuffer.AsSpan();
+            int bytesRead;
+
+            while (!CancelReading &&
+                globalSampleArrayWriteHead + SAMPLE_BUFFER_SIZE < globalSampleArray.Length &&
+                // Read buffer from audio file
+                (bytesRead = sampleReaderDataProvider!.ReadBytes(sampleBufferSpan)) > 0)
+            {
+                // Write into global array
+                Buffer.BlockCopy(sampleBuffer, 0, globalSampleArray, globalSampleArrayWriteHead * sizeof(float), bytesRead / sizeof(float) * sizeof(float));
+                globalSampleArrayWriteHead += bytesRead / sizeof(float);
+            }
+            Debug.WriteLine($"{DateTime.Now:HH:mm:ss.ffff} Done Reading!");
+
+            arrayPool.Return(sampleBuffer);
+        });
     }
 
     public float[] GetCurrentFftSpectrumData()
     {
-        analyzeDataProvider?.Seek(playerDataProvider!.Position); // Sync positions to get the same audio data for analysis
+        if (globalSampleArrayWriteHead <= (playerDataProvider!.Position / 4) + (FFT_BUFFER_SIZE / 2) + 1
+            || playerDataProvider!.Position / 4 <= FFT_BUFFER_SIZE / 2 + 1)
+            return fftZeroResult;
 
-        var sampleBuffer = analyzeSamplePool.Rent(ANALYZE_BUFFER_SIZE);
-        var sampleBufferSpan = sampleBuffer.AsSpan();
+        Memory<float> memorySlice = globalSampleArray.AsMemory((playerDataProvider!.Position / 4) - (FFT_BUFFER_SIZE / 2), FFT_BUFFER_SIZE);
+        Span<float> sampleBufferSpan = memorySlice.Span;
 
-        _ = analyzeDataProvider!.ReadBytes(sampleBufferSpan);
         spectrumAnalyzer.Process(sampleBufferSpan, PlaybackDeviceFormat.Channels);
         var re = spectrumAnalyzer.SpectrumData.ToArray();
 
-        analyzeSamplePool.Return(sampleBuffer);
         return re;
     }
 }
