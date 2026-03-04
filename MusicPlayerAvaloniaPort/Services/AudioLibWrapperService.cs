@@ -19,9 +19,10 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace MusicPlayerAvaloniaPort;
+namespace MusicPlayerAvaloniaPort.Services;
 
-public class AudioLibWrapper
+[RegisterImplementation(ServiceRegisterType.Singleton, typeof(AudioLibWrapperService))]
+public class AudioLibWrapperService
 {
     private static readonly AudioEngine Engine = new MiniAudioEngine();
     private static readonly DeviceConfig DeviceConfig = new MiniAudioDeviceConfig
@@ -60,7 +61,7 @@ public class AudioLibWrapper
     SpectrumAnalyzer spectrumAnalyzer = new SpectrumAnalyzer(PlaybackDeviceFormat, FFT_BUFFER_SIZE);
     float[] fftZeroResult;
 
-    public AudioLibWrapper()
+    public AudioLibWrapperService()
     {
         fftZeroResult = arrayPool.Rent(FFT_BUFFER_SIZE);
 

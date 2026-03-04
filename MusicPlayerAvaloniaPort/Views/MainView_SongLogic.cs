@@ -3,14 +3,17 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
+using Microsoft.Extensions.DependencyInjection;
 using MusicPlayerAvaloniaPort.Configuration;
+using MusicPlayerAvaloniaPort.Helpers;
+using MusicPlayerAvaloniaPort.Services;
 
 namespace MusicPlayerAvaloniaPort;
 
 public partial class MainView : UserControl
 {
-    SongManager songManager = new();
-    AudioLibWrapper audioLibWrapper = new();
+    SongManagerService songManager = ServiceContainer.Services.GetService<SongManagerService>();
+    AudioLibWrapperService audioLibWrapper = ServiceContainer.Services.GetService<AudioLibWrapperService>();
 
     void MapLocalSongLibrary()
     {
@@ -26,13 +29,13 @@ public partial class MainView : UserControl
             }).Result;
             var folder = folders?.FirstOrDefault();
 
-            if (folder == null || !Helpers.DirOrSubDirsContainMp3(folder.Path.AbsolutePath))
+            if (folder == null || !HelperFuncs.DirOrSubDirsContainMp3(folder.Path.AbsolutePath))
                 window?.Close();
 
             Config.Data.SongLibraryPath = folder!.Path.AbsolutePath;
         }
 
-        songManager.AvailableSongPaths = Helpers.FindAllMp3FilesInDir(Config.Data.SongLibraryPath);
+        songManager.AvailableSongPaths = HelperFuncs.FindAllMp3FilesInDir(Config.Data.SongLibraryPath);
     }
 
     void InitPlayingCurrentSong(string CurrentSongPath)

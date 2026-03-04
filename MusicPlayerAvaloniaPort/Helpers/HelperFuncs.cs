@@ -9,9 +9,9 @@ using System.Dynamic;
 using System.IO;
 using System.Linq;
 
-namespace MusicPlayerAvaloniaPort;
+namespace MusicPlayerAvaloniaPort.Helpers;
 
-public class Helpers
+public class HelperFuncs
 {
     public static List<string> FindAllMp3FilesInDir(string StartDir)
     {
@@ -39,7 +39,7 @@ public class Helpers
         return false;
     }
 
-    public static Stream ModifyImagePixels(SKBitmap bitmap, Color col)
+    public static Stream ModifyRGBChannelsAndKeepAlpha(SKBitmap bitmap, Color col)
     {
         // Lock the pixels
         IntPtr pixels = bitmap.GetPixels(out var pixelInfo);

@@ -1,6 +1,8 @@
 using System;
 using Avalonia;
 
+namespace MusicPlayerAvaloniaPort.Helpers;
+
 public static class Globals
 {
     public static readonly Point InitialWindowSize = new(625, 375);

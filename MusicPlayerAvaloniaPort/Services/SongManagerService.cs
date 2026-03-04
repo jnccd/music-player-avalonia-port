@@ -4,9 +4,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace MusicPlayerAvaloniaPort;
+namespace MusicPlayerAvaloniaPort.Services;
 
-public class SongManager
+[RegisterImplementation(ServiceRegisterType.Singleton, typeof(SongManagerService))]
+public class SongManagerService
 {
     public List<string> AvailableSongPaths = new();
 

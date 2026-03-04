@@ -13,6 +13,7 @@ using Avalonia.VisualTree;
 using SkiaSharp;
 using MusicPlayerAvaloniaPort.Configuration;
 using MusicPlayerAvaloniaPort.ViewModels;
+using MusicPlayerAvaloniaPort.Helpers;
 
 namespace MusicPlayerAvaloniaPort;
 
@@ -105,7 +106,7 @@ public partial class MainView : UserControl
         using var upvoteBitmap = SKBitmap.Decode(Environment.CurrentDirectory + "/Assets/Upvote.png");
 
         if (upvoteImage?.Source != null)
-            upvoteImage.Source = new Bitmap(Helpers.ModifyImagePixels(upvoteBitmap, viewModel?.UpvoteLocked == true ? Config.Data.PrimaryColor : Color.FromRgb(255, 255, 255)));
+            upvoteImage.Source = new Bitmap(HelperFuncs.ModifyRGBChannelsAndKeepAlpha(upvoteBitmap, viewModel?.UpvoteLocked == true ? Config.Data.PrimaryColor : Color.FromRgb(255, 255, 255)));
     }
 
     private void VolumeBarStackPanel_PointerPressed(object? sender, PointerPressedEventArgs e)
