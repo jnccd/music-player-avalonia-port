@@ -14,6 +14,7 @@ using SkiaSharp;
 using MusicPlayerAvaloniaPort.Configuration;
 using MusicPlayerAvaloniaPort.ViewModels;
 using MusicPlayerAvaloniaPort.Helpers;
+using Avalonia.Threading;
 
 namespace MusicPlayerAvaloniaPort;
 
@@ -26,15 +27,10 @@ public partial class MainView : UserControl
     public MainView()
     {
         // Avalonia Init
-        InitializeComponent();
+        AvaloniaXamlLoader.Load(this);
 
         // Events
         this.Loaded += MainView_Loaded;
-    }
-
-    private void InitializeComponent()
-    {
-        AvaloniaXamlLoader.Load(this);
     }
 
     private void MainView_Loaded(object? sender, RoutedEventArgs e)
@@ -54,10 +50,20 @@ public partial class MainView : UserControl
         MainView_ScalingChanged(null, EventArgs.Empty);
         songManager.GetNextSong(InitPlayingCurrentSong);
 
-        // Start Loops
+        // Init Loops
+        int frameCounter = 0;
         globalStopwatch.Start();
-        RunDiagramUpdater();
-        RunTitleUpdater();
+        InitDiagramUpdater();
+        InitTitleUpdater();
+        // Start Loops
+        DispatcherTimer.Run(() =>
+        {
+            DoDiagramUpdate();
+            DoTitleUpdate(frameCounter);
+
+            frameCounter++;
+            return true;
+        }, TimeSpan.FromMilliseconds(16), DispatcherPriority.Render);
     }
 
     private void MainView_Closing(object? sender, WindowClosingEventArgs e)

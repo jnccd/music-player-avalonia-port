@@ -11,8 +11,12 @@ public partial class MainViewModel : ViewModelBase
     }
 
     [ObservableProperty]
-    private bool _upvoteLocked = false;
+    private float _volume = 1;
+    [ObservableProperty]
+    private float _playProgress = 0;
 
+    [ObservableProperty]
+    private bool _upvoteLocked = false;
     [RelayCommand]
     public void ToggleUpvoteLocked()
     {
