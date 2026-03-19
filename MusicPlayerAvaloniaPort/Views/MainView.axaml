@@ -22,6 +22,7 @@
         <sys:Double x:Key="BottomGridIconSize">24</sys:Double>
 
         <helpers:AddMultiplyConverter x:Key="AddMultiplyConverter" />
+        <helpers:EitherOrConverter x:Key="EitherOrConverter" />
     </UserControl.Resources>
     <Border BorderBrush="#0AE3E3E3" BorderThickness="1">
         <Grid
@@ -149,7 +150,7 @@
                     <Image
                         Width="{StaticResource BottomGridIconSize}"
                         Height="{StaticResource BottomGridIconSize}"
-                        Source="/Assets/play.png" />
+                        Source="{Binding Playing, Converter={StaticResource EitherOrConverter}, ConverterParameter='./Assets/pause.png|./Assets/play.png'}" />
                 </Button>
                 <StackPanel
                     Name="DurationBarStackPanel"

@@ -26,6 +26,8 @@ public partial class MainViewModel : ViewModelBase
             SetProperty(ref field, value);
         }
     } = 0;
+    [ObservableProperty]
+    private bool _playing = true;
 
     [ObservableProperty]
     private bool _upvoteLocked = false;
@@ -39,5 +41,6 @@ public partial class MainViewModel : ViewModelBase
     public void PlayPause()
     {
         audioLibWrapper?.TogglePlayPause();
+        Playing = audioLibWrapper?.PlayState == SoundFlow.Enums.PlaybackState.Playing;
     }
 }
