@@ -20,7 +20,7 @@ public partial class MainView : UserControl
     Rectangle? durationBarAntiAliasingRectangle;
     Rectangle? durationBarDurationRectangle;
     SolidColorBrush? AntiAliasRectBrush;
-    double PixelSize = 0.5;
+    double PixelScale = 0.5;
 
     private void InitPlayProgressUpdater()
     {
@@ -32,7 +32,7 @@ public partial class MainView : UserControl
         AntiAliasRectBrush = new SolidColorBrush(primaryColorBrush!.Color, primaryColorBrush.Opacity);
         durationBarAntiAliasingRectangle.Fill = AntiAliasRectBrush;
 
-        PixelSize = (this.GetVisualRoot() as Window)!.RenderScaling;
+        PixelScale = 1 / (this.GetVisualRoot() as Window)!.RenderScaling;
     }
 
     private void DoPlayProgressUpdate()
@@ -40,8 +40,8 @@ public partial class MainView : UserControl
         var window = this.GetVisualRoot() as Window;
 
         var pixelProgress = durationBarBackRectangle?.Bounds.Width * audioLibWrapper.PlayProgress ?? 0;
-        durationBarDurationRectangle?.Width = pixelProgress - PixelSize > 0 ? pixelProgress - PixelSize : 0;
+        durationBarDurationRectangle?.Width = pixelProgress - PixelScale > 0 ? pixelProgress - PixelScale : 0;
         durationBarAntiAliasingRectangle?.Width = pixelProgress;
-        AntiAliasRectBrush?.Opacity = pixelProgress % PixelSize;
+        AntiAliasRectBrush?.Opacity = pixelProgress % PixelScale;
     }
 }

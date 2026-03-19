@@ -124,9 +124,11 @@ public partial class MainView : UserControl
         e.Handled = true;
     }
 
-    private void DurationBarStackPanel_PointerPressed(object? sender, PointerPressedEventArgs e)
+    private void DurationBarStackPanel_PointerMoved(object? sender, PointerEventArgs e)
     {
-        Debug.WriteLine("DurationBarStackPanel_PointerPressed!");
+        Debug.WriteLine("DurationBarStackPanel_PointerMoved!");
+        if (!e.Properties.IsLeftButtonPressed)
+            return;
         if (sender is not StackPanel eventRoot)
         {
             Debug.WriteLine("eventRoot null?");
@@ -134,7 +136,7 @@ public partial class MainView : UserControl
         }
 
         var clickPoint = e.GetPosition(eventRoot);
-        var targetPercentage = clickPoint.X / eventRoot.Bounds.Width;
+        var targetPercentage = (clickPoint.X - 3) / (eventRoot.Bounds.Width - 7);
         audioLibWrapper.PlayProgress = (float)targetPercentage;
 
         e.Handled = true;
