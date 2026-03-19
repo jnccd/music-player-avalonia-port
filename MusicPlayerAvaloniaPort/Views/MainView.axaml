@@ -158,12 +158,23 @@
                     PointerPressed="DurationBarStackPanel_PointerPressed"
                     Spacing="0">
                     <Rectangle
-                        Name="DurationBarRectangle"
+                        Name="DurationBarBackRectangle"
                         Height="4"
                         MinWidth="3"
                         Margin="4,0"
                         HorizontalAlignment="Stretch"
                         Fill="White" />
+                    <Rectangle
+                        Name="DurationBarAntiAliasingRectangle"
+                        Height="4"
+                        MinWidth="3"
+                        Margin="4,0"
+                        HorizontalAlignment="Left"
+                        Fill="{StaticResource PrimaryColor}">
+                        <Rectangle.RenderTransform>
+                            <TranslateTransform X="0" Y="-4" />
+                        </Rectangle.RenderTransform>
+                    </Rectangle>
                     <Rectangle
                         Name="DurationBarDurationRectangle"
                         Height="4"
@@ -172,7 +183,7 @@
                         HorizontalAlignment="Left"
                         Fill="{StaticResource PrimaryColor}">
                         <Rectangle.RenderTransform>
-                            <TranslateTransform X="0" Y="-4" />
+                            <TranslateTransform X="0" Y="-8" />
                         </Rectangle.RenderTransform>
                     </Rectangle>
                 </StackPanel>

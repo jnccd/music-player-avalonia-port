@@ -45,6 +45,8 @@ public partial class MainView : UserControl
     void DoTitleUpdate(ulong frameCount)
     {
         var currentTIme = globalStopwatch.Elapsed;
+        if (audioLibWrapper.PlayState != SoundFlow.Enums.PlaybackState.Playing)
+            return;
         var movement = (currentTIme! - titleLastUpdateTime!).Value.Milliseconds / 69.0;
 
         if (titleCanvas!.Bounds.Width > titleCanvasText1!.DesiredSize.Width)

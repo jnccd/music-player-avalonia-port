@@ -47,6 +47,8 @@ public partial class MainView : UserControl
 
     void DoDiagramUpdate()
     {
+        if (audioLibWrapper.PlayState != SoundFlow.Enums.PlaybackState.Playing)
+            return;
         float[] fftData = audioLibWrapper.GetCurrentFftSpectrumData();
         var canvasWidth = diagramCanvas!.Bounds.Width;
         var canvasHeight = diagramCanvas.Bounds.Height;
