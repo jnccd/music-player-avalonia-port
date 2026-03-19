@@ -144,7 +144,8 @@
                 <Button
                     Name="ButtonPlayPause"
                     Grid.Column="0"
-                    Background="Transparent">
+                    Background="Transparent"
+                    Command="{Binding PlayPause}">
                     <Image
                         Width="{StaticResource BottomGridIconSize}"
                         Height="{StaticResource BottomGridIconSize}"

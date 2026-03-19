@@ -34,4 +34,10 @@ public partial class MainViewModel : ViewModelBase
     {
         UpvoteLocked = !UpvoteLocked;
     }
+
+    [RelayCommand]
+    public void PlayPause()
+    {
+        audioLibWrapper?.TogglePlayPause();
+    }
 }

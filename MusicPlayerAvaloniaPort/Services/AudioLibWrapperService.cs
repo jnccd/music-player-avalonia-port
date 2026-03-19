@@ -67,13 +67,9 @@ public class AudioLibWrapperService
     /// </summary>
     public float Volume
     {
-        get;
-        set
-        {
-            field = value;
-            soundPlayer?.Volume = value;
-        }
-    } = 1;
+        get => soundPlayer?.Volume ?? 0;
+        set => soundPlayer?.Volume = value;
+    }
     /// <summary>
     /// [0,1]
     /// </summary>
@@ -85,6 +81,10 @@ public class AudioLibWrapperService
             if (value != null)
                 soundPlayer?.Seek(value.Value * soundPlayer.Duration);
         }
+    }
+    public PlaybackState? PlayState
+    {
+        get => soundPlayer?.State;
     }
 
     public AudioLibWrapperService()
@@ -98,6 +98,17 @@ public class AudioLibWrapperService
         playbackDeviceInfo = Engine.PlaybackDevices.FirstOrDefault(d => d.IsDefault);
         playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, PlaybackDeviceFormat, DeviceConfig);
         playbackDevice.Start();
+    }
+
+    public void TogglePlayPause()
+    {
+        if (soundPlayer != null)
+        {
+            if (soundPlayer.State == PlaybackState.Playing)
+                soundPlayer.Pause();
+            else
+                soundPlayer.Play();
+        }
     }
 
     public void PlaySong(string songPath)
