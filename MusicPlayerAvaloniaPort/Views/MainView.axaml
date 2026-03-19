@@ -159,15 +159,14 @@
                     <Rectangle
                         Name="DurationBarRectangle"
                         Height="4"
-                        MinWidth="20"
+                        MinWidth="3"
                         Margin="4,0"
                         HorizontalAlignment="Stretch"
                         Fill="White" />
                     <Rectangle
                         Name="DurationBarDurationRectangle"
-                        Width="50"
                         Height="4"
-                        MinWidth="20"
+                        MinWidth="3"
                         Margin="4,0"
                         HorizontalAlignment="Left"
                         Fill="{StaticResource PrimaryColor}">

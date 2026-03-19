@@ -61,6 +61,32 @@ public class AudioLibWrapperService
     SpectrumAnalyzer spectrumAnalyzer = new SpectrumAnalyzer(PlaybackDeviceFormat, FFT_BUFFER_SIZE);
     float[] fftZeroResult;
 
+    // Setters
+    /// <summary>
+    /// [0,1]
+    /// </summary>
+    public float Volume
+    {
+        get;
+        set
+        {
+            field = value;
+            soundPlayer?.Volume = value;
+        }
+    } = 1;
+    /// <summary>
+    /// [0,1]
+    /// </summary>
+    public float? PlayProgress
+    {
+        get => soundPlayer?.Time / soundPlayer?.Duration;
+        set
+        {
+            if (value != null)
+                soundPlayer?.Seek(value.Value * soundPlayer.Duration);
+        }
+    }
+
     public AudioLibWrapperService()
     {
         fftZeroResult = arrayPool.Rent(FFT_BUFFER_SIZE);

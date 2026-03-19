@@ -15,6 +15,7 @@ using MusicPlayerAvaloniaPort.Configuration;
 using MusicPlayerAvaloniaPort.ViewModels;
 using MusicPlayerAvaloniaPort.Helpers;
 using Avalonia.Threading;
+using Color = Avalonia.Media.Color;
 
 namespace MusicPlayerAvaloniaPort;
 
@@ -51,15 +52,17 @@ public partial class MainView : UserControl
         songManager.GetNextSong(InitPlayingCurrentSong);
 
         // Init Loops
-        int frameCounter = 0;
+        ulong frameCounter = 0;
         globalStopwatch.Start();
         InitDiagramUpdater();
         InitTitleUpdater();
+        InitPlayProgressUpdater();
         // Start Loops
         DispatcherTimer.Run(() =>
         {
             DoDiagramUpdate();
             DoTitleUpdate(frameCounter);
+            DoPlayProgressUpdate();
 
             frameCounter++;
             return true;

@@ -42,7 +42,7 @@ public partial class MainView : UserControl
         titleCanvasText1X = titleCanvas.Bounds.Width * ((titleInitialOpacityMask?.GradientStops.Skip(1).FirstOrDefault()?.Offset ?? 0.2) / 2);
         titleCanvasText2X = titleCanvasText1X + titleCanvasText1Width + titleGap;
     }
-    void DoTitleUpdate(int frameCount)
+    void DoTitleUpdate(ulong frameCount)
     {
         var currentTIme = globalStopwatch.Elapsed;
         var movement = (currentTIme! - titleLastUpdateTime!).Value.Milliseconds / 69.0;
