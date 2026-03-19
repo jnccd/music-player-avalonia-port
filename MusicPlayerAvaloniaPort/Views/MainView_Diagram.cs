@@ -51,9 +51,9 @@ public partial class MainView : UserControl
         var canvasWidth = diagramCanvas!.Bounds.Width;
         var canvasHeight = diagramCanvas.Bounds.Height;
         diagramFftDataSpace = canvasWidth;
-        while (diagramFigure!.Segments?.Count - 1 < diagramFftDataSpace + diagramNumBorderSegments)
+        while (diagramFigure!.Segments?.Count < diagramFftDataSpace + diagramNumBorderSegments)
         {
-            diagramFigure.Segments!.Add(new LineSegment() { Point = new Point(diagramThickness + diagramFigure.Segments.Count, canvasHeight - diagramThickness) });
+            diagramFigure.Segments!.Add(new LineSegment() { Point = new Point(diagramFigure.Segments.Count, canvasHeight - diagramThickness) });
         }
         while (diagramFigure.Segments?.Count - 1 > diagramFftDataSpace + diagramNumBorderSegments)
         {
