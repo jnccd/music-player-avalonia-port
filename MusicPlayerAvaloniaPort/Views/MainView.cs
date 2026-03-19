@@ -127,6 +127,16 @@ public partial class MainView : UserControl
     private void DurationBarStackPanel_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
         Debug.WriteLine("DurationBarStackPanel_PointerPressed!");
+        if (sender is not StackPanel eventRoot)
+        {
+            Debug.WriteLine("eventRoot null?");
+            return;
+        }
+
+        var clickPoint = e.GetPosition(eventRoot);
+        var targetPercentage = clickPoint.X / eventRoot.Bounds.Width;
+        audioLibWrapper.PlayProgress = (float)targetPercentage;
+
         e.Handled = true;
     }
 }
