@@ -25,22 +25,6 @@ namespace MusicPlayerAvaloniaPort.Services;
 public class AudioLibWrapperService
 {
     private static readonly AudioEngine Engine = new MiniAudioEngine();
-    private static readonly DeviceConfig DeviceConfig = new MiniAudioDeviceConfig
-    {
-        PeriodSizeInFrames = 960, // 10ms at 48kHz = 480 frames @ 2 channels = 960 frames
-        Playback = new DeviceSubConfig
-        {
-            ShareMode = ShareMode.Shared // Use shared mode for better compatibility with other applications
-        },
-        Capture = new DeviceSubConfig
-        {
-            ShareMode = ShareMode.Shared // Use shared mode for better compatibility with other applications
-        },
-        Wasapi = new WasapiSettings
-        {
-            Usage = WasapiUsage.ProAudio // Use ProAudio mode for lower latency on Windows
-        }
-    };
     DeviceInfo playbackDeviceInfo;
     AudioPlaybackDevice playbackDevice;
     SoundPlayer? soundPlayer = null;
@@ -99,8 +83,23 @@ public class AudioLibWrapperService
         playbackDeviceInfo = Engine.PlaybackDevices.FirstOrDefault(d => d.IsDefault);
         var playbackDeviceInfoFormat = playbackDeviceInfo.SupportedDataFormats.First();
         playBackFormat = AudioFormat.GetFormatFromNativeFormat(playbackDeviceInfoFormat);
-        playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, playBackFormat, DeviceConfig);
+        playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, GetCurrentAudioFormat());
         playbackDevice.Start();
+    }
+
+    private AudioFormat GetCurrentAudioFormat()
+    {
+        return new AudioFormat()
+        {
+            Channels = playerDataProvider?.FormatInfo?.ChannelCount ?? 2,
+            Layout = AudioFormat.GetLayoutFromChannels((playerDataProvider?.FormatInfo?.ChannelCount) ?? 2),
+            Format = playBackFormat.Format,
+            SampleRate = playerDataProvider?.FormatInfo?.SampleRate ?? 48000
+        };
+    }
+    private uint GetCurrentPeriodSizeInFrames()
+    {
+        return (uint?)(playerDataProvider?.FormatInfo?.SampleRate / 100 * playerDataProvider?.FormatInfo?.ChannelCount) ?? 960;
     }
 
     public void TogglePlayPause()
@@ -115,7 +114,7 @@ public class AudioLibWrapperService
             playbackDeviceInfo = Engine.PlaybackDevices.FirstOrDefault(d => d.IsDefault);
             var playbackDeviceInfoFormat = playbackDeviceInfo.SupportedDataFormats.First();
             playBackFormat = AudioFormat.GetFormatFromNativeFormat(playbackDeviceInfoFormat);
-            playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, playBackFormat, DeviceConfig);
+            playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, playBackFormat);
             playbackDevice.MasterMixer.AddComponent(soundPlayer);
             playbackDevice.Start();
         }
@@ -136,9 +135,16 @@ public class AudioLibWrapperService
         {
             playbackDevice.MasterMixer.RemoveComponent(soundPlayer);
             soundPlayer.Dispose();
+            playbackDevice.Dispose();
         }
-        soundPlayer = new SoundPlayer(Engine, playBackFormat, playerDataProvider);
+
+        playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, GetCurrentAudioFormat(), new MiniAudioDeviceConfig
+        {
+            PeriodSizeInFrames = GetCurrentPeriodSizeInFrames()
+        });
+        soundPlayer = new SoundPlayer(Engine, GetCurrentAudioFormat(), playerDataProvider);
         playbackDevice.MasterMixer.AddComponent(soundPlayer);
+        playbackDevice.Start();
         soundPlayer.Play();
 
         if (SampleReaderThread != null)
