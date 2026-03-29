@@ -109,7 +109,7 @@ public class AudioLibWrapperService
             throw new Exception("Sound Player gon");
 
         Engine.UpdateAudioDevicesInfo();
-        if (playbackDeviceInfo != Engine.PlaybackDevices.FirstOrDefault(d => d.IsDefault))
+        if (playbackDeviceInfo.Name != Engine.PlaybackDevices.First(d => d.IsDefault).Name)
         {
             playbackDevice.Dispose();
             playbackDeviceInfo = Engine.PlaybackDevices.FirstOrDefault(d => d.IsDefault);
