@@ -41,11 +41,11 @@ public class AudioLibWrapperService
             Usage = WasapiUsage.ProAudio // Use ProAudio mode for lower latency on Windows
         }
     };
-    private static readonly AudioFormat PlaybackDeviceFormat = AudioFormat.DvdHq;
     DeviceInfo playbackDeviceInfo;
     AudioPlaybackDevice playbackDevice;
     SoundPlayer? soundPlayer = null;
     StreamDataProvider? playerDataProvider = null;
+    private AudioFormat playBackFormat;
     readonly ArrayPool<float> arrayPool = ArrayPool<float>.Shared;
 
     // Sample Reader Thread
@@ -58,7 +58,8 @@ public class AudioLibWrapperService
 
     // FFT Vars
     const int FFT_BUFFER_SIZE = 16384 / 4;
-    SpectrumAnalyzer spectrumAnalyzer = new SpectrumAnalyzer(PlaybackDeviceFormat, FFT_BUFFER_SIZE);
+    private static readonly AudioFormat AnalyzeFormat = AudioFormat.Studio;
+    SpectrumAnalyzer spectrumAnalyzer = new SpectrumAnalyzer(AnalyzeFormat, FFT_BUFFER_SIZE);
     float[] fftZeroResult;
 
     // Setters
@@ -96,19 +97,32 @@ public class AudioLibWrapperService
             throw new InvalidOperationException("No default playback device found.");
         }
         playbackDeviceInfo = Engine.PlaybackDevices.FirstOrDefault(d => d.IsDefault);
-        playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, PlaybackDeviceFormat, DeviceConfig);
+        var playbackDeviceInfoFormat = playbackDeviceInfo.SupportedDataFormats.First();
+        playBackFormat = AudioFormat.GetFormatFromNativeFormat(playbackDeviceInfoFormat);
+        playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, playBackFormat, DeviceConfig);
         playbackDevice.Start();
     }
 
     public void TogglePlayPause()
     {
-        if (soundPlayer != null)
+        if (soundPlayer == null)
+            throw new Exception("Sound Player gon");
+
+        Engine.UpdateAudioDevicesInfo();
+        if (playbackDeviceInfo != Engine.PlaybackDevices.FirstOrDefault(d => d.IsDefault))
         {
-            if (soundPlayer.State == PlaybackState.Playing)
-                soundPlayer.Pause();
-            else
-                soundPlayer.Play();
+            playbackDevice.Dispose();
+            playbackDeviceInfo = Engine.PlaybackDevices.FirstOrDefault(d => d.IsDefault);
+            var playbackDeviceInfoFormat = playbackDeviceInfo.SupportedDataFormats.First();
+            playBackFormat = AudioFormat.GetFormatFromNativeFormat(playbackDeviceInfoFormat);
+            playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, playBackFormat, DeviceConfig);
+            playbackDevice.MasterMixer.AddComponent(soundPlayer);
+            playbackDevice.Start();
         }
+        if (soundPlayer.State == PlaybackState.Playing)
+            soundPlayer.Pause();
+        else
+            soundPlayer.Play();
     }
 
     public void PlaySong(string songPath)
@@ -123,7 +137,7 @@ public class AudioLibWrapperService
             playbackDevice.MasterMixer.RemoveComponent(soundPlayer);
             soundPlayer.Dispose();
         }
-        soundPlayer = new SoundPlayer(Engine, PlaybackDeviceFormat, playerDataProvider);
+        soundPlayer = new SoundPlayer(Engine, playBackFormat, playerDataProvider);
         playbackDevice.MasterMixer.AddComponent(soundPlayer);
         soundPlayer.Play();
 
@@ -168,7 +182,7 @@ public class AudioLibWrapperService
         Memory<float> memorySlice = globalSampleArray.AsMemory((playerDataProvider!.Position / 4) - (FFT_BUFFER_SIZE / 2), FFT_BUFFER_SIZE);
         Span<float> sampleBufferSpan = memorySlice.Span;
 
-        spectrumAnalyzer.Process(sampleBufferSpan, PlaybackDeviceFormat.Channels);
+        spectrumAnalyzer.Process(sampleBufferSpan, AnalyzeFormat.Channels);
         var re = spectrumAnalyzer.SpectrumData.ToArray();
 
         return re;

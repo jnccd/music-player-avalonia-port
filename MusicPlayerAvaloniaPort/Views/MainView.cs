@@ -66,7 +66,7 @@ public partial class MainView : UserControl
 
             frameCounter++;
             return true;
-        }, TimeSpan.FromMilliseconds(16), DispatcherPriority.Render);
+        }, TimeSpan.FromMilliseconds(1000 / 60.0), DispatcherPriority.Render);
     }
 
     private void MainView_Closing(object? sender, WindowClosingEventArgs e)
