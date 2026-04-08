@@ -32,7 +32,7 @@
             VerticalAlignment="Stretch"
             ColumnDefinitions="*"
             ColumnSpacing="8"
-            RowDefinitions="50, *, 40"
+            RowDefinitions="40, *, 40"
             RowSpacing="8">
             <Grid.Effect>
                 <DropShadowEffect
@@ -46,7 +46,7 @@
                 <Canvas
                     Name="TitleCanvas"
                     Grid.Column="0"
-                    Height="50"
+                    Height="40"
                     HorizontalAlignment="Stretch">
                     <Canvas.OpacityMask>
                         <LinearGradientBrush StartPoint="0%,50%" EndPoint="100%,50%">
