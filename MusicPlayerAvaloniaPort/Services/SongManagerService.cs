@@ -1,4 +1,5 @@
 using Avalonia;
+using MusicPlayerAvaloniaPort.Helpers;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -9,11 +10,16 @@ namespace MusicPlayerAvaloniaPort.Services;
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(SongManagerService))]
 public class SongManagerService
 {
-    public List<string> AvailableSongPaths = new();
+    List<string> AvailableSongPaths = new();
 
-    public int RuntimePlayHistoryIndex = 0;
-    public List<string> RuntimePlayHistorySongPaths = new();
-    public string CurrentlyPlaying => RuntimePlayHistorySongPaths.LastOrDefault() ?? string.Empty;
+    int RuntimePlayHistoryIndex = 0;
+    List<string> RuntimePlayHistorySongPaths = new();
+    string CurrentlyPlaying => RuntimePlayHistorySongPaths.LastOrDefault() ?? string.Empty;
+
+    public void UpdateAvailableSongPaths(string libraryRootPath)
+    {
+        AvailableSongPaths = HelperFuncs.FindAllMp3FilesInDir(libraryRootPath);
+    }
 
     public void GetNextSong(Action<string> initPlayingCurrentSong)
     {

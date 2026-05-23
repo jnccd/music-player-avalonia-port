@@ -22,6 +22,8 @@ public partial class MainView : UserControl
             // Get the StorageProvider from your window
             var window = this.GetVisualRoot() as Window;
             var storageProvider = TopLevel.GetTopLevel(window)!.StorageProvider;
+
+            // Use folder dialog
             var folders = storageProvider?.OpenFolderPickerAsync(new FolderPickerOpenOptions
             {
                 Title = "Select your Music Root Folder",
@@ -32,10 +34,11 @@ public partial class MainView : UserControl
             if (folder == null || !HelperFuncs.DirOrSubDirsContainMp3(folder.Path.AbsolutePath))
                 window?.Close();
 
+            // Set SongLibraryPath
             Config.Data.SongLibraryPath = folder!.Path.AbsolutePath;
         }
 
-        songManager.AvailableSongPaths = HelperFuncs.FindAllMp3FilesInDir(Config.Data.SongLibraryPath);
+        songManager.UpdateAvailableSongPaths(Config.Data.SongLibraryPath);
     }
 
     void InitPlayingCurrentSong(string CurrentSongPath)
