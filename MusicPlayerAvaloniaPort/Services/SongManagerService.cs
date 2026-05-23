@@ -8,20 +8,33 @@ using System.Linq;
 namespace MusicPlayerAvaloniaPort.Services;
 
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(SongManagerService))]
-public class SongManagerService(AudioLibWrapperService AudioLibWrapper)
+public class SongManagerService
 {
+    AudioLibWrapperService AudioLibWrapper;
+
     List<string> AvailableSongPaths = new();
 
     int RuntimePlayHistoryIndex = 0;
     List<string> RuntimePlayHistorySongPaths = new();
     string? CurrentlyPlaying => RuntimePlayHistorySongPaths.LastOrDefault();
 
+    public event EventHandler<string>? NewSongStarted;
+
+    public SongManagerService(AudioLibWrapperService AudioLibWrapper)
+    {
+        this.AudioLibWrapper = AudioLibWrapper;
+        AudioLibWrapper.PlaybackEnded += (sender, args) =>
+        {
+            GetNextSong();
+        };
+    }
+
     public void UpdateAvailableSongPaths(string libraryRootPath)
     {
         AvailableSongPaths = HelperFuncs.FindAllMp3FilesInDir(libraryRootPath);
     }
 
-    public void GetNextSong(Action<string> updateUiForNewSong)
+    public void GetNextSong()
     {
         RuntimePlayHistoryIndex++;
         while (RuntimePlayHistoryIndex >= RuntimePlayHistorySongPaths.Count)
@@ -31,9 +44,9 @@ public class SongManagerService(AudioLibWrapperService AudioLibWrapper)
         }
 
         AudioLibWrapper.PlaySong(CurrentlyPlaying ?? throw new InvalidDataException("No song to play"));
-        updateUiForNewSong(CurrentlyPlaying);
+        NewSongStarted?.Invoke(this, CurrentlyPlaying);
     }
-    public void GetPreviousSong(Action<string> updateUiForNewSong)
+    public void GetPreviousSong()
     {
         RuntimePlayHistoryIndex--;
         while (RuntimePlayHistoryIndex < 0)
@@ -44,7 +57,7 @@ public class SongManagerService(AudioLibWrapperService AudioLibWrapper)
         }
 
         AudioLibWrapper.PlaySong(CurrentlyPlaying ?? throw new InvalidDataException("No song to play"));
-        updateUiForNewSong(CurrentlyPlaying);
+        NewSongStarted?.Invoke(this, CurrentlyPlaying);
     }
 
     public string ChooseNewSongPath()

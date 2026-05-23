@@ -53,6 +53,7 @@ public partial class MainView : UserControl
         // Events
         window?.Closing += MainView_Closing;
         window?.ScalingChanged += MainView_ScalingChanged;
+        songManager.NewSongStarted += (s, songPath) => UpdateUiForNewSong(songPath);
 
         // Ui loops
         uiUpdateLoop.AddInput(new UiLoopDiagram.Input(this.GetLogicalDescendants().OfType<Canvas>().FirstOrDefault(x => x.Name == "DiagramCanvas")!));
@@ -69,7 +70,7 @@ public partial class MainView : UserControl
 
         // Initial Update
         MainView_ScalingChanged(null, EventArgs.Empty);
-        songManager.GetNextSong(UpdateUiForNewSong);
+        songManager.GetNextSong();
     }
 
     private void MainView_Closing(object? sender, WindowClosingEventArgs e)
@@ -96,11 +97,11 @@ public partial class MainView : UserControl
     {
         if (e.Delta.Y > 0)
         {
-            songManager.GetNextSong(UpdateUiForNewSong);
+            songManager.GetNextSong();
         }
         else if (e.Delta.Y < 0)
         {
-            songManager.GetPreviousSong(UpdateUiForNewSong);
+            songManager.GetPreviousSong();
         }
     }
 

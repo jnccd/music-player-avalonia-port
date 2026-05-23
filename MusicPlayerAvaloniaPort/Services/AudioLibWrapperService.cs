@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Threading;
 using SoundFlow.Abstracts;
 using SoundFlow.Abstracts.Devices;
 using SoundFlow.Backends.MiniAudio;
@@ -71,6 +72,7 @@ public class AudioLibWrapperService
     {
         get => soundPlayer?.State;
     }
+    public event EventHandler<EventArgs>? PlaybackEnded;
 
     public AudioLibWrapperService()
     {
@@ -85,6 +87,14 @@ public class AudioLibWrapperService
         playBackFormat = AudioFormat.GetFormatFromNativeFormat(playbackDeviceInfoFormat);
         playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, GetCurrentAudioFormat());
         playbackDevice.Start();
+    }
+
+    private void SoundPlayer_PlaybackEnded(object? sender, EventArgs e)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            PlaybackEnded?.Invoke(this, EventArgs.Empty);
+        });
     }
 
     private AudioFormat GetCurrentAudioFormat()
@@ -146,6 +156,8 @@ public class AudioLibWrapperService
         playbackDevice.MasterMixer.AddComponent(soundPlayer);
         playbackDevice.Start();
         soundPlayer.Play();
+
+        soundPlayer.PlaybackEnded += SoundPlayer_PlaybackEnded;
 
         if (SampleReaderThread != null)
         {
