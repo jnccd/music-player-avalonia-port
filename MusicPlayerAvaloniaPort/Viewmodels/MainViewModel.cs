@@ -9,7 +9,7 @@ namespace MusicPlayerAvaloniaPort.ViewModels;
 
 public partial class MainViewModel : ViewModelBase
 {
-    AudioLibWrapperService? audioLibWrapper = ServiceContainer.Services.GetService<AudioLibWrapperService>();
+    AudioLibWrapperService? audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
 
     public MainViewModel()
     {

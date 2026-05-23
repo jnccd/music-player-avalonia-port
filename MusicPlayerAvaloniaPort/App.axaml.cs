@@ -8,6 +8,7 @@ using Avalonia.Media;
 using MusicPlayerAvaloniaPort.Configuration;
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.ViewModels;
+using MusicPlayerAvaloniaPort.Views.MainView;
 
 namespace MusicPlayerAvaloniaPort;
 

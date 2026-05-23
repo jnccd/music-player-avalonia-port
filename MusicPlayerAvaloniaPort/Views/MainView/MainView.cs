@@ -16,14 +16,22 @@ using MusicPlayerAvaloniaPort.ViewModels;
 using MusicPlayerAvaloniaPort.Helpers;
 using Avalonia.Threading;
 using Color = Avalonia.Media.Color;
+using MusicPlayerAvaloniaPort.Services;
+using MusicPlayerAvaloniaPort.Services.UiUpdateLoop;
+using static MusicPlayerAvaloniaPort.Views.MainView.UiLoopDiagram;
+using Avalonia.Controls.Shapes;
 
-namespace MusicPlayerAvaloniaPort;
+namespace MusicPlayerAvaloniaPort.Views.MainView;
 
 public partial class MainView : UserControl
 {
     MainViewModel? viewModel => DataContext as MainViewModel;
     Window? window => this.GetVisualRoot() as Window;
     Stopwatch globalStopwatch = new();
+
+    SongManagerService songManager = ServiceContainer.GetService<SongManagerService>();
+    AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
+    UiUpdateLoopService uiUpdateLoop = ServiceContainer.GetService<UiUpdateLoopService>();
 
     public MainView()
     {
@@ -51,18 +59,24 @@ public partial class MainView : UserControl
         MainView_ScalingChanged(null, EventArgs.Empty);
         songManager.GetNextSong(InitPlayingCurrentSong);
 
+        uiUpdateLoop.AddInput(new UiLoopDiagram.Input(this.GetLogicalDescendants().OfType<Canvas>().FirstOrDefault(x => x.Name == "DiagramCanvas")!));
+        uiUpdateLoop.AddInput(new UiLoopPlayProgress.Input(
+            this.GetLogicalDescendants().OfType<Rectangle>().FirstOrDefault(x => x.Name == "DurationBarBackRectangle")!,
+            this.GetLogicalDescendants().OfType<Rectangle>().FirstOrDefault(x => x.Name == "DurationBarAntiAliasingRectangle")!,
+            this.GetLogicalDescendants().OfType<Rectangle>().FirstOrDefault(x => x.Name == "DurationBarDurationRectangle")!,
+            this.FindResource("PrimaryColor") as SolidColorBrush,
+            PixelScale: 1 / (this.GetVisualRoot() as Window)!.RenderScaling));
+        uiUpdateLoop.Init();
+        uiUpdateLoop.StartLoopThread();
+
         // Init Loops
         ulong frameCounter = 0;
         globalStopwatch.Start();
-        InitDiagramUpdater();
         InitTitleUpdater();
-        InitPlayProgressUpdater();
         // Start Loops
         DispatcherTimer.Run(() =>
         {
-            DoDiagramUpdate();
             DoTitleUpdate(frameCounter);
-            DoPlayProgressUpdate();
 
             frameCounter++;
             return true;
@@ -86,7 +100,7 @@ public partial class MainView : UserControl
 
     private void MainView_SizeChanged(object? sender, SizeChangedEventArgs e)
     {
-        UpdateDiagramScaling();
+        uiUpdateLoop.InvokeEvent(new UpdateDiagramScalingEventArgs());
     }
 
     private void MainView_PointerWheelChanged(object? sender, PointerWheelEventArgs e)

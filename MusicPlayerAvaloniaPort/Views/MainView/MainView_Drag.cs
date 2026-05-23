@@ -6,7 +6,7 @@ using Avalonia.Input;
 using Avalonia.Platform;
 using MusicPlayerAvaloniaPort.Configuration;
 
-namespace MusicPlayerAvaloniaPort;
+namespace MusicPlayerAvaloniaPort.Views.MainView;
 
 public partial class MainView : UserControl
 {

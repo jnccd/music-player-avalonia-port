@@ -8,13 +8,10 @@ using MusicPlayerAvaloniaPort.Configuration;
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Services;
 
-namespace MusicPlayerAvaloniaPort;
+namespace MusicPlayerAvaloniaPort.Views.MainView;
 
 public partial class MainView : UserControl
 {
-    SongManagerService songManager = ServiceContainer.Services.GetService<SongManagerService>();
-    AudioLibWrapperService audioLibWrapper = ServiceContainer.Services.GetService<AudioLibWrapperService>();
-
     void MapLocalSongLibrary()
     {
         if (Config.Data.SongLibraryPath == null)

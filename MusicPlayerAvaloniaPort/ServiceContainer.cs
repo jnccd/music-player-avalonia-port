@@ -18,7 +18,7 @@ public enum ServiceRegisterType { Singleton, Scoped, Transient }
 public static class ServiceContainer
 {
     static IServiceCollection serviceCollection;
-    public static readonly IServiceProvider Services;
+    static readonly IServiceProvider Services;
 
     static ServiceContainer()
     {
@@ -45,5 +45,12 @@ public static class ServiceContainer
         }
 
         Services = serviceCollection.BuildServiceProvider();
+    }
+
+    public static TRequested GetService<TRequested>()
+    {
+        var service = Services.GetService<TRequested>()
+            ?? throw new Exception($"Service of type {typeof(TRequested)} not found. Make sure it is decorated with [RegisterImplementation] and that its dependencies can be resolved.");
+        return service;
     }
 }

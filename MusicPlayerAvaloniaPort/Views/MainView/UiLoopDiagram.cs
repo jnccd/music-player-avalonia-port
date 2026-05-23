@@ -1,19 +1,24 @@
-using System;
 using System.Collections.Generic;
-using System.Diagnostics;
+using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.LogicalTree;
 using Avalonia.Media;
-using Avalonia.Threading;
+using MusicPlayerAvaloniaPort.Services;
+using MusicPlayerAvaloniaPort.Services.UiUpdateLoop;
 using Path = Avalonia.Controls.Shapes.Path;
 
-namespace MusicPlayerAvaloniaPort;
+namespace MusicPlayerAvaloniaPort.Views.MainView;
 
-public partial class MainView : UserControl
+[RegisterUiLoop]
+public class UiLoopDiagram() : IUiUpdateLoop(typeof(MainView), typeof(Input))
 {
+    public class Input(Canvas Canvas) : IUiUpdateLoopInput
+    {
+        public Canvas Canvas { get; set; } = Canvas;
+    }
+    AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
+
     int diagramThickness = 10;
     Canvas? diagramCanvas = null;
     Path? diagramPath = null;
@@ -21,9 +26,11 @@ public partial class MainView : UserControl
     int diagramNumBorderSegments = 3;
     double diagramFftDataSpace = 0;
 
-    void InitDiagramUpdater()
+    public override void Init(IUiUpdateLoopInput uiUpdateLoopInput)
     {
-        diagramCanvas = this.GetLogicalDescendants().OfType<Canvas>().FirstOrDefault(x => x.Name == "DiagramCanvas")!;
+        var input = uiUpdateLoopInput as Input ?? throw new InvalidDataException("Invalid input for UiLoopDiagram");
+
+        diagramCanvas = input.Canvas;
         diagramPath = diagramCanvas.Children.OfType<Path>().FirstOrDefault(x => x.Name == "MyPath")!;
 
         var canvasWidth = diagramCanvas.Bounds.Width;
@@ -45,7 +52,7 @@ public partial class MainView : UserControl
         }
     }
 
-    void DoDiagramUpdate()
+    public override void Update(IUiUpdateLoopInput uiUpdateLoopInput, ulong frameCounter)
     {
         if (audioLibWrapper.PlayState != SoundFlow.Enums.PlaybackState.Playing)
             return;
@@ -68,19 +75,28 @@ public partial class MainView : UserControl
         }
     }
 
-    void UpdateDiagramScaling()
+    public record UpdateDiagramScalingEventArgs;
+    public new List<IUiUpdateLoopEventHandler>? Events
     {
-        diagramCanvas = this.GetLogicalDescendants().OfType<Canvas>().FirstOrDefault(x => x.Name == "DiagramCanvas")!;
-        diagramPath = diagramCanvas.Children.OfType<Path>().FirstOrDefault(x => x.Name == "MyPath")!;
-        var geometry = (diagramPath.Data as PathGeometry)!;
-        var figure = geometry?.Figures?[0];
-        if (figure == null) return;
+        get =>
+        [
+            new UiUpdateLoopEventHandler<UpdateDiagramScalingEventArgs>(args =>
+                {
+                    if (diagramCanvas == null || diagramPath == null) return;
 
-        var canvasWidth = diagramCanvas.Bounds.Width;
-        var canvasHeight = diagramCanvas.Bounds.Height;
-        figure.StartPoint = new Point(canvasWidth, canvasHeight - diagramThickness);
-        figure.Segments![0] = new LineSegment() { Point = new Point(canvasWidth, canvasHeight) };
-        figure.Segments![1] = new LineSegment() { Point = new Point(0, canvasHeight) };
-        figure.Segments![2] = new LineSegment() { Point = new Point(0, canvasHeight - diagramThickness) };
+                    diagramPath = diagramCanvas.Children.OfType<Path>().FirstOrDefault(x => x.Name == "MyPath")!;
+                    var geometry = (diagramPath.Data as PathGeometry)!;
+                    var figure = geometry?.Figures?[0];
+                    if (figure == null) return;
+
+                    var canvasWidth = diagramCanvas.Bounds.Width;
+                    var canvasHeight = diagramCanvas.Bounds.Height;
+                    figure.StartPoint = new Point(canvasWidth, canvasHeight - diagramThickness);
+                    figure.Segments![0] = new LineSegment() { Point = new Point(canvasWidth, canvasHeight) };
+                    figure.Segments![1] = new LineSegment() { Point = new Point(0, canvasHeight) };
+                    figure.Segments![2] = new LineSegment() { Point = new Point(0, canvasHeight - diagramThickness) };
+                }
+            )
+        ];
     }
 }

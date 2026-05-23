@@ -9,7 +9,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
 
-namespace MusicPlayerAvaloniaPort;
+namespace MusicPlayerAvaloniaPort.Views.MainView;
 
 public partial class MainView : UserControl
 {
