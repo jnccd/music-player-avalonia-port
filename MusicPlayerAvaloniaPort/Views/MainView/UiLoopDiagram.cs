@@ -76,11 +76,11 @@ public class UiLoopDiagram() : IUiUpdateLoop(typeof(MainView), typeof(Input))
     }
 
     public record UpdateDiagramScalingEventArgs;
-    public new List<IUiUpdateLoopEventHandler>? Events
+    public override List<IUiUpdateLoopEventHandler>? Events
     {
         get =>
         [
-            new UiUpdateLoopEventHandler<UpdateDiagramScalingEventArgs>(args =>
+            new UiUpdateLoopEventHandler<UpdateDiagramScalingEventArgs>((args, uiUpdateLoopInput) =>
                 {
                     if (diagramCanvas == null || diagramPath == null) return;
 

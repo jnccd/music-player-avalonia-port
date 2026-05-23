@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MusicPlayerAvaloniaPort.Configuration;
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Services;
+using static MusicPlayerAvaloniaPort.Views.MainView.UiLoopTitle;
 
 namespace MusicPlayerAvaloniaPort.Views.MainView;
 
@@ -41,7 +42,7 @@ public partial class MainView : UserControl
     void InitPlayingCurrentSong(string CurrentSongPath)
     {
         var songName = Path.GetFileNameWithoutExtension(CurrentSongPath);
-        ChangeTitle(songName);
+        uiUpdateLoop.InvokeEvent(new UpdateTitleEventArgs(songName));
         audioLibWrapper.PlaySong(CurrentSongPath);
     }
 }

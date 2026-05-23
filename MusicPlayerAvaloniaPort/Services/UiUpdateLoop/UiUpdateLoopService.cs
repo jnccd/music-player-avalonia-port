@@ -20,7 +20,6 @@ public class UiUpdateLoopService
 {
     readonly List<IUiUpdateLoopInput> Inputs = new();
     readonly List<IUiUpdateLoop> Loops = new();
-    readonly List<IUiUpdateLoopEventHandler> EventHandlers = new();
 
     private ulong FrameCounter = 0;
 
@@ -41,7 +40,6 @@ public class UiUpdateLoopService
             IUiUpdateLoop? loop = (IUiUpdateLoop?)Activator.CreateInstance(declaringType);
             if (loop == null) continue;
             Loops.Add(loop);
-            EventHandlers.AddRange(loop.Events ?? []);
         }
     }
 
@@ -92,11 +90,15 @@ public class UiUpdateLoopService
 
     public void InvokeEvent<TEventArgs>(TEventArgs args)
     {
-        foreach (var handler in EventHandlers)
+        foreach (var loop in Loops)
         {
-            if (handler is UiUpdateLoopEventHandler<TEventArgs> typedHandler)
+            var input = Inputs.FirstOrDefault(x => x.GetType() == loop.InputType);
+            foreach (var eventHandler in loop.Events ?? [])
             {
-                typedHandler.Handle(args);
+                if (eventHandler is UiUpdateLoopEventHandler<TEventArgs> typedHandler)
+                {
+                    typedHandler.Handle(args, input!);
+                }
             }
         }
     }

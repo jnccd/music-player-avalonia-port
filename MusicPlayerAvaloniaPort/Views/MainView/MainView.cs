@@ -55,10 +55,7 @@ public partial class MainView : UserControl
         window?.Closing += MainView_Closing;
         window?.ScalingChanged += MainView_ScalingChanged;
 
-        // Initial Update
-        MainView_ScalingChanged(null, EventArgs.Empty);
-        songManager.GetNextSong(InitPlayingCurrentSong);
-
+        // Ui loops
         uiUpdateLoop.AddInput(new UiLoopDiagram.Input(this.GetLogicalDescendants().OfType<Canvas>().FirstOrDefault(x => x.Name == "DiagramCanvas")!));
         uiUpdateLoop.AddInput(new UiLoopPlayProgress.Input(
             this.GetLogicalDescendants().OfType<Rectangle>().FirstOrDefault(x => x.Name == "DurationBarBackRectangle")!,
@@ -66,21 +63,14 @@ public partial class MainView : UserControl
             this.GetLogicalDescendants().OfType<Rectangle>().FirstOrDefault(x => x.Name == "DurationBarDurationRectangle")!,
             this.FindResource("PrimaryColor") as SolidColorBrush,
             PixelScale: 1 / (this.GetVisualRoot() as Window)!.RenderScaling));
+        uiUpdateLoop.AddInput(new UiLoopTitle.Input(this.GetLogicalDescendants().OfType<Canvas>().FirstOrDefault(x => x.Name == "TitleCanvas")!));
+
         uiUpdateLoop.Init();
         uiUpdateLoop.StartLoopThread();
 
-        // Init Loops
-        ulong frameCounter = 0;
-        globalStopwatch.Start();
-        InitTitleUpdater();
-        // Start Loops
-        DispatcherTimer.Run(() =>
-        {
-            DoTitleUpdate(frameCounter);
-
-            frameCounter++;
-            return true;
-        }, TimeSpan.FromMilliseconds(900 / 60.0), DispatcherPriority.Render);
+        // Initial Update
+        MainView_ScalingChanged(null, EventArgs.Empty);
+        songManager.GetNextSong(InitPlayingCurrentSong);
     }
 
     private void MainView_Closing(object? sender, WindowClosingEventArgs e)
