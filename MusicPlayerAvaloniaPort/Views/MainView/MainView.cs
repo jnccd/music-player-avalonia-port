@@ -27,7 +27,6 @@ public partial class MainView : UserControl
 {
     MainViewModel? viewModel => DataContext as MainViewModel;
     Window? window => this.GetVisualRoot() as Window;
-    Stopwatch globalStopwatch = new();
 
     SongManagerService songManager = ServiceContainer.GetService<SongManagerService>();
     AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
@@ -70,7 +69,7 @@ public partial class MainView : UserControl
 
         // Initial Update
         MainView_ScalingChanged(null, EventArgs.Empty);
-        songManager.GetNextSong(InitPlayingCurrentSong);
+        songManager.GetNextSong(UpdateUiForNewSong);
     }
 
     private void MainView_Closing(object? sender, WindowClosingEventArgs e)
@@ -97,11 +96,11 @@ public partial class MainView : UserControl
     {
         if (e.Delta.Y > 0)
         {
-            songManager.GetNextSong(InitPlayingCurrentSong);
+            songManager.GetNextSong(UpdateUiForNewSong);
         }
         else if (e.Delta.Y < 0)
         {
-            songManager.GetPreviousSong(InitPlayingCurrentSong);
+            songManager.GetPreviousSong(UpdateUiForNewSong);
         }
     }
 

@@ -8,20 +8,20 @@ using System.Linq;
 namespace MusicPlayerAvaloniaPort.Services;
 
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(SongManagerService))]
-public class SongManagerService
+public class SongManagerService(AudioLibWrapperService AudioLibWrapper)
 {
     List<string> AvailableSongPaths = new();
 
     int RuntimePlayHistoryIndex = 0;
     List<string> RuntimePlayHistorySongPaths = new();
-    string CurrentlyPlaying => RuntimePlayHistorySongPaths.LastOrDefault() ?? string.Empty;
+    string? CurrentlyPlaying => RuntimePlayHistorySongPaths.LastOrDefault();
 
     public void UpdateAvailableSongPaths(string libraryRootPath)
     {
         AvailableSongPaths = HelperFuncs.FindAllMp3FilesInDir(libraryRootPath);
     }
 
-    public void GetNextSong(Action<string> initPlayingCurrentSong)
+    public void GetNextSong(Action<string> updateUiForNewSong)
     {
         RuntimePlayHistoryIndex++;
         while (RuntimePlayHistoryIndex >= RuntimePlayHistorySongPaths.Count)
@@ -29,9 +29,11 @@ public class SongManagerService
             var nextSong = ChooseNewSongPath();
             RuntimePlayHistorySongPaths.Add(nextSong);
         }
-        initPlayingCurrentSong(CurrentlyPlaying);
+
+        AudioLibWrapper.PlaySong(CurrentlyPlaying ?? throw new InvalidDataException("No song to play"));
+        updateUiForNewSong(CurrentlyPlaying);
     }
-    public void GetPreviousSong(Action<string> initPlayingCurrentSong)
+    public void GetPreviousSong(Action<string> updateUiForNewSong)
     {
         RuntimePlayHistoryIndex--;
         while (RuntimePlayHistoryIndex < 0)
@@ -40,7 +42,9 @@ public class SongManagerService
             RuntimePlayHistorySongPaths.Insert(0, newPreviousSong);
             RuntimePlayHistoryIndex++;
         }
-        initPlayingCurrentSong(CurrentlyPlaying);
+
+        AudioLibWrapper.PlaySong(CurrentlyPlaying ?? throw new InvalidDataException("No song to play"));
+        updateUiForNewSong(CurrentlyPlaying);
     }
 
     public string ChooseNewSongPath()

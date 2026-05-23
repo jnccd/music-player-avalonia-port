@@ -39,10 +39,9 @@ public partial class MainView : UserControl
         songManager.UpdateAvailableSongPaths(Config.Data.SongLibraryPath);
     }
 
-    void InitPlayingCurrentSong(string CurrentSongPath)
+    void UpdateUiForNewSong(string CurrentSongPath)
     {
         var songName = Path.GetFileNameWithoutExtension(CurrentSongPath);
         uiUpdateLoop.InvokeEvent(new UpdateTitleEventArgs(songName));
-        audioLibWrapper.PlaySong(CurrentSongPath);
     }
 }
