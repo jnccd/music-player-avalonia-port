@@ -86,7 +86,10 @@ public class AudioLibWrapperService
 
     private void SoundPlayer_PlaybackEnded(object? sender, EventArgs e)
     {
-        PlaybackEnded?.Invoke(this, EventArgs.Empty);
+        Task.Run(() =>
+        {
+            PlaybackEnded?.Invoke(this, EventArgs.Empty);
+        });
     }
 
     private AudioFormat GetCurrentAudioFormat()
