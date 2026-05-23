@@ -1,4 +1,3 @@
-using Avalonia;
 using MusicPlayerAvaloniaPort.Helpers;
 using System;
 using System.Collections.Generic;

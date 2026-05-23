@@ -2,6 +2,7 @@ using System.IO;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Microsoft.Extensions.DependencyInjection;
 using MusicPlayerAvaloniaPort.Configuration;
@@ -41,7 +42,10 @@ public partial class MainView : UserControl
 
     void UpdateUiForNewSong(string SongPath)
     {
-        var songName = Path.GetFileNameWithoutExtension(SongPath);
-        uiUpdateLoop.InvokeEvent(new UpdateTitleEventArgs(songName));
+        Dispatcher.UIThread.Post(() =>
+        {
+            var songName = Path.GetFileNameWithoutExtension(SongPath);
+            uiUpdateLoop.InvokeEvent(new UpdateTitleEventArgs(songName));
+        });
     }
 }

@@ -1,20 +1,15 @@
-using Avalonia;
-using Avalonia.Threading;
 using SoundFlow.Abstracts;
 using SoundFlow.Abstracts.Devices;
 using SoundFlow.Backends.MiniAudio;
 using SoundFlow.Backends.MiniAudio.Devices;
-using SoundFlow.Backends.MiniAudio.Enums;
 using SoundFlow.Components;
 using SoundFlow.Enums;
-using SoundFlow.Interfaces;
 using SoundFlow.Metadata.Models;
 using SoundFlow.Providers;
 using SoundFlow.Structs;
 using SoundFlow.Visualization;
 using System;
 using System.Buffers;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -91,10 +86,7 @@ public class AudioLibWrapperService
 
     private void SoundPlayer_PlaybackEnded(object? sender, EventArgs e)
     {
-        Dispatcher.UIThread.Post(() =>
-        {
-            PlaybackEnded?.Invoke(this, EventArgs.Empty);
-        });
+        PlaybackEnded?.Invoke(this, EventArgs.Empty);
     }
 
     private AudioFormat GetCurrentAudioFormat()
