@@ -109,6 +109,9 @@ public class UiLoopTitle() : IUiUpdateLoop(typeof(MainView), typeof(Input))
 
                     titleCanvasText1.Text = args.newTitle;
                     titleCanvasText2.Text = args.newTitle;
+
+                    titleCanvasText1.Measure(Size.Infinity);
+                    titleCanvasText1Width = titleCanvasText1.DesiredSize.Width;
                 }
             )
         ];
