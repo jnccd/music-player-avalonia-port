@@ -23,6 +23,11 @@ public class EitherOrConverter : IValueConverter
                 obj1 = new Bitmap(@params[0]);
                 obj2 = new Bitmap(@params[1]);
             }
+            else if (targetType == typeof(Geometry))
+            {
+                obj1 = Geometry.Parse(@params[0]);
+                obj2 = Geometry.Parse(@params[1]);
+            }
             else
             {
                 obj1 = System.Convert.ChangeType(@params[0], targetType);

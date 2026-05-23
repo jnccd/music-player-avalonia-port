@@ -114,12 +114,9 @@ public partial class MainView : UserControl
     {
         viewModel?.UpvoteLocked = !viewModel.UpvoteLocked;
         var upvoteButton = sender as Button;
-        var upvoteImage = upvoteButton?.GetLogicalChildren().FirstOrDefault() as Image;
 
-        using var upvoteBitmap = SKBitmap.Decode(Environment.CurrentDirectory + "/Assets/Upvote.png");
-
-        if (upvoteImage?.Source != null)
-            upvoteImage.Source = new Bitmap(HelperFuncs.ModifyRGBChannelsAndKeepAlpha(upvoteBitmap, viewModel?.UpvoteLocked == true ? Config.Data.PrimaryColor : Color.FromRgb(255, 255, 255)));
+        var path = upvoteButton?.GetLogicalChildren().FirstOrDefault() as Path;
+        path?.Fill = viewModel?.UpvoteLocked == true ? this.FindResource("PrimaryColor") as SolidColorBrush : Brushes.White;
     }
 
     private void VolumeBarStackPanel_PointerPressed(object? sender, PointerPressedEventArgs e)
