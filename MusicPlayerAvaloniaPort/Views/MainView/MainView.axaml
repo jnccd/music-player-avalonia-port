@@ -115,6 +115,7 @@
                     Margin="0,0,-6,0"
                     VerticalAlignment="Center"
                     PointerMoved="VolumeBarStackPanel_PointerMoved"
+                    PointerPressed="VolumeBarStackPanel_PointerPressed"
                     Spacing="0">
                     <Rectangle
                         Name="VolumeBarBackRectangle"
@@ -187,6 +188,7 @@
                     VerticalAlignment="Center"
                     Background="#01000000"
                     PointerMoved="DurationBarStackPanel_PointerMoved"
+                    PointerPressed="DurationBarStackPanel_PointerPressed"
                     Spacing="0">
                     <Rectangle
                         Name="DurationBarBackRectangle"

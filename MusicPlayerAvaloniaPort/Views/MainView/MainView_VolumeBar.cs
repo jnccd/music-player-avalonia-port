@@ -26,9 +26,20 @@ public partial class MainView : UserControl
         UpdateVolumeUi();
     }
 
+    private void VolumeBarStackPanel_PointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        Debug.WriteLine("VolumeBarStackPanel_PointerPressed!");
+        VolumeBarStackPanel_PointerDown(sender, e);
+    }
+
     private void VolumeBarStackPanel_PointerMoved(object? sender, PointerEventArgs e)
     {
         Debug.WriteLine("VolumeBarStackPanel_PointerMoved!");
+        VolumeBarStackPanel_PointerDown(sender, e);
+    }
+
+    void VolumeBarStackPanel_PointerDown(object? sender, PointerEventArgs e)
+    {
         if (!e.Properties.IsLeftButtonPressed)
             return;
         if (sender is not StackPanel eventRoot)

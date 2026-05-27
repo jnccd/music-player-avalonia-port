@@ -76,9 +76,20 @@ public partial class MainView : UserControl
         path?.Fill = viewModel?.UpvoteLocked == true ? this.FindResource("PrimaryColor") as SolidColorBrush : Brushes.White;
     }
 
+    private void DurationBarStackPanel_PointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        Debug.WriteLine("DurationBarStackPanel_PointerPressed!");
+        DurationBarStackPanel_PointerDown(sender, e);
+    }
+
     private void DurationBarStackPanel_PointerMoved(object? sender, PointerEventArgs e)
     {
         Debug.WriteLine("DurationBarStackPanel_PointerMoved!");
+        DurationBarStackPanel_PointerDown(sender, e);
+    }
+
+    void DurationBarStackPanel_PointerDown(object? sender, PointerEventArgs e)
+    {
         if (!e.Properties.IsLeftButtonPressed)
             return;
         if (sender is not StackPanel eventRoot)
