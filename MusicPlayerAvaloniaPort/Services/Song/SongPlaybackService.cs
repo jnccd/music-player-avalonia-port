@@ -10,7 +10,7 @@ namespace MusicPlayerAvaloniaPort.Services;
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(SongManagerService))]
 public class SongManagerService
 {
-    AudioLibWrapperService AudioLibWrapper;
+    readonly AudioLibWrapperService AudioLibWrapper;
 
     readonly List<AvailableSong> AvailableSongs = [];
 
@@ -33,6 +33,7 @@ public class SongManagerService
 
     public void UpdateAvailableSongPaths(string libraryRootPath)
     {
+        AvailableSongs.Clear();
         AvailableSongs.AddRange([.. HelperFuncs.FindAllMp3FilesInDir(libraryRootPath)
             .Select(path => new AvailableSong(path, null))]); // TODO: Link to Upvoted Songs later
     }
@@ -42,7 +43,7 @@ public class SongManagerService
         RuntimePlayHistoryIndex++;
         while (RuntimePlayHistoryIndex >= RuntimePlayHistory.Count)
         {
-            var nextSong = ChooseNewSongPath();
+            var nextSong = ChooseNextSong();
             RuntimePlayHistory.Add(nextSong);
         }
 
@@ -54,7 +55,7 @@ public class SongManagerService
         RuntimePlayHistoryIndex--;
         while (RuntimePlayHistoryIndex < 0)
         {
-            var newPreviousSong = ChooseNewSongPath();
+            var newPreviousSong = ChooseNextSong();
             RuntimePlayHistory.Insert(0, newPreviousSong);
             RuntimePlayHistoryIndex++;
         }
@@ -63,7 +64,7 @@ public class SongManagerService
         NewSongStarted?.Invoke(this, CurrentlyPlaying);
     }
 
-    public AvailableSong ChooseNewSongPath()
+    AvailableSong ChooseNextSong()
     {
         // TODO Proper Song Choosing
         var newSong = AvailableSongs[Random.Shared.Next(AvailableSongs.Count)];
