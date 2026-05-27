@@ -13,6 +13,11 @@ namespace MusicPlayerAvaloniaPort.Helpers;
 
 public class HelperFuncs
 {
+    /// <summary>
+    /// Recursively finds all mp3 files in a directory and its subdirectories.
+    /// </summary>
+    /// <param name="StartDir">The directory to search in.</param>
+    /// <returns>Full paths of all mp3 files</returns>
     public static List<string> FindAllMp3FilesInDir(string StartDir)
     {
         List<string> re = new();

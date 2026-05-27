@@ -1,4 +1,5 @@
 using MusicPlayerAvaloniaPort.Helpers;
+using MusicPlayerAvaloniaPort.Services.Song;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -11,13 +12,15 @@ public class SongManagerService
 {
     AudioLibWrapperService AudioLibWrapper;
 
-    List<string> AvailableSongPaths = new();
+    readonly List<AvailableSong> AvailableSongs = [];
 
     int RuntimePlayHistoryIndex = 0;
-    List<string> RuntimePlayHistorySongPaths = new();
-    string? CurrentlyPlaying => RuntimePlayHistorySongPaths.LastOrDefault();
+    readonly List<AvailableSong> RuntimePlayHistory = [];
+    AvailableSong? CurrentlyPlaying => RuntimePlayHistoryIndex >= 0 && RuntimePlayHistoryIndex < RuntimePlayHistory.Count ?
+        RuntimePlayHistory[RuntimePlayHistoryIndex] :
+        null;
 
-    public event EventHandler<string>? NewSongStarted;
+    public event EventHandler<AvailableSong>? NewSongStarted;
 
     public SongManagerService(AudioLibWrapperService AudioLibWrapper)
     {
@@ -30,19 +33,20 @@ public class SongManagerService
 
     public void UpdateAvailableSongPaths(string libraryRootPath)
     {
-        AvailableSongPaths = HelperFuncs.FindAllMp3FilesInDir(libraryRootPath);
+        AvailableSongs.AddRange([.. HelperFuncs.FindAllMp3FilesInDir(libraryRootPath)
+            .Select(path => new AvailableSong(path, null))]); // TODO: Link to Upvoted Songs later
     }
 
     public void GetNextSong()
     {
         RuntimePlayHistoryIndex++;
-        while (RuntimePlayHistoryIndex >= RuntimePlayHistorySongPaths.Count)
+        while (RuntimePlayHistoryIndex >= RuntimePlayHistory.Count)
         {
             var nextSong = ChooseNewSongPath();
-            RuntimePlayHistorySongPaths.Add(nextSong);
+            RuntimePlayHistory.Add(nextSong);
         }
 
-        AudioLibWrapper.PlaySong(CurrentlyPlaying ?? throw new InvalidDataException("No song to play"));
+        AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"));
         NewSongStarted?.Invoke(this, CurrentlyPlaying);
     }
     public void GetPreviousSong()
@@ -51,18 +55,18 @@ public class SongManagerService
         while (RuntimePlayHistoryIndex < 0)
         {
             var newPreviousSong = ChooseNewSongPath();
-            RuntimePlayHistorySongPaths.Insert(0, newPreviousSong);
+            RuntimePlayHistory.Insert(0, newPreviousSong);
             RuntimePlayHistoryIndex++;
         }
 
-        AudioLibWrapper.PlaySong(CurrentlyPlaying ?? throw new InvalidDataException("No song to play"));
+        AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"));
         NewSongStarted?.Invoke(this, CurrentlyPlaying);
     }
 
-    public string ChooseNewSongPath()
+    public AvailableSong ChooseNewSongPath()
     {
         // TODO Proper Song Choosing
-        var newSong = AvailableSongPaths[Random.Shared.Next(AvailableSongPaths.Count)];
+        var newSong = AvailableSongs[Random.Shared.Next(AvailableSongs.Count)];
         return newSong;
     }
 }

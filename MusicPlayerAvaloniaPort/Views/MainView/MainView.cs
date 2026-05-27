@@ -55,7 +55,7 @@ public partial class MainView : UserControl
         // Events
         window?.Closing += MainView_Closing;
         window?.ScalingChanged += MainView_ScalingChanged;
-        songManager.NewSongStarted += (s, songPath) => UpdateUiForNewSong(songPath);
+        songManager.NewSongStarted += (s, song) => UpdateUiForNewSong(song);
 
         // Ui loops
         uiUpdateLoop.AddInput(new UiLoopDiagram.Input(this.GetLogicalDescendants().OfType<Canvas>().FirstOrDefault(x => x.Name == "DiagramCanvas")!));
@@ -96,47 +96,8 @@ public partial class MainView : UserControl
         uiUpdateLoop.InvokeEvent(new UpdateDiagramScalingEventArgs());
     }
 
-    private void MainView_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
-    {
-        if (e.Delta.Y > 0)
-        {
-            songManager.GetNextSong();
-        }
-        else if (e.Delta.Y < 0)
-        {
-            songManager.GetPreviousSong();
-        }
-    }
-
     void ButtonClose_Click(object? sender, RoutedEventArgs e)
     {
         window?.Close();
-    }
-
-    void ButtonUpvote_Click(object? sender, RoutedEventArgs e)
-    {
-        viewModel?.UpvoteLocked = !viewModel.UpvoteLocked;
-        var upvoteButton = sender as Button;
-
-        var path = upvoteButton?.GetLogicalChildren().FirstOrDefault() as Path;
-        path?.Fill = viewModel?.UpvoteLocked == true ? this.FindResource("PrimaryColor") as SolidColorBrush : Brushes.White;
-    }
-
-    private void DurationBarStackPanel_PointerMoved(object? sender, PointerEventArgs e)
-    {
-        Debug.WriteLine("DurationBarStackPanel_PointerMoved!");
-        if (!e.Properties.IsLeftButtonPressed)
-            return;
-        if (sender is not StackPanel eventRoot)
-        {
-            Debug.WriteLine("eventRoot null?");
-            return;
-        }
-
-        var clickPoint = e.GetPosition(eventRoot);
-        var targetPercentage = (clickPoint.X - 3) / (eventRoot.Bounds.Width - 7); // I love magic numbers
-        audioLibWrapper.PlayProgress = (float)targetPercentage;
-
-        e.Handled = true;
     }
 }
