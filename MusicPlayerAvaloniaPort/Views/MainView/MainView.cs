@@ -32,6 +32,8 @@ public partial class MainView : UserControl
     AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
     UiUpdateLoopService uiUpdateLoop = ServiceContainer.GetService<UiUpdateLoopService>();
 
+    const double MAX_VOLUME = 1;
+
     public MainView()
     {
         // Avalonia Init
@@ -71,6 +73,7 @@ public partial class MainView : UserControl
         // Initial Update
         MainView_ScalingChanged(null, EventArgs.Empty);
         songManager.GetNextSong();
+        SetVolumeUi();
     }
 
     private void MainView_Closing(object? sender, WindowClosingEventArgs e)
@@ -119,10 +122,52 @@ public partial class MainView : UserControl
         path?.Fill = viewModel?.UpvoteLocked == true ? this.FindResource("PrimaryColor") as SolidColorBrush : Brushes.White;
     }
 
-    private void VolumeBarStackPanel_PointerPressed(object? sender, PointerPressedEventArgs e)
+    private void VolumeBarStackPanel_PointerMoved(object? sender, PointerEventArgs e)
     {
-        Debug.WriteLine("VolumeBarStackPanel_PointerPressed!");
+        Debug.WriteLine("VolumeBarStackPanel_PointerMoved!");
+        if (!e.Properties.IsLeftButtonPressed)
+            return;
+        if (sender is not StackPanel eventRoot)
+        {
+            Debug.WriteLine("eventRoot null?");
+            return;
+        }
+
+        var clickPoint = e.GetPosition(eventRoot);
+        var targetPercentage = (clickPoint.X - 3) / (eventRoot.Bounds.Width - 7); // I love magic numbers
+        targetPercentage = double.Clamp(targetPercentage, 0, 1);
+        targetPercentage *= MAX_VOLUME;
+        audioLibWrapper.Volume = (float)targetPercentage;
+        //Console.WriteLine($"Volume set to {audioLibWrapper.Volume}");
+
+        SetVolumeUi();
+
         e.Handled = true;
+    }
+
+    private void SetVolumeUi()
+    {
+        var volumeBarUserRectangle = this.GetLogicalDescendants().OfType<Rectangle>().FirstOrDefault(x => x.Name == "VolumeBarUserRectangle");
+        var volumeBarRealRectangle = this.GetLogicalDescendants().OfType<Rectangle>().FirstOrDefault(x => x.Name == "VolumeBarRealRectangle");
+        if (volumeBarUserRectangle == null || volumeBarRealRectangle == null)
+            return;
+
+        var totalWidth = (this.FindResource("VolumeBarWidth") as double?) ?? 100;
+        var volumePercent = audioLibWrapper.Volume / MAX_VOLUME;
+        volumeBarUserRectangle.Width = totalWidth * volumePercent;
+        volumeBarRealRectangle.Width = totalWidth * volumePercent * 0.8;
+
+        var volumeIconArc1 = this.GetLogicalDescendants().OfType<Path>().FirstOrDefault(x => x.Name == "VolumeIconVolumeArc1Path");
+        var volumeIconArc2 = this.GetLogicalDescendants().OfType<Path>().FirstOrDefault(x => x.Name == "VolumeIconVolumeArc2Path");
+        var volumeIconArc3 = this.GetLogicalDescendants().OfType<Path>().FirstOrDefault(x => x.Name == "VolumeIconVolumeArc3Path");
+        if (volumeIconArc1 == null || volumeIconArc2 == null || volumeIconArc3 == null)
+        {
+            Console.WriteLine("Volume arcs not found!");
+            return;
+        }
+        volumeIconArc1.IsVisible = audioLibWrapper.Volume > 0.1;
+        volumeIconArc2.IsVisible = audioLibWrapper.Volume > 0.5;
+        volumeIconArc3.IsVisible = audioLibWrapper.Volume > 0.9;
     }
 
     private void DurationBarStackPanel_PointerMoved(object? sender, PointerEventArgs e)
@@ -137,7 +182,7 @@ public partial class MainView : UserControl
         }
 
         var clickPoint = e.GetPosition(eventRoot);
-        var targetPercentage = (clickPoint.X - 3) / (eventRoot.Bounds.Width - 7);
+        var targetPercentage = (clickPoint.X - 3) / (eventRoot.Bounds.Width - 7); // I love magic numbers
         audioLibWrapper.PlayProgress = (float)targetPercentage;
 
         e.Handled = true;
