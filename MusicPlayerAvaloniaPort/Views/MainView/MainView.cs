@@ -73,13 +73,13 @@ public partial class MainView : UserControl
         // Initial Update
         MainView_ScalingChanged(null, EventArgs.Empty);
         songManager.GetNextSong();
-        UpdateVolumeUi();
+        LoadVolume();
     }
 
     private void MainView_Closing(object? sender, WindowClosingEventArgs e)
     {
-        Debug.WriteLine("MainView closing!");
         Config.Save();
+        Debug.WriteLine("MainView closing!");
     }
 
     private void MainView_ScalingChanged(object? sender, EventArgs e)

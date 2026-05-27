@@ -20,6 +20,12 @@ namespace MusicPlayerAvaloniaPort.Views.MainView;
 
 public partial class MainView : UserControl
 {
+    void LoadVolume()
+    {
+        audioLibWrapper.Volume = (float)(Config.Data.Volume * MAX_VOLUME);
+        UpdateVolumeUi();
+    }
+
     private void VolumeBarStackPanel_PointerMoved(object? sender, PointerEventArgs e)
     {
         Debug.WriteLine("VolumeBarStackPanel_PointerMoved!");
@@ -33,11 +39,12 @@ public partial class MainView : UserControl
 
         var clickPoint = e.GetPosition(eventRoot);
         var targetPercentage = (clickPoint.X - 3) / (eventRoot.Bounds.Width - 7); // I love magic numbers
-        targetPercentage = double.Clamp(targetPercentage, 0, 1);
-        targetPercentage *= MAX_VOLUME;
-        audioLibWrapper.Volume = (float)targetPercentage;
+        var clampedTargetPercentage = double.Clamp(targetPercentage, 0, 1);
+        var targetVolume = clampedTargetPercentage * MAX_VOLUME;
+        audioLibWrapper.Volume = (float)targetVolume;
         //Console.WriteLine($"Volume set to {audioLibWrapper.Volume}");
 
+        Config.Data.Volume = clampedTargetPercentage;
         UpdateVolumeUi();
 
         e.Handled = true;

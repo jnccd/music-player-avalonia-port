@@ -12,6 +12,7 @@ namespace MusicPlayerAvaloniaPort.Configuration
         public PixelPoint? Pos;
         public double? Width;
         public double? Height;
+        public double Volume = 0.8;
         public Color PrimaryColor;
         public string? SongLibraryPath;
 
