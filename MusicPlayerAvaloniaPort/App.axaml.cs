@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -9,15 +11,15 @@ using MusicPlayerAvaloniaPort.Configuration;
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.ViewModels;
 using MusicPlayerAvaloniaPort.Views.MainView;
+using MusicPlayerAvaloniaPort.Views.OptionsView;
 
 namespace MusicPlayerAvaloniaPort;
 
 public partial class App : Application
 {
-    public MainViewModel MainViewModel { get; private set; } = new();
-
     public override void Initialize()
     {
+        AvaloniaWindowManager.Initialize(this);
         AvaloniaXamlLoader.Load(this);
     }
 
@@ -25,25 +27,7 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new Window
-            {
-                Content = new MainView
-                {
-                    DataContext = MainViewModel
-                },
-                Position = Config.Data.Pos ?? new PixelPoint(100, 100),
-                Width = Config.Data.Width ?? Globals.InitialWindowSize.X,
-                Height = Config.Data.Height ?? Globals.InitialWindowSize.Y,
-                ShowInTaskbar = true,
-                Title = "MusicPlayer",
-                Icon = new WindowIcon("./Assets/icon.ico"),
-                Background = new SolidColorBrush(Color.Parse("#1a000000")),
-                TransparencyLevelHint = [WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.Transparent],
-                ExtendClientAreaToDecorationsHint = true,
-                ExtendClientAreaChromeHints = Avalonia.Platform.ExtendClientAreaChromeHints.NoChrome,
-                ExtendClientAreaTitleBarHeightHint = -1,
-            };
-            ViewModelBase.MainView = desktop.MainWindow.Content as MainView;
+            desktop.MainWindow = AvaloniaWindowManager.GetWindow(typeof(MainView));
         }
         else
         {

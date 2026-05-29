@@ -2,8 +2,8 @@
     x:Class="MusicPlayerAvaloniaPort.Views.MainView.MainView"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:conv="clr-namespace:MusicPlayerAvaloniaPort.Converters;assembly=MusicPlayerAvaloniaPort"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-    xmlns:helpers="clr-namespace:MusicPlayerAvaloniaPort.Converters;assembly=MusicPlayerAvaloniaPort"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:sys="clr-namespace:System;assembly=mscorlib"
     xmlns:vm="using:MusicPlayerAvaloniaPort.ViewModels"
@@ -23,8 +23,8 @@
         <sys:Double x:Key="VolumeIconSize">32</sys:Double>
         <sys:Double x:Key="BottomGridIconSize">24</sys:Double>
 
-        <helpers:AddMultiplyConverter x:Key="AddMultiplyConverter" />
-        <helpers:EitherOrConverter x:Key="EitherOrConverter" />
+        <conv:AddMultiplyConverter x:Key="AddMultiplyConverter" />
+        <conv:EitherOrConverter x:Key="EitherOrConverter" />
     </UserControl.Resources>
     <Border BorderBrush="#0AE3E3E3" BorderThickness="1">
         <Grid
@@ -238,7 +238,8 @@
                 <Button
                     Name="ButtonOptions"
                     Grid.Column="3"
-                    Background="Transparent">
+                    Background="Transparent"
+                    Click="ButtonOptions_Click">
                     <Path
                         Width="{StaticResource BottomGridIconSize}"
                         Height="{StaticResource BottomGridIconSize}"

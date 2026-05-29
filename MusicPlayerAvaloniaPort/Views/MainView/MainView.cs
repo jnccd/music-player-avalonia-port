@@ -25,8 +25,9 @@ namespace MusicPlayerAvaloniaPort.Views.MainView;
 
 public partial class MainView : UserControl
 {
-    MainViewModel? viewModel => DataContext as MainViewModel;
     Window? window => this.GetVisualRoot() as Window;
+    MainViewModel? viewModel => DataContext as MainViewModel;
+    OptionsView.OptionsView OptionsView = new();
 
     SongManagerService songManager = ServiceContainer.GetService<SongManagerService>();
     AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
@@ -38,6 +39,9 @@ public partial class MainView : UserControl
     {
         // Avalonia Init
         AvaloniaXamlLoader.Load(this);
+#if DEBUG
+        window?.AttachDevTools();
+#endif
 
         // Events
         this.Loaded += MainView_Loaded;
@@ -46,9 +50,7 @@ public partial class MainView : UserControl
     private void MainView_Loaded(object? sender, RoutedEventArgs e)
     {
         Debug.WriteLine("MainView loaded!");
-#if DEBUG
-        window?.AttachDevTools();
-#endif
+
         // Setup 
         MapLocalSongLibrary();
 
@@ -76,6 +78,13 @@ public partial class MainView : UserControl
         LoadVolume();
     }
 
+    void ButtonOptions_Click(object? sender, RoutedEventArgs e)
+    {
+        var optionsWIndow = AvaloniaWindowManager.GetWindow(typeof(OptionsView.OptionsView));
+        optionsWIndow.Show();
+        optionsWIndow.Focus();
+    }
+
     private void MainView_Closing(object? sender, WindowClosingEventArgs e)
     {
         Config.Save();
@@ -99,5 +108,6 @@ public partial class MainView : UserControl
     void ButtonClose_Click(object? sender, RoutedEventArgs e)
     {
         window?.Close();
+        Environment.Exit(0);
     }
 }
