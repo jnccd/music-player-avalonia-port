@@ -13,10 +13,10 @@ using Microsoft.Extensions.DependencyInjection;
 using MusicPlayerAvaloniaPort.Configuration;
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Services;
-using static MusicPlayerAvaloniaPort.Views.MainView.UiLoopTitle;
+using static MusicPlayerAvaloniaPort.Views.Main.UiLoopTitle;
 using Path = Avalonia.Controls.Shapes.Path;
 
-namespace MusicPlayerAvaloniaPort.Views.MainView;
+namespace MusicPlayerAvaloniaPort.Views.Main;
 
 public partial class MainView : UserControl
 {

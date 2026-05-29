@@ -5,7 +5,7 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.VisualTree;
 
-namespace MusicPlayerAvaloniaPort.Views.OptionsView;
+namespace MusicPlayerAvaloniaPort.Views.Options;
 
 public partial class OptionsView : UserControl
 {

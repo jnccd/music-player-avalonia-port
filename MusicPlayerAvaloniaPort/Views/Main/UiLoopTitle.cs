@@ -11,7 +11,7 @@ using MusicPlayerAvaloniaPort.Services;
 using MusicPlayerAvaloniaPort.Services.UiUpdateLoop;
 using Path = Avalonia.Controls.Shapes.Path;
 
-namespace MusicPlayerAvaloniaPort.Views.MainView;
+namespace MusicPlayerAvaloniaPort.Views.Main;
 
 [RegisterUiLoop]
 public class UiLoopTitle() : IUiUpdateLoop(typeof(MainView), typeof(Input))

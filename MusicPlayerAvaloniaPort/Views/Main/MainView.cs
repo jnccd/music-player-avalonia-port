@@ -3,31 +3,25 @@ using System.Diagnostics;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Input;
+using Avalonia.Controls.Shapes;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
-using Avalonia.Media.Imaging;
 using Avalonia.VisualTree;
-using SkiaSharp;
 using MusicPlayerAvaloniaPort.Configuration;
-using MusicPlayerAvaloniaPort.ViewModels;
-using MusicPlayerAvaloniaPort.Helpers;
-using Avalonia.Threading;
-using Color = Avalonia.Media.Color;
 using MusicPlayerAvaloniaPort.Services;
 using MusicPlayerAvaloniaPort.Services.UiUpdateLoop;
-using static MusicPlayerAvaloniaPort.Views.MainView.UiLoopDiagram;
-using Avalonia.Controls.Shapes;
+using MusicPlayerAvaloniaPort.ViewModels;
+using MusicPlayerAvaloniaPort.Views.Options;
+using static MusicPlayerAvaloniaPort.Views.Main.UiLoopDiagram;
 
-namespace MusicPlayerAvaloniaPort.Views.MainView;
+namespace MusicPlayerAvaloniaPort.Views.Main;
 
 public partial class MainView : UserControl
 {
     Window? window => this.GetVisualRoot() as Window;
     MainViewModel? viewModel => DataContext as MainViewModel;
-    OptionsView.OptionsView OptionsView = new();
 
     SongManagerService songManager = ServiceContainer.GetService<SongManagerService>();
     AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
@@ -80,7 +74,7 @@ public partial class MainView : UserControl
 
     void ButtonOptions_Click(object? sender, RoutedEventArgs e)
     {
-        var optionsWIndow = AvaloniaWindowManager.GetWindow(typeof(OptionsView.OptionsView));
+        var optionsWIndow = AvaloniaWindowManager.GetWindow(typeof(OptionsView));
         optionsWIndow.Show();
         optionsWIndow.Focus();
     }

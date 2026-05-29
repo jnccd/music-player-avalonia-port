@@ -1,5 +1,5 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
-using MusicPlayerAvaloniaPort.Views.MainView;
+using MusicPlayerAvaloniaPort.Views.Main;
 
 namespace MusicPlayerAvaloniaPort.ViewModels;
 
