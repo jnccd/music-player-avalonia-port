@@ -28,9 +28,9 @@
                     <TextBox x:Name="passwordTextBox" MinWidth="150" PasswordChar="*" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button>Login</Button>
-                    <Button>Register</Button>
-                </StackPanel>
+                    <Button Click="LoginButton_Click">Login</Button>
+                    <Button Click="RegisterButton_Click">Register</Button>
+                </StackPanel> 
                 <StackPanel Orientation="Horizontal">
                     <Label Content="State: " />
                     <Label Name="stateLabel" Content="" />

@@ -1,7 +1,11 @@
 using Avalonia;
+using EzAuth.Interfaces;
+using EzAuth.Keycloak;
 using Microsoft.Extensions.DependencyInjection;
+using MusicPlayerAvaloniaPort.Persistence.Database;
 using System;
 using System.Linq;
+using System.Net.Http;
 using System.Reflection;
 
 namespace MusicPlayerAvaloniaPort;
@@ -44,6 +48,8 @@ public static class ServiceContainer
                 serviceCollection.AddTransient(declaringType, attr.serviceType);
         }
 
+        serviceCollection.AddSingleton<HttpClient>(new HttpClient());
+        serviceCollection.AddSingleton<IEzAuth>(new EzKeycloak());
         Services = serviceCollection.BuildServiceProvider();
     }
 
