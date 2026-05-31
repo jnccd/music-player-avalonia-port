@@ -46,7 +46,7 @@ public partial class OptionsView : UserControl
 
         var stateLabel = this.GetNestedControl<Label>("stateLabel");
         stateLabel?.Content = syncService.State;
-        syncService.OnStateChanged = state => stateLabel?.Content = state;
+        syncService.OnStateChanged = state => Dispatcher.Invoke(() => stateLabel?.Content = state);
     }
 
     private void LoginButton_Click(object? sender, RoutedEventArgs e)
