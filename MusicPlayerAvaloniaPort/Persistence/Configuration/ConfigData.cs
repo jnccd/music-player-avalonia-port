@@ -17,6 +17,11 @@ public class ConfigData
     public string? SongLibraryPath;
     public double Volume = 0.8;
 
+    // Sync settings
+    public string? AuthBackendRefreshToken;
+    public string? SyncServerHost;
+    public string? SyncServerUsername;
+
     public ConfigData()
     {
         _ = Color.TryParse("#007B82", out PrimaryColor);
