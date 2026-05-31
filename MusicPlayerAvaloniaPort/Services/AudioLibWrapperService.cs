@@ -151,9 +151,12 @@ public class AudioLibWrapperService
 
         if (soundPlayer != null)
         {
-            playbackDevice.MasterMixer.RemoveComponent(soundPlayer);
-            soundPlayer.Dispose();
-            playbackDevice.Dispose();
+            Task.Run(() =>
+            {
+                playbackDevice.MasterMixer.RemoveComponent(soundPlayer);
+                soundPlayer.Dispose();
+                playbackDevice.Dispose();
+            });
         }
 
         playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, GetCurrentAudioFormat(), new MiniAudioDeviceConfig
