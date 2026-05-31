@@ -9,8 +9,8 @@ using System.Linq;
 
 namespace MusicPlayerAvaloniaPort.Services;
 
-[RegisterImplementation(ServiceRegisterType.Singleton, typeof(SongManagerService))]
-public class SongManagerService
+[RegisterImplementation(ServiceRegisterType.Singleton, typeof(SongPlaybackService))]
+public class SongPlaybackService
 {
     readonly AudioLibWrapperService AudioLibWrapper;
     readonly UpvotedSongManagerService UpvotedSongManager;
@@ -22,10 +22,11 @@ public class SongManagerService
     AvailableSong? CurrentlyPlaying => RuntimePlayHistoryIndex >= 0 && RuntimePlayHistoryIndex < RuntimePlayHistory.Count ?
         RuntimePlayHistory[RuntimePlayHistoryIndex] :
         null;
+    public bool UpvoteLockedIn { get; set; } = false;
 
     public event EventHandler<AvailableSong>? NewSongStarted;
 
-    public SongManagerService(AudioLibWrapperService AudioLibWrapper, UpvotedSongSyncService SyncService, UpvotedSongManagerService UpvotedSongManager)
+    public SongPlaybackService(AudioLibWrapperService AudioLibWrapper, UpvotedSongManagerService UpvotedSongManager)
     {
         this.AudioLibWrapper = AudioLibWrapper;
         AudioLibWrapper.PlaybackEnded += (sender, args) =>
@@ -56,6 +57,20 @@ public class SongManagerService
 
     public void GetNextSong()
     {
+        // Score Change
+        if (UpvoteLockedIn)
+        {
+            UpvotedSongManager.UpvoteUpvotedSong(CurrentlyPlaying?.UpvotedSongId
+                ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"), null);
+            UpvoteLockedIn = false;
+        }
+        else if (RuntimePlayHistoryIndex > 0 && RuntimePlayHistoryIndex == RuntimePlayHistory.Count - 1) // Last Song in filled RuntimePlayHistory
+        {
+            UpvotedSongManager.DownvoteUpvotedSong(CurrentlyPlaying?.UpvotedSongId
+                ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"), null);
+        }
+
+        // Update RuntimePlayHistory
         RuntimePlayHistoryIndex++;
         while (RuntimePlayHistoryIndex >= RuntimePlayHistory.Count)
         {
@@ -63,11 +78,21 @@ public class SongManagerService
             RuntimePlayHistory.Add(nextSong);
         }
 
+        // Invoke Events
         AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"));
         NewSongStarted?.Invoke(this, CurrentlyPlaying);
     }
     public void GetPreviousSong()
     {
+        // Score Change
+        if (UpvoteLockedIn)
+        {
+            UpvotedSongManager.UpvoteUpvotedSong(CurrentlyPlaying?.UpvotedSongId
+                ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"), null);
+            UpvoteLockedIn = false;
+        }
+
+        // Update RuntimePlayHistory
         RuntimePlayHistoryIndex--;
         while (RuntimePlayHistoryIndex < 0)
         {
@@ -76,6 +101,7 @@ public class SongManagerService
             RuntimePlayHistoryIndex++;
         }
 
+        // Invoke Events
         AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"));
         NewSongStarted?.Invoke(this, CurrentlyPlaying);
     }

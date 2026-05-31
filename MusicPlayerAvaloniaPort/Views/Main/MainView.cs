@@ -23,7 +23,7 @@ public partial class MainView : UserControl
     Window? window => TopLevel.GetTopLevel(this) as Window;
     MainViewModel? viewModel => DataContext as MainViewModel;
 
-    SongManagerService songManager = ServiceContainer.GetService<SongManagerService>();
+    SongPlaybackService songPlaybackService = ServiceContainer.GetService<SongPlaybackService>();
     AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
     UiUpdateLoopService uiUpdateLoop = ServiceContainer.GetService<UiUpdateLoopService>();
 
@@ -48,7 +48,7 @@ public partial class MainView : UserControl
         // Events
         window?.Closing += MainView_Closing;
         window?.ScalingChanged += MainView_ScalingChanged;
-        songManager.NewSongStarted += (s, song) => UpdateUiForNewSong(song);
+        songPlaybackService.NewSongStarted += (s, song) => UpdateUiForNewSong(song);
 
         // Ui loops
         uiUpdateLoop.AddInput(new UiLoopDiagram.Input(this.GetLogicalDescendants().OfType<Canvas>().FirstOrDefault(x => x.Name == "DiagramCanvas")!));
@@ -65,7 +65,7 @@ public partial class MainView : UserControl
 
         // Initial Update
         MainView_ScalingChanged(null, EventArgs.Empty);
-        songManager.GetNextSong();
+        songPlaybackService.GetNextSong();
         LoadVolume();
     }
 

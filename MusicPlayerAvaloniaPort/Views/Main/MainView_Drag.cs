@@ -47,7 +47,6 @@ public partial class MainView : UserControl
             Config.Data.Width = window.Width;
             Config.Data.Height = window.Height;
         }
-        Config.Save();
     }
     double CurrentRenderScaling() => window?.RenderScaling ?? 1;
     PixelPoint[] WindowPoints = new PixelPoint[4];

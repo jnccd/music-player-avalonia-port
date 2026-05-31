@@ -31,11 +31,6 @@ public partial class MainViewModel : ViewModelBase
     // Upvote
     [ObservableProperty]
     private bool _upvoteLocked = false;
-    [RelayCommand]
-    public void ToggleUpvoteLocked()
-    {
-        UpvoteLocked = !UpvoteLocked;
-    }
 
     // --- Commands ---
 

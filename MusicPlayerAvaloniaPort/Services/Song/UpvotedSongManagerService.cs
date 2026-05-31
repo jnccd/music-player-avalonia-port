@@ -4,15 +4,16 @@ using MusicPlayerAvaloniaPort.Services.Song;
 using MusicPlayerSyncInterface.DTOs;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 
 namespace MusicPlayerAvaloniaPort.Services;
 
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(UpvotedSongManagerService))]
-public class UpvotedSongManagerService(UpvotedSongSyncService SyncService)
+public class UpvotedSongManagerService(AudioLibWrapperService AudioLibWrapper, UpvotedSongSyncService SyncService)
 {
-    public UpvotedSong RegisterNewUpvotedSong(string songPath)
+    public UpvotedSong RegisterNewUpvotedSong([StringSyntax(StringSyntaxAttribute.Uri)] string songPath)
     {
         var songFileName = Path.GetFileName(songPath);
         var newUpvotedSong = new UpvotedSong(songFileName, 0, 0, 0, 0, GetSongAgeFromPath(songPath), -1) { Path = songPath };
@@ -26,7 +27,7 @@ public class UpvotedSongManagerService(UpvotedSongSyncService SyncService)
         return newUpvotedSong;
     }
 
-    public UpvotedSong? FindUpvotedSong(string songPath, SongDbContext? songDbContext)
+    public UpvotedSong? FindUpvotedSong([StringSyntax(StringSyntaxAttribute.Uri)] string songPath, SongDbContext? songDbContext)
     {
         songDbContext ??= new SongDbContext();
 
@@ -47,7 +48,7 @@ public class UpvotedSongManagerService(UpvotedSongSyncService SyncService)
         throw new Exception("Master Skywalker there are too many of them what are we going to do!?");
     }
 
-    DateTimeOffset? GetSongAgeFromPath(string SongPath)
+    DateTimeOffset? GetSongAgeFromPath([StringSyntax(StringSyntaxAttribute.Uri)] string SongPath)
     {
         if (File.Exists(SongPath))
         {
@@ -56,5 +57,86 @@ public class UpvotedSongManagerService(UpvotedSongSyncService SyncService)
         }
         else
             return null;
+    }
+
+    public void UpvoteUpvotedSong(Guid upvotedSongId, SongDbContext? songDbContext)
+    {
+        songDbContext ??= new SongDbContext();
+
+        var upvotedSong = songDbContext.UpvotedSongs.FirstOrDefault(x => x.SongId == upvotedSongId)
+            ?? throw new ArgumentException("No matching UpvotedSongs for guid", nameof(upvotedSongId));
+
+        var totalPlayProgress = (AudioLibWrapper.PlayProgress ?? throw new InvalidDataException($"{nameof(AudioLibWrapper.PlayProgress)} is null!"))
+            - AudioLibWrapper.SeekedPlayProgress;
+
+        if (upvotedSong.Score > 120)
+            upvotedSong.Score = 120;
+        if (upvotedSong.Score < -1)
+            upvotedSong.Score = -1;
+
+        if (upvotedSong.Streak < 1)
+            upvotedSong.Streak = 1;
+        else if (totalPlayProgress > 0.9)
+            upvotedSong.Streak++;
+
+        var scoreChange = upvotedSong.Streak * GetUpvoteWeight(upvotedSong.Score) * totalPlayProgress * 8;
+        upvotedSong.Score += scoreChange;
+        upvotedSong.TotalLikes++;
+
+        SaveScoreChangeToHistory(upvotedSong, scoreChange, songDbContext);
+
+        // TODO: UpdateSongChoosingList
+
+        // TODO: Show ui popup?
+    }
+    public void DownvoteUpvotedSong(Guid upvotedSongId, SongDbContext? songDbContext)
+    {
+        songDbContext ??= new SongDbContext();
+
+        var upvotedSong = songDbContext.UpvotedSongs.FirstOrDefault(x => x.SongId == upvotedSongId)
+            ?? throw new ArgumentException("No matching UpvotedSongs for guid", nameof(upvotedSongId));
+
+        var totalPlayProgress = (AudioLibWrapper.PlayProgress ?? throw new InvalidDataException($"{nameof(AudioLibWrapper.PlayProgress)} is null!"))
+            + AudioLibWrapper.SeekedPlayProgress;
+
+        if (upvotedSong.Score > 120)
+            upvotedSong.Score = 120;
+        if (upvotedSong.Score < -1)
+            upvotedSong.Score = -1;
+
+        if (upvotedSong.Streak > -1)
+            upvotedSong.Streak = -1;
+        else
+            upvotedSong.Streak -= 1;
+
+        var scoreChange = upvotedSong.Streak * GetDownvoteWeight(upvotedSong.Score) * (1 - totalPlayProgress) * 32;
+        upvotedSong.Score += scoreChange;
+        upvotedSong.TotalDislikes++;
+
+        SaveScoreChangeToHistory(upvotedSong, scoreChange, songDbContext);
+
+        // TODO: UpdateSongChoosingList
+
+        // TODO: Show ui popup? Program.game.ShowSecondRowMessage("Downvoted  previous  song!", 1.2f);
+    }
+
+    void SaveScoreChangeToHistory(UpvotedSong upvotedSong, float scoreChange, SongDbContext? songDbContext)
+    {
+        songDbContext ??= new SongDbContext();
+
+        var newEntry = new SongHistoryEntry(upvotedSong.SongId, scoreChange, DateTime.Now);
+        songDbContext.SongHistoryEntries.Add(newEntry);
+        songDbContext.SaveChanges();
+
+        SyncService.Vote(newEntry);
+    }
+
+    float GetUpvoteWeight(float SongScore)
+    {
+        return (float)Math.Pow(2, -SongScore / 20);
+    }
+    float GetDownvoteWeight(float SongScore)
+    {
+        return (float)Math.Pow(2, (SongScore - 100) / 20);
     }
 }

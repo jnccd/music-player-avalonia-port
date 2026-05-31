@@ -1,3 +1,4 @@
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -42,7 +43,7 @@ public partial class MainView : UserControl
             Config.Data.SongLibraryPath = folder!.Path.AbsolutePath;
         }
 
-        songManager.UpdateAvailableSongPaths(Config.Data.SongLibraryPath);
+        songPlaybackService.UpdateAvailableSongPaths(Config.Data.SongLibraryPath);
     }
 
     void UpdateUiForNewSong(AvailableSong song)
@@ -54,23 +55,31 @@ public partial class MainView : UserControl
         });
     }
 
+    DateTime lastPointerWheelChangedEvent = DateTime.MinValue;
     private void MainView_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
     {
-        if (e.Delta.Y > 0)
+        if ((DateTime.Now - lastPointerWheelChangedEvent).TotalMilliseconds > 1000)
         {
-            songManager.GetNextSong();
-        }
-        else if (e.Delta.Y < 0)
-        {
-            songManager.GetPreviousSong();
+            lastPointerWheelChangedEvent = DateTime.Now;
+            if (e.Delta.Y > 0)
+            {
+                songPlaybackService.GetNextSong();
+            }
+            else if (e.Delta.Y < 0)
+            {
+                songPlaybackService.GetPreviousSong();
+            }
         }
     }
 
     void ButtonUpvote_Click(object? sender, RoutedEventArgs e)
     {
+        // Logic update
         viewModel?.UpvoteLocked = !viewModel.UpvoteLocked;
-        var upvoteButton = sender as Button;
+        songPlaybackService.UpvoteLockedIn = viewModel!.UpvoteLocked;
 
+        // Ui color update
+        var upvoteButton = sender as Button;
         var path = upvoteButton?.GetLogicalChildren().FirstOrDefault() as Avalonia.Controls.Shapes.Path;
         path?.Fill = viewModel?.UpvoteLocked == true ? this.FindResource("PrimaryColor") as SolidColorBrush : Brushes.White;
     }
