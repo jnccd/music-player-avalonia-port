@@ -1,4 +1,6 @@
+using System;
 using System.Diagnostics;
+using System.IO;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -9,15 +11,12 @@ namespace MusicPlayerAvaloniaPort.Views.Options;
 
 public partial class OptionsView : UserControl
 {
-    Window? window => this.GetVisualRoot() as Window;
+    Window? window => TopLevel.GetTopLevel(this) as Window;
 
     public OptionsView()
     {
         // Avalonia Init
         AvaloniaXamlLoader.Load(this);
-#if DEBUG
-        window?.AttachDevTools();
-#endif
 
         // Events
         this.Loaded += OptionsView_Loaded;
@@ -26,5 +25,14 @@ public partial class OptionsView : UserControl
     private void OptionsView_Loaded(object? sender, RoutedEventArgs e)
     {
         Debug.WriteLine("OptionsView loaded!");
+
+        Dispatcher.Invoke(() =>
+        {
+            if (window == null)
+                throw new InvalidDataException(nameof(window));
+
+            window.MinWidth = window.Width;
+            window.MinHeight = window.Height;
+        });
     }
 }

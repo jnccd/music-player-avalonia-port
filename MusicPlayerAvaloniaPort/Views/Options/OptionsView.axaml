@@ -12,7 +12,30 @@
         <conv:AddMultiplyConverter x:Key="AddMultiplyConverter" />
         <conv:EitherOrConverter x:Key="EitherOrConverter" />
     </UserControl.Resources>
-    <StackPanel>
-        <TextBlock Text="This is the second window." />
-    </StackPanel>
+    <WrapPanel>
+        <GroupBox Header="Sync Server Connection">
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal">
+                    <Label Content="Host" Target="hostTextBox" />
+                    <TextBox x:Name="hostTextBox" MinWidth="200" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Label Content="Username" Target="usernameTextBox" />
+                    <TextBox x:Name="usernameTextBox" MinWidth="150" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Label Content="Password" Target="passwordTextBox" />
+                    <TextBox x:Name="passwordTextBox" MinWidth="150" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Button>Login</Button>
+                    <Button>Register</Button>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Label Content="State: " />
+                    <Label Name="stateLabel" Content="State: " />
+                </StackPanel>
+            </StackPanel>
+        </GroupBox>
+    </WrapPanel>
 </UserControl>
