@@ -64,9 +64,18 @@ public class AudioLibWrapperService
         set
         {
             if (value != null)
+            {
+                SeekedPlayProgress += value.Value - (PlayProgress
+                    ?? throw new InvalidDataException($"{nameof(PlayProgress)} is null!"));
                 soundPlayer?.Seek(value.Value * soundPlayer.Duration);
+            }
         }
     }
+    /// <summary>
+    /// Same unit as PlayProgress but may land outside of any bounds due to the nature of what it represents.
+    /// Forward seeking results in positive numbers and backwards seeking in negative.
+    /// </summary>
+    public float SeekedPlayProgress { get; private set; } = 0;
     public PlaybackState? PlayState
     {
         get => soundPlayer?.State;
@@ -156,6 +165,7 @@ public class AudioLibWrapperService
         playbackDevice.Start();
         soundPlayer.Volume = Volume;
         soundPlayer.Play();
+        SeekedPlayProgress = 0;
 
         soundPlayer.PlaybackEnded += SoundPlayer_PlaybackEnded;
 
