@@ -1,3 +1,9 @@
 [submodule "SoundFlow"]
 	path = SoundFlow
 	url = https://github.com/jnccd/SoundFlow
+[submodule "MusicPlayerSyncInterface"]
+	path = MusicPlayerSyncInterface
+	url = https://github.com/jnccd/music-player-sync-interface
+[submodule "EzAuth"]
+	path = EzAuth
+	url = https://github.com/jnccd/ez-auth
