@@ -9,7 +9,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.VisualTree;
-using MusicPlayerAvaloniaPort.Configuration;
+using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Services;
 using MusicPlayerAvaloniaPort.Services.UiUpdateLoop;
 using MusicPlayerAvaloniaPort.ViewModels;

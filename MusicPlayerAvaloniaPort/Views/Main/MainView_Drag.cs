@@ -4,7 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Platform;
-using MusicPlayerAvaloniaPort.Configuration;
+using MusicPlayerAvaloniaPort.Persistence.Configuration;
 
 namespace MusicPlayerAvaloniaPort.Views.Main;
 
