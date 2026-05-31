@@ -28,8 +28,8 @@ public class SongDbContext : DbContext
         }
         else if (Environment.GetEnvironmentVariable("DB_PROVIDER") == "sqlite" || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DB_PROVIDER")))
         {
-            var exePath = Path.GetDirectoryName(Assembly.GetEntryAssembly()?.Location ?? "~") + Path.DirectorySeparatorChar;
-            var sqlitePath = (Environment.GetEnvironmentVariable("MUSIC_PLAYER_SQLITE_DB_PATH") ?? exePath) + "song.db";
+            var exePath = $"{Path.GetDirectoryName(Assembly.GetEntryAssembly()?.Location ?? "~")}";
+            var sqlitePath = $"{Environment.GetEnvironmentVariable("MUSIC_PLAYER_SQLITE_DB_PATH") ?? exePath}{Path.DirectorySeparatorChar}Persistence{Path.DirectorySeparatorChar}song.db";
             Directory.CreateDirectory(Path.GetDirectoryName(sqlitePath)!);
 
             options.UseSqlite($"Data Source={sqlitePath}");
