@@ -48,21 +48,10 @@ public class SongManagerService
     {
         songDbContext ??= new SongDbContext();
 
-        // TODO: The matching logic should ideally be part of the interface repo since it concerns all projects using the db schema
-        var fileName = Path.GetFileName(path);
+        var upvotedSong = UpvotedSongManager.FindUpvotedSong(path, songDbContext);
+        upvotedSong ??= UpvotedSongManager.RegisterNewUpvotedSong(path);
 
-        var filenameMatchingSongs = songDbContext.UpvotedSongs.Where(x => x.Name == fileName).ToArray();
-        if (filenameMatchingSongs.Length == 1)
-            return new AvailableSong(path, filenameMatchingSongs.First().SongId);
-        if (filenameMatchingSongs.Length == 0)
-            return new AvailableSong(path, UpvotedSongManager.RegisterNewUpvotedSong(path).SongId);
-
-        (var album, var artists) = HelperFuncs.GetAlbumAndArtistsFromSong(path);
-        var fullMatchingSongs = songDbContext.UpvotedSongs.Where(x => x.Name == fileName && x.Album == album && x.Artist == artists).ToArray();
-        if (filenameMatchingSongs.Length == 1)
-            return new AvailableSong(path, fullMatchingSongs.First().SongId);
-
-        throw new Exception("Master Skywalker there are too many of them what are we going to do!?");
+        return new AvailableSong(path, upvotedSong.SongId);
     }
 
     public void GetNextSong()
