@@ -47,7 +47,7 @@ public class UpvotedSongManagerService(UpvotedSongSyncService SyncService)
         throw new Exception("Master Skywalker there are too many of them what are we going to do!?");
     }
 
-    public static DateTimeOffset? GetSongAgeFromPath(string SongPath)
+    DateTimeOffset? GetSongAgeFromPath(string SongPath)
     {
         if (File.Exists(SongPath))
         {
