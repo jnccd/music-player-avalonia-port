@@ -21,10 +21,14 @@ public partial class App : Application
         {
             desktop.MainWindow = AvaloniaWindowManager.GetWindow(typeof(MainView));
         }
+        else if (ApplicationLifetime == null)
+        {
+            Console.WriteLine("This seems to be a previewer run! How exciting!");
+        }
         else
         {
             File.AppendAllText("error.log", "ApplicationLifetime start failed!\n");
-            throw new NotSupportedException("ApplicationLifetime start failed!");
+            throw new NotSupportedException($"ApplicationLifetime start failed!");
         }
 
         base.OnFrameworkInitializationCompleted();
