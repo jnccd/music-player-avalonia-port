@@ -25,7 +25,6 @@ public partial class MainView : UserControl
         if (Config.Data.SongLibraryPath == null)
         {
             // Get the StorageProvider from your window
-            var window = this.GetVisualRoot() as Window;
             var storageProvider = TopLevel.GetTopLevel(window)!.StorageProvider;
 
             // Use folder dialog

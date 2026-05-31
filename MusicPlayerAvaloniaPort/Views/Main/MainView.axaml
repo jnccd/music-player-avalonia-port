@@ -49,7 +49,8 @@
                     Name="TitleCanvas"
                     Grid.Column="0"
                     Height="40"
-                    HorizontalAlignment="Stretch">
+                    HorizontalAlignment="Stretch"
+                    ClipToBounds="True">
                     <Canvas.OpacityMask>
                         <LinearGradientBrush StartPoint="0%,50%" EndPoint="100%,50%">
                             <GradientStop Offset="0.0" Color="rgba(255, 255, 255, 0)" />
@@ -133,7 +134,7 @@
                         Width="50"
                         Height="{StaticResource VolumeBarHeight}"
                         MinWidth="0"
-                        Margin="4,0"
+                        Margin="3,0"
                         HorizontalAlignment="Left"
                         Fill="{StaticResource PrimaryColorBrighter}">
                         <Rectangle.RenderTransform>
@@ -145,7 +146,7 @@
                         Width="40"
                         Height="{StaticResource VolumeBarHeight}"
                         MinWidth="0"
-                        Margin="4,0"
+                        Margin="3,0"
                         HorizontalAlignment="Left"
                         Fill="{StaticResource PrimaryColor}">
                         <Rectangle.RenderTransform>

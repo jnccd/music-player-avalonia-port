@@ -44,12 +44,12 @@ public partial class MainView : UserControl
         Config.Data.Pos = window!.Position;
         if (window != null && window.FrameSize != null)
         {
-            Config.Data.Width = window.FrameSize.Value.Width;
-            Config.Data.Height = window.FrameSize.Value.Height;
+            Config.Data.Width = window.Width;
+            Config.Data.Height = window.Height;
         }
         Config.Save();
     }
-    double CurrentRenderScaling() => this.VisualRoot?.RenderScaling ?? 1;
+    double CurrentRenderScaling() => window?.RenderScaling ?? 1;
     PixelPoint[] WindowPoints = new PixelPoint[4];
     PixelPoint Diff;
     static int X, Y;

@@ -20,7 +20,7 @@ namespace MusicPlayerAvaloniaPort.Views.Main;
 
 public partial class MainView : UserControl
 {
-    Window? window => this.GetVisualRoot() as Window;
+    Window? window => TopLevel.GetTopLevel(this) as Window;
     MainViewModel? viewModel => DataContext as MainViewModel;
 
     SongManagerService songManager = ServiceContainer.GetService<SongManagerService>();
@@ -33,9 +33,6 @@ public partial class MainView : UserControl
     {
         // Avalonia Init
         AvaloniaXamlLoader.Load(this);
-#if DEBUG
-        window?.AttachDevTools();
-#endif
 
         // Events
         this.Loaded += MainView_Loaded;
@@ -60,7 +57,7 @@ public partial class MainView : UserControl
             this.GetLogicalDescendants().OfType<Rectangle>().FirstOrDefault(x => x.Name == "DurationBarAntiAliasingRectangle")!,
             this.GetLogicalDescendants().OfType<Rectangle>().FirstOrDefault(x => x.Name == "DurationBarDurationRectangle")!,
             this.FindResource("PrimaryColor") as SolidColorBrush,
-            PixelScale: 1 / (this.GetVisualRoot() as Window)!.RenderScaling));
+            PixelScale: 1 / window!.RenderScaling));
         uiUpdateLoop.AddInput(new UiLoopTitle.Input(this.GetLogicalDescendants().OfType<Canvas>().FirstOrDefault(x => x.Name == "TitleCanvas")!));
 
         uiUpdateLoop.Init();
@@ -88,10 +85,10 @@ public partial class MainView : UserControl
     private void MainView_ScalingChanged(object? sender, EventArgs e)
     {
         // Fix Shadow Scaling
-        var rootGrid = this.GetLogicalDescendants().OfType<Grid>().FirstOrDefault(x => x.Name == "RootGrid")!;
-        var effect = rootGrid.Effect as DropShadowEffect;
-        effect?.OffsetX = 5 * (this.VisualRoot?.RenderScaling ?? 1);
-        effect?.OffsetY = 5 * (this.VisualRoot?.RenderScaling ?? 1);
+        // var rootGrid = this.GetLogicalDescendants().OfType<Grid>().FirstOrDefault(x => x.Name == "RootGrid")!;
+        // var effect = rootGrid.Effect as DropShadowEffect;
+        // effect?.OffsetX = 5 * (window?.RenderScaling ?? 1);
+        // effect?.OffsetY = 5 * (window?.RenderScaling ?? 1);
     }
 
     private void MainView_SizeChanged(object? sender, SizeChangedEventArgs e)

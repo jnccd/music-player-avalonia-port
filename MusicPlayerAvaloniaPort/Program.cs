@@ -18,5 +18,6 @@ class Program
             .UsePlatformDetect()
             .With(new Win32PlatformOptions())
             .With(new X11PlatformOptions())
+            .WithDeveloperTools()
             .LogToTrace();
 }
