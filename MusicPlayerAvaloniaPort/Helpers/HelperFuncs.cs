@@ -3,10 +3,11 @@ using SkiaSharp;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace MusicPlayerAvaloniaPort.Helpers;
 
-public class HelperFuncs
+public static class HelperFuncs
 {
     /// <summary>
     /// Recursively finds all mp3 files in a directory and its subdirectories.
@@ -37,6 +38,12 @@ public class HelperFuncs
             if (DirOrSubDirsContainMp3(D))
                 return true;
         return false;
+    }
+
+    public static (string Album, string Artists) GetAlbumAndArtistsFromSong(string songPath)
+    {
+        TagLib.File file = TagLib.File.Create(songPath);
+        return (file.Tag.Album, file.Tag.AlbumArtists.Length == 0 ? "" : file.Tag.AlbumArtists.Aggregate((x, y) => x + " + " + y));
     }
 
     public static Stream ModifyRGBChannelsAndKeepAlpha(SKBitmap bitmap, Color col)
