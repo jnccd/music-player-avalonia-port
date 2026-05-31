@@ -1,5 +1,7 @@
 using MusicPlayerAvaloniaPort.Helpers;
+using MusicPlayerAvaloniaPort.Persistence.Database;
 using MusicPlayerAvaloniaPort.Services.Song;
+using MusicPlayerSyncInterface.DTOs;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -11,6 +13,7 @@ namespace MusicPlayerAvaloniaPort.Services;
 public class SongManagerService
 {
     readonly AudioLibWrapperService AudioLibWrapper;
+    readonly UpvotedSongManagerService UpvotedSongManager;
 
     readonly List<AvailableSong> AvailableSongs = [];
 
@@ -22,20 +25,44 @@ public class SongManagerService
 
     public event EventHandler<AvailableSong>? NewSongStarted;
 
-    public SongManagerService(AudioLibWrapperService AudioLibWrapper)
+    public SongManagerService(AudioLibWrapperService AudioLibWrapper, UpvotedSongSyncService SyncService, UpvotedSongManagerService UpvotedSongManager)
     {
         this.AudioLibWrapper = AudioLibWrapper;
         AudioLibWrapper.PlaybackEnded += (sender, args) =>
         {
             GetNextSong();
         };
+
+        this.UpvotedSongManager = UpvotedSongManager;
     }
 
     public void UpdateAvailableSongPaths(string libraryRootPath)
     {
         AvailableSongs.Clear();
+        using var songDbContext = new SongDbContext();
         AvailableSongs.AddRange([.. HelperFuncs.FindAllMp3FilesInDir(libraryRootPath)
-            .Select(path => new AvailableSong(path, null))]); // TODO: Link to Upvoted Songs later
+            .Select(path => CreateAvailableSong(path, songDbContext))]);
+    }
+
+    AvailableSong CreateAvailableSong(string path, SongDbContext? songDbContext)
+    {
+        songDbContext ??= new SongDbContext();
+
+        // TODO: The matching logic should ideally be part of the interface repo since it concerns all projects using the db schema
+        var fileName = Path.GetFileName(path);
+
+        var filenameMatchingSongs = songDbContext.UpvotedSongs.Where(x => x.Name == fileName).ToArray();
+        if (filenameMatchingSongs.Length == 1)
+            return new AvailableSong(path, filenameMatchingSongs.First().SongId);
+        if (filenameMatchingSongs.Length == 0)
+            return new AvailableSong(path, UpvotedSongManager.RegisterNewUpvotedSong(path).SongId);
+
+        (var album, var artists) = HelperFuncs.GetAlbumAndArtistsFromSong(path);
+        var fullMatchingSongs = songDbContext.UpvotedSongs.Where(x => x.Name == fileName && x.Album == album && x.Artist == artists).ToArray();
+        if (filenameMatchingSongs.Length == 1)
+            return new AvailableSong(path, fullMatchingSongs.First().SongId);
+
+        throw new Exception("Master Skywalker there are too many of them what are we going to do!?");
     }
 
     public void GetNextSong()
