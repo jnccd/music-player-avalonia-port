@@ -34,9 +34,12 @@ public static class Config
         }
     }
     private static ConfigData data = new ConfigData();
-    static JsonSerializerOptions jsonOptions = new()
+    static JsonSerializerOptions jsonOptionsSerialize = new()
     {
-        WriteIndented = true,
+        WriteIndented = true
+    };
+    static JsonSerializerOptions jsonOptionsDeserialize = new()
+    {
         PropertyNameCaseInsensitive = true
     };
 
@@ -62,7 +65,8 @@ public static class Config
         {
             if (File.Exists(configPath))
                 File.Copy(configPath, configBackupPath, true);
-            File.WriteAllText(configPath, JsonSerializer.Serialize(Data, jsonOptions));
+            var cereal = JsonSerializer.Serialize(Data, jsonOptionsSerialize);
+            File.WriteAllText(configPath, cereal);
 
             UnsavedChanges = false;
         }
@@ -72,7 +76,7 @@ public static class Config
         lock (lockject)
         {
             if (Exists())
-                Data = JsonSerializer.Deserialize<ConfigData>(File.ReadAllText(configPath), jsonOptions) ?? Data;
+                Data = JsonSerializer.Deserialize<ConfigData>(File.ReadAllText(configPath), jsonOptionsDeserialize) ?? Data;
             else
                 Data = new ConfigData();
         }
@@ -81,7 +85,7 @@ public static class Config
     {
         lock (lockject)
         {
-            Data = JsonSerializer.Deserialize<ConfigData>(JSON, jsonOptions) ?? Data;
+            Data = JsonSerializer.Deserialize<ConfigData>(JSON, jsonOptionsDeserialize) ?? Data;
         }
     }
     public static new string ToString()

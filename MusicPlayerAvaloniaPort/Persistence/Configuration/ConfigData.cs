@@ -9,21 +9,21 @@ namespace MusicPlayerAvaloniaPort.Persistence.Configuration;
 public class ConfigData
 {
     // Local Gui Settings
-    public PixelPoint? Pos;
-    public double? Width;
-    public double? Height;
-    public Color PrimaryColor;
+    public PixelPoint? Pos { get; set; }
+    public double? Width { get; set; }
+    public double? Height { get; set; }
+    public Color PrimaryColor { get; set; }
 
-    public string? SongLibraryPath;
-    public double Volume = 0.8;
+    public string? SongLibraryPath { get; set; }
+    public double Volume { get; set; } = 0.8;
 
     // Sync settings
-    public string? AuthBackendRefreshToken;
-    public string? SyncServerHost;
-    public string? SyncServerUsername;
+    public string? AuthBackendRefreshToken { get; set; }
+    public string? SyncServerHost { get; set; }
+    public string? SyncServerUsername { get; set; }
 
     public ConfigData()
     {
-        _ = Color.TryParse("#007B82", out PrimaryColor);
+        PrimaryColor = Color.Parse("#007B82");
     }
 }
