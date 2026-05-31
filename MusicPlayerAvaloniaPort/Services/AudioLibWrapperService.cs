@@ -48,9 +48,13 @@ public class AudioLibWrapperService
     /// </summary>
     public float Volume
     {
-        get => soundPlayer?.Volume ?? 0;
-        set => soundPlayer?.Volume = value;
-    }
+        get;
+        set
+        {
+            soundPlayer?.Volume = value;
+            field = value;
+        }
+    } = 0;
     /// <summary>
     /// [0,1]
     /// </summary>
@@ -150,6 +154,7 @@ public class AudioLibWrapperService
         soundPlayer = new SoundPlayer(Engine, GetCurrentAudioFormat(), playerDataProvider);
         playbackDevice.MasterMixer.AddComponent(soundPlayer);
         playbackDevice.Start();
+        soundPlayer.Volume = Volume;
         soundPlayer.Play();
 
         soundPlayer.PlaybackEnded += SoundPlayer_PlaybackEnded;
