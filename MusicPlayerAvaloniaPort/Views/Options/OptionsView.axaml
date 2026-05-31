@@ -12,12 +12,12 @@
         <conv:AddMultiplyConverter x:Key="AddMultiplyConverter" />
         <conv:EitherOrConverter x:Key="EitherOrConverter" />
     </UserControl.Resources>
-    <WrapPanel>
+    <WrapPanel Margin="8">
         <GroupBox Header="Sync Server Connection">
             <StackPanel Spacing="8">
                 <StackPanel Orientation="Horizontal">
                     <Label Content="Host" Target="hostTextBox" />
-                    <TextBox x:Name="hostTextBox" MinWidth="200" />
+                    <TextBox x:Name="hostTextBox" MinWidth="200" Text="https://" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <Label Content="Username" Target="usernameTextBox" />
@@ -25,15 +25,15 @@
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <Label Content="Password" Target="passwordTextBox" />
-                    <TextBox x:Name="passwordTextBox" MinWidth="150" />
+                    <TextBox x:Name="passwordTextBox" MinWidth="150" PasswordChar="*" />
                 </StackPanel>
-                <StackPanel Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button>Login</Button>
                     <Button>Register</Button>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <Label Content="State: " />
-                    <Label Name="stateLabel" Content="State: " />
+                    <Label Name="stateLabel" Content="" />
                 </StackPanel>
             </StackPanel>
         </GroupBox>
