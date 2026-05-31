@@ -1,10 +1,10 @@
 ﻿using MusicPlayerAvaloniaPort.Helpers;
-using Newtonsoft.Json;
 using System;
 using System.Collections;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
 
 namespace MusicPlayerAvaloniaPort.Persistence.Configuration;
 
@@ -34,6 +34,11 @@ public static class Config
         }
     }
     private static ConfigData data = new ConfigData();
+    static JsonSerializerOptions jsonOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNameCaseInsensitive = true
+    };
 
     static Config()
     {
@@ -57,7 +62,7 @@ public static class Config
         {
             if (File.Exists(configPath))
                 File.Copy(configPath, configBackupPath, true);
-            File.WriteAllText(configPath, JsonConvert.SerializeObject(Data, Formatting.Indented));
+            File.WriteAllText(configPath, JsonSerializer.Serialize(Data, jsonOptions));
 
             UnsavedChanges = false;
         }
@@ -67,7 +72,7 @@ public static class Config
         lock (lockject)
         {
             if (Exists())
-                Data = JsonConvert.DeserializeObject<ConfigData>(File.ReadAllText(configPath)) ?? Data;
+                Data = JsonSerializer.Deserialize<ConfigData>(File.ReadAllText(configPath), jsonOptions) ?? Data;
             else
                 Data = new ConfigData();
         }
@@ -76,7 +81,7 @@ public static class Config
     {
         lock (lockject)
         {
-            Data = JsonConvert.DeserializeObject<ConfigData>(JSON) ?? Data;
+            Data = JsonSerializer.Deserialize<ConfigData>(JSON, jsonOptions) ?? Data;
         }
     }
     public static new string ToString()
