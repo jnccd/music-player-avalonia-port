@@ -32,5 +32,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SoundFlow\Src\SoundFlow.csproj" />
+    <ProjectReference Include="..\MusicPlayerSyncInterface\MusicPlayerSyncInterface.csproj" />
+    <ProjectReference Include="..\EzAuth\EzAuth.csproj" /> 
   </ItemGroup>
 </Project>
