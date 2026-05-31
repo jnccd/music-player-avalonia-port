@@ -68,14 +68,15 @@ public class UpvotedSongSyncService
         }
     }
 
-    public EzAuthAddress? GetAuthBackendAddress(string syncServerHost)
+    public EzAuthAddress? GetAuthBackendAddress(string? syncServerHost)
     {
+        if (syncServerHost == null) return null;
         var res = _httpClient.GetAsync($"{syncServerHost}/authBackend").Result;
         var content = res.Content.ReadAsStringAsync().Result;
         return JsonSerializer.Deserialize<EzAuthAddress>(content);
     }
 
-    public string GetAccountRegistrationAddress() => client!.GetAccountRegistrationAddress();
+    public string GetAccountRegistrationAddress(string? syncServerHost = null) => client!.GetAccountRegistrationAddress(GetAuthBackendAddress(syncServerHost)?.RealmUrl);
 
     public void Pull()
     {
