@@ -58,8 +58,9 @@ public partial class MainView : UserControl
     DateTime lastPointerWheelChangedEvent = DateTime.MinValue;
     private void MainView_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
     {
-        if ((DateTime.Now - lastPointerWheelChangedEvent).TotalMilliseconds > 1000)
+        if ((DateTime.Now - lastPointerWheelChangedEvent).TotalSeconds > 3)
         {
+            Debug.WriteLine($"Scrollwheel event! {e.Delta.Y}");
             lastPointerWheelChangedEvent = DateTime.Now;
             if (e.Delta.Y > 0)
             {
