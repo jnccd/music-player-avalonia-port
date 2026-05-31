@@ -46,6 +46,7 @@ public partial class OptionsView : UserControl
 
         var stateLabel = this.GetNestedControl<Label>("stateLabel");
         stateLabel?.Content = syncService.State;
+        syncService.OnStateChanged = state => stateLabel?.Content = state;
     }
 
     private void LoginButton_Click(object? sender, RoutedEventArgs e)
@@ -61,11 +62,9 @@ public partial class OptionsView : UserControl
             Config.Save();
 
             syncService.Init(textBoxPassword.Text, true);
-            stateLabel?.Content = syncService.State;
         }
         catch (Exception ex)
         {
-            stateLabel?.Content = syncService.State;
             new MessageBox(e => Console.WriteLine(e), window, this)
                 .Show("Can't initialize login.", $"{syncService.State}\n\n{ex}");
             return;
@@ -74,11 +73,9 @@ public partial class OptionsView : UserControl
         try
         {
             syncService.Pull();
-            stateLabel?.Content = syncService.State;
         }
         catch (Exception ex)
         {
-            stateLabel?.Content = syncService.State;
             new MessageBox(e => Console.WriteLine(e), window, this)
                 .Show("Can't pull.", $"{syncService.State}\n\n{ex}");
             return;

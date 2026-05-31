@@ -17,11 +17,11 @@
             <StackPanel Spacing="8">
                 <StackPanel Orientation="Horizontal">
                     <Label Content="Host" Target="hostTextBox" />
-                    <TextBox x:Name="hostTextBox" MinWidth="200" Text="https://" />
+                    <TextBox x:Name="hostTextBox" MinWidth="200" Text="{Binding SyncServerHost}" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <Label Content="Username" Target="usernameTextBox" />
-                    <TextBox x:Name="usernameTextBox" MinWidth="150" />
+                    <TextBox x:Name="usernameTextBox" MinWidth="150" Text="{Binding SyncServerUsername}" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <Label Content="Password" Target="passwordTextBox" />
