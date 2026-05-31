@@ -30,6 +30,7 @@ public class SongDbContext : DbContext
         {
             var exePath = Path.GetDirectoryName(Assembly.GetEntryAssembly()?.Location ?? "~") + Path.DirectorySeparatorChar;
             var sqlitePath = (Environment.GetEnvironmentVariable("MUSIC_PLAYER_SQLITE_DB_PATH") ?? exePath) + "song.db";
+            Directory.CreateDirectory(Path.GetDirectoryName(sqlitePath)!);
 
             options.UseSqlite($"Data Source={sqlitePath}");
             DbStatus = $"Using SQLite DB at {sqlitePath}";
