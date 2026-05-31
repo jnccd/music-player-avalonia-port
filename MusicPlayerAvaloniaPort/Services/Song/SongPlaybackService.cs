@@ -14,6 +14,7 @@ public class SongPlaybackService
 {
     readonly AudioLibWrapperService AudioLibWrapper;
     readonly UpvotedSongManagerService UpvotedSongManager;
+    readonly SongChoosingService SongChoosingService;
 
     readonly List<AvailableSong> AvailableSongs = [];
 
@@ -26,7 +27,7 @@ public class SongPlaybackService
 
     public event EventHandler<AvailableSong>? NewSongStarted;
 
-    public SongPlaybackService(AudioLibWrapperService AudioLibWrapper, UpvotedSongManagerService UpvotedSongManager)
+    public SongPlaybackService(AudioLibWrapperService AudioLibWrapper, UpvotedSongManagerService UpvotedSongManager, SongChoosingService SongChoosingService)
     {
         this.AudioLibWrapper = AudioLibWrapper;
         AudioLibWrapper.PlaybackEnded += (sender, args) =>
@@ -35,6 +36,7 @@ public class SongPlaybackService
         };
 
         this.UpvotedSongManager = UpvotedSongManager;
+        this.SongChoosingService = SongChoosingService;
     }
 
     public void UpdateAvailableSongPaths(string libraryRootPath)
@@ -42,14 +44,16 @@ public class SongPlaybackService
         AvailableSongs.Clear();
         using var songDbContext = new SongDbContext();
         AvailableSongs.AddRange([.. HelperFuncs.FindAllMp3FilesInDir(libraryRootPath)
-            .Select(path => CreateAvailableSong(path, songDbContext))]);
+            .Select(path => CreateAvailableSong(path))]);
+
+        SongChoosingService.CreateSongChoosingDataStructure(AvailableSongs);
     }
 
-    AvailableSong CreateAvailableSong(string path, SongDbContext? songDbContext)
+    AvailableSong CreateAvailableSong(string path)
     {
-        songDbContext ??= new SongDbContext();
+        using var songDbContext = new SongDbContext();
 
-        var upvotedSong = UpvotedSongManager.FindUpvotedSong(path, songDbContext);
+        var upvotedSong = UpvotedSongManager.FindUpvotedSong(path);
         upvotedSong ??= UpvotedSongManager.RegisterNewUpvotedSong(path);
 
         return new AvailableSong(path, upvotedSong.SongId);
@@ -60,14 +64,16 @@ public class SongPlaybackService
         // Score Change
         if (UpvoteLockedIn)
         {
-            UpvotedSongManager.UpvoteUpvotedSong(CurrentlyPlaying?.UpvotedSongId
-                ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"), null);
-            UpvoteLockedIn = false;
+            UpvotedSongManager.UpvoteUpvotedSong(CurrentlyPlaying
+                ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"),
+                AvailableSongs);
+            UpvoteLockedIn = false; // TODO: Callback to ui so its also updated there
         }
         else if (RuntimePlayHistoryIndex > 0 && RuntimePlayHistoryIndex == RuntimePlayHistory.Count - 1) // Last Song in filled RuntimePlayHistory
         {
-            UpvotedSongManager.DownvoteUpvotedSong(CurrentlyPlaying?.UpvotedSongId
-                ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"), null);
+            UpvotedSongManager.DownvoteUpvotedSong(CurrentlyPlaying
+                ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"),
+                AvailableSongs);
         }
 
         // Update RuntimePlayHistory
@@ -87,8 +93,9 @@ public class SongPlaybackService
         // Score Change
         if (UpvoteLockedIn)
         {
-            UpvotedSongManager.UpvoteUpvotedSong(CurrentlyPlaying?.UpvotedSongId
-                ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"), null);
+            UpvotedSongManager.UpvoteUpvotedSong(CurrentlyPlaying
+                ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"),
+                AvailableSongs);
             UpvoteLockedIn = false;
         }
 

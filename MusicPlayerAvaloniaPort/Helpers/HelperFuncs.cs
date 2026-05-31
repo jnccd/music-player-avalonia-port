@@ -46,6 +46,11 @@ public static class HelperFuncs
         return (file.Tag.Album, file.Tag.AlbumArtists.Length == 0 ? "" : file.Tag.AlbumArtists.Aggregate((x, y) => x + " + " + y));
     }
 
+    public static float Sigmoid(double value)
+    {
+        return (float)(1.0 / (1.0 + Math.Pow(Math.E, -value)));
+    }
+
     public static Stream ModifyRGBChannelsAndKeepAlpha(SKBitmap bitmap, Color col)
     {
         // Lock the pixels

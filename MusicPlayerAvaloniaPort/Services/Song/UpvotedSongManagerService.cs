@@ -11,7 +11,7 @@ using System.Linq;
 namespace MusicPlayerAvaloniaPort.Services;
 
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(UpvotedSongManagerService))]
-public class UpvotedSongManagerService(AudioLibWrapperService AudioLibWrapper, UpvotedSongSyncService SyncService)
+public class UpvotedSongManagerService(AudioLibWrapperService AudioLibWrapper, UpvotedSongSyncService SyncService, SongChoosingService SongChoosingService)
 {
     public UpvotedSong RegisterNewUpvotedSong([StringSyntax(StringSyntaxAttribute.Uri)] string songPath)
     {
@@ -27,9 +27,9 @@ public class UpvotedSongManagerService(AudioLibWrapperService AudioLibWrapper, U
         return newUpvotedSong;
     }
 
-    public UpvotedSong? FindUpvotedSong([StringSyntax(StringSyntaxAttribute.Uri)] string songPath, SongDbContext? songDbContext)
+    public UpvotedSong? FindUpvotedSong([StringSyntax(StringSyntaxAttribute.Uri)] string songPath)
     {
-        songDbContext ??= new SongDbContext();
+        using var songDbContext = new SongDbContext();
 
         // TODO: The matching logic should ideally be part of the interface repo since it concerns all projects using the db schema
         var fileName = Path.GetFileName(songPath);
@@ -59,12 +59,11 @@ public class UpvotedSongManagerService(AudioLibWrapperService AudioLibWrapper, U
             return null;
     }
 
-    public void UpvoteUpvotedSong(Guid upvotedSongId, SongDbContext? songDbContext)
+    public void UpvoteUpvotedSong(AvailableSong songToUpvote, List<AvailableSong> AvailableSongs)
     {
-        songDbContext ??= new SongDbContext();
-
-        var upvotedSong = songDbContext.UpvotedSongs.FirstOrDefault(x => x.SongId == upvotedSongId)
-            ?? throw new ArgumentException("No matching UpvotedSongs for guid", nameof(upvotedSongId));
+        using var songDbContext = new SongDbContext();
+        var upvotedSong = songDbContext.UpvotedSongs.FirstOrDefault(x => x.SongId == songToUpvote.UpvotedSongId)
+            ?? throw new ArgumentException("No matching UpvotedSongs for guid", nameof(songToUpvote.UpvotedSongId));
 
         var totalPlayProgress = (AudioLibWrapper.PlayProgress ?? throw new InvalidDataException($"{nameof(AudioLibWrapper.PlayProgress)} is null!"))
             - AudioLibWrapper.SeekedPlayProgress;
@@ -83,18 +82,17 @@ public class UpvotedSongManagerService(AudioLibWrapperService AudioLibWrapper, U
         upvotedSong.Score += scoreChange;
         upvotedSong.TotalLikes++;
 
-        SaveScoreChangeToHistory(upvotedSong, scoreChange, songDbContext);
+        SaveScoreChangeToHistory(upvotedSong, scoreChange);
 
-        // TODO: UpdateSongChoosingList
+        SongChoosingService.UpdateSongChoosingDataStructure(songToUpvote, AvailableSongs);
 
         // TODO: Show ui popup?
     }
-    public void DownvoteUpvotedSong(Guid upvotedSongId, SongDbContext? songDbContext)
+    public void DownvoteUpvotedSong(AvailableSong songToDownvote, List<AvailableSong> AvailableSongs)
     {
-        songDbContext ??= new SongDbContext();
-
-        var upvotedSong = songDbContext.UpvotedSongs.FirstOrDefault(x => x.SongId == upvotedSongId)
-            ?? throw new ArgumentException("No matching UpvotedSongs for guid", nameof(upvotedSongId));
+        using var songDbContext = new SongDbContext();
+        var upvotedSong = songDbContext.UpvotedSongs.FirstOrDefault(x => x.SongId == songToDownvote.UpvotedSongId)
+            ?? throw new ArgumentException("No matching UpvotedSongs for guid", nameof(songToDownvote.UpvotedSongId));
 
         var totalPlayProgress = (AudioLibWrapper.PlayProgress ?? throw new InvalidDataException($"{nameof(AudioLibWrapper.PlayProgress)} is null!"))
             + AudioLibWrapper.SeekedPlayProgress;
@@ -113,16 +111,16 @@ public class UpvotedSongManagerService(AudioLibWrapperService AudioLibWrapper, U
         upvotedSong.Score += scoreChange;
         upvotedSong.TotalDislikes++;
 
-        SaveScoreChangeToHistory(upvotedSong, scoreChange, songDbContext);
+        SaveScoreChangeToHistory(upvotedSong, scoreChange);
 
-        // TODO: UpdateSongChoosingList
+        SongChoosingService.UpdateSongChoosingDataStructure(songToDownvote, AvailableSongs);
 
         // TODO: Show ui popup? Program.game.ShowSecondRowMessage("Downvoted  previous  song!", 1.2f);
     }
 
-    void SaveScoreChangeToHistory(UpvotedSong upvotedSong, float scoreChange, SongDbContext? songDbContext)
+    void SaveScoreChangeToHistory(UpvotedSong upvotedSong, float scoreChange)
     {
-        songDbContext ??= new SongDbContext();
+        using var songDbContext = new SongDbContext();
 
         var newEntry = new SongHistoryEntry(upvotedSong.SongId, scoreChange, DateTime.Now);
         songDbContext.SongHistoryEntries.Add(newEntry);
