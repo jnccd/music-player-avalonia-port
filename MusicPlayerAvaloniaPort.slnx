@@ -1,0 +1,42 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  
+  <Project Path="MusicPlayerAvaloniaPort/MusicPlayerAvaloniaPort.csproj" />
+  
+  <Project Path="MusicPlayerSyncInterface/MusicPlayerSyncInterface.csproj" />
+  <Project Path="EzAuth/EzAuth.csproj" />
+
+  <Folder Name="/SoundFlow/" />
+  <Folder Name="/SoundFlow/Codecs/">
+    <Project Path="SoundFlow/Codecs/SoundFlow.Codecs.FFMpeg/SoundFlow.Codecs.FFMpeg.csproj" />
+  </Folder>
+  <Folder Name="/SoundFlow/Extensions/">
+    <Project Path="SoundFlow/Extensions/SoundFlow.Extensions.WebRtc.Apm/SoundFlow.Extensions.WebRtc.Apm.csproj" />
+  </Folder>
+  <Folder Name="/SoundFlow/Midi/">
+    <Project Path="SoundFlow/Midi/SoundFlow.Midi.PortMidi/SoundFlow.Midi.PortMidi.csproj" />
+  </Folder>
+  <Folder Name="/SoundFlow/Samples/">
+    <Project Path="SoundFlow/Samples/SoundFlow.Samples.EditingMixer/SoundFlow.Samples.EditingMixer.csproj" />
+    <Project Path="SoundFlow/Samples/SoundFlow.Samples.Midi.BasicSequencing/SoundFlow.Samples.Midi.BasicSequencing.csproj" />
+    <Project Path="SoundFlow/Samples/SoundFlow.Samples.Midi.PropertyMapping/SoundFlow.Samples.Midi.PropertyMapping.csproj" />
+    <Project Path="SoundFlow/Samples/SoundFlow.Samples.Midi.SynthesisModifiers/SoundFlow.Samples.Midi.SynthesisModifiers.csproj" />
+    <Project Path="SoundFlow/Samples/SoundFlow.Samples.MultiEngines/SoundFlow.Samples.MultiEngines.csproj" />
+    <Project Path="SoundFlow/Samples/SoundFlow.Samples.NoiseSuppression/SoundFlow.Samples.NoiseSuppression.csproj" />
+    <Project Path="SoundFlow/Samples/SoundFlow.Samples.Recording/SoundFlow.Samples.Recording.csproj" />
+    <Project Path="SoundFlow/Samples/SoundFlow.Samples.Security.Authentication/SoundFlow.Samples.Security.Authentication.csproj" />
+    <Project Path="SoundFlow/Samples/SoundFlow.Samples.Security.Encryption/SoundFlow.Samples.Security.Encryption.csproj" />
+    <Project Path="SoundFlow/Samples/SoundFlow.Samples.Security.Fingerprinting/SoundFlow.Samples.Security.Fingerprinting.csproj" />
+    <Project Path="SoundFlow/Samples/SoundFlow.Samples.Security.IntegrityWatermarking/SoundFlow.Samples.Security.IntegrityWatermarking.csproj" />
+    <Project Path="SoundFlow/Samples/SoundFlow.Samples.Security.OwnershipWatermarking/SoundFlow.Samples.Security.OwnershipWatermarking.csproj" />
+    <Project Path="SoundFlow/Samples/SoundFlow.Samples.SimplePlayer/SoundFlow.Samples.SimplePlayer.csproj" />
+    <Project Path="SoundFlow/Samples/SoundFlow.Samples.SwitchDevices/SoundFlow.Samples.SwitchDevices.csproj" />
+  </Folder>
+  <Folder Name="/SoundFlow/Src/">
+    <Project Path="SoundFlow/Src/SoundFlow.csproj" />
+  </Folder>
+</Solution>
