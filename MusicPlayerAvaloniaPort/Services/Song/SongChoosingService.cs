@@ -14,7 +14,7 @@ public class SongChoosingService
 {
     List<AvailableSong> SongChoosingList = [];
 
-    public AvailableSong ChooseSongWithWeightedChances(AvailableSong currentSongThatShouldntBeRepeated)
+    public AvailableSong ChooseSongWithWeightedChances(AvailableSong? currentSongThatShouldntBeRepeated)
     {
         int SongChoosingListIndex;
         do

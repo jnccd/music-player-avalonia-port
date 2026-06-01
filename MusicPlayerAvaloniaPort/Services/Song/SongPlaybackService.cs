@@ -115,8 +115,7 @@ public class SongPlaybackService
 
     AvailableSong ChooseNextSong()
     {
-        // TODO Proper Song Choosing
-        var newSong = AvailableSongs[Random.Shared.Next(AvailableSongs.Count)];
+        var newSong = SongChoosingService.ChooseSongWithWeightedChances(CurrentlyPlaying);
         return newSong;
     }
 }
