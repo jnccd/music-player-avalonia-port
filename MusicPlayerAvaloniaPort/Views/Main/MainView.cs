@@ -49,6 +49,7 @@ public partial class MainView : UserControl
         window?.Closing += MainView_Closing;
         window?.ScalingChanged += MainView_ScalingChanged;
         songPlaybackService.NewSongStarted += (s, song) => UpdateUiForNewSong(song);
+        songPlaybackService.UpvoteLockedInChanged += (s, lockedIn) => UpdateUiForNewUpvoteLockedInState(lockedIn);
 
         // Ui loops
         uiUpdateLoop.AddInput(new UiLoopDiagram.Input(this.GetLogicalDescendants().OfType<Canvas>().FirstOrDefault(x => x.Name == "DiagramCanvas")!));

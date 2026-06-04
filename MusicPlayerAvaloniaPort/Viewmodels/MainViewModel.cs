@@ -30,7 +30,7 @@ public partial class MainViewModel : ViewModelBase
 
     // Upvote
     [ObservableProperty]
-    private bool _upvoteLocked = false;
+    private bool _upvoteLockedIn = false;
 
     // --- Commands ---
 

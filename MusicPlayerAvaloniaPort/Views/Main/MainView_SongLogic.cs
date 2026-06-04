@@ -55,6 +55,15 @@ public partial class MainView : UserControl
         });
     }
 
+    void UpdateUiForNewUpvoteLockedInState(bool lockedIn)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            viewModel!.UpvoteLockedIn = lockedIn;
+            UpdateButtonUpvoteColor();
+        });
+    }
+
     DateTime lastPointerWheelChangedEvent = DateTime.MinValue;
     private void MainView_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
     {
@@ -76,13 +85,17 @@ public partial class MainView : UserControl
     void ButtonUpvote_Click(object? sender, RoutedEventArgs e)
     {
         // Logic update
-        viewModel?.UpvoteLocked = !viewModel.UpvoteLocked;
-        songPlaybackService.UpvoteLockedIn = viewModel!.UpvoteLocked;
+        viewModel?.UpvoteLockedIn = !viewModel.UpvoteLockedIn;
+        songPlaybackService.UpvoteLockedIn = viewModel!.UpvoteLockedIn;
 
-        // Ui color update
-        var upvoteButton = sender as Button;
+        UpdateButtonUpvoteColor();
+    }
+
+    void UpdateButtonUpvoteColor()
+    {
+        var upvoteButton = this.GetLogicalDescendants().OfType<Button>().FirstOrDefault(x => x.Name == "ButtonUpvote");
         var path = upvoteButton?.GetLogicalChildren().FirstOrDefault() as Avalonia.Controls.Shapes.Path;
-        path?.Fill = viewModel?.UpvoteLocked == true ? this.FindResource("PrimaryColor") as SolidColorBrush : Brushes.White;
+        path?.Fill = viewModel?.UpvoteLockedIn == true ? this.FindResource("PrimaryColor") as SolidColorBrush : Brushes.White;
     }
 
     private void DurationBarStackPanel_PointerPressed(object? sender, PointerPressedEventArgs e)

@@ -16,14 +16,14 @@ namespace MusicPlayerAvaloniaPort.Services.Song;
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(UpvotedSongSyncService))]
 public class UpvotedSongSyncService
 {
-    HttpClient httpClient;
-    IEzAuth authBackend;
-    IEzAuthHttpClient? client = null;
+    readonly HttpClient httpClient;
+    readonly IEzAuth authBackend;
+    private IEzAuthHttpClient? client = null;
     EzAuthAddress? authBackendAddress = null;
     public string State { get => state; private set { OnStateChanged?.Invoke(value); state = value; } }
     private string state = "";
     public Action<string>? OnStateChanged = null;
-    JsonSerializerOptions jsonOptions = new()
+    readonly JsonSerializerOptions jsonOptions = new()
     {
         WriteIndented = true,
         PropertyNameCaseInsensitive = true

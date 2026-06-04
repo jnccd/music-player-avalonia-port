@@ -26,6 +26,7 @@ public class SongPlaybackService
     public bool UpvoteLockedIn { get; set; } = false;
 
     public event EventHandler<AvailableSong>? NewSongStarted;
+    public event EventHandler<bool>? UpvoteLockedInChanged;
 
     public SongPlaybackService(AudioLibWrapperService AudioLibWrapper, UpvotedSongManagerService UpvotedSongManager, SongChoosingService SongChoosingService)
     {
@@ -67,7 +68,8 @@ public class SongPlaybackService
             UpvotedSongManager.UpvoteUpvotedSong(CurrentlyPlaying
                 ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"),
                 AvailableSongs);
-            UpvoteLockedIn = false; // TODO: Callback to ui so its also updated there
+            UpvoteLockedIn = false;
+            UpvoteLockedInChanged?.Invoke(this, UpvoteLockedIn);
         }
         else if (RuntimePlayHistoryIndex > 0 && RuntimePlayHistoryIndex == RuntimePlayHistory.Count - 1) // Last Song in filled RuntimePlayHistory
         {
@@ -97,6 +99,7 @@ public class SongPlaybackService
                 ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"),
                 AvailableSongs);
             UpvoteLockedIn = false;
+            UpvoteLockedInChanged?.Invoke(this, UpvoteLockedIn);
         }
 
         // Update RuntimePlayHistory
