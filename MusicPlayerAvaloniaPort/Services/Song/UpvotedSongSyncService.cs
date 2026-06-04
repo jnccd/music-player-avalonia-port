@@ -27,6 +27,7 @@ public class UpvotedSongSyncService
         WriteIndented = true,
         PropertyNameCaseInsensitive = true
     };
+    const string ROUTE_VERSION_PREFIX = "/v1";
 
     public UpvotedSongSyncService(HttpClient httpClient, IEzAuth authBackend)
     {
@@ -38,6 +39,7 @@ public class UpvotedSongSyncService
 
     public void Init(string? password = null, bool TryCallApiInit = false)
     {
+        var endpoint = $"{ROUTE_VERSION_PREFIX}/sync/init";
         try
         {
             authBackendAddress = GetAuthBackendAddress(Config.Data.SyncServerHost
@@ -65,7 +67,7 @@ public class UpvotedSongSyncService
                 using var songDbContext = new SongDbContext();
                 var sendObjString = JsonSerializer.Serialize(new UserSongDataAndHistory([], [.. songDbContext.UpvotedSongs], [.. songDbContext.SongHistoryEntries]), jsonOptions);
                 var sendContent = new StringContent(sendObjString, Encoding.UTF8, "application/json");
-                var res = client.PostAsync($"{Config.Data.SyncServerHost}/sync/init", sendContent).Result;
+                var res = client.PostAsync($"{Config.Data.SyncServerHost}{endpoint}", sendContent).Result;
                 State = $"Init {res.StatusCode} {res.Content.ReadAsStringAsync().Result}";
             }
         }
@@ -79,7 +81,7 @@ public class UpvotedSongSyncService
     public EzAuthAddress? GetAuthBackendAddress(string? syncServerHost)
     {
         if (syncServerHost == null) return null;
-        var res = httpClient.GetAsync($"{syncServerHost}/authBackend").Result;
+        var res = httpClient.GetAsync($"{syncServerHost}{ROUTE_VERSION_PREFIX}/authBackend").Result;
         var content = res.Content.ReadAsStringAsync().Result;
         var address = JsonSerializer.Deserialize<EzAuthAddress>(content, jsonOptions);
         return address;
@@ -92,9 +94,10 @@ public class UpvotedSongSyncService
 
     public void Pull()
     {
+        var endpoint = $"{ROUTE_VERSION_PREFIX}/sync/pull";
         try
         {
-            var res = client!.GetStringAsync($"{Config.Data.SyncServerHost}/sync/pull").Result;
+            var res = client!.GetStringAsync($"{Config.Data.SyncServerHost}{endpoint}").Result;
             var pulledData = JsonSerializer.Deserialize<UserSongDataAndHistory>(res, jsonOptions);
 
             if (pulledData == null)
@@ -136,7 +139,7 @@ public class UpvotedSongSyncService
 
     public void UploadNewSong(UpvotedSong newSong)
     {
-        var endpoint = "/sync/new-song";
+        var endpoint = $"{ROUTE_VERSION_PREFIX}/sync/new-song";
         var newSongjson = JsonSerializer.Serialize(newSong, jsonOptions);
         try
         {
@@ -158,7 +161,7 @@ public class UpvotedSongSyncService
 
     public void Vote(SongHistoryEntry newEntry)
     {
-        var endpoint = "/sync/vote";
+        var endpoint = $"{ROUTE_VERSION_PREFIX}/sync/vote";
         var newEntryjson = JsonSerializer.Serialize(newEntry, jsonOptions);
         try
         {
