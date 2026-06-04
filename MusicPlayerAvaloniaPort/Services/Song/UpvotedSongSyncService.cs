@@ -9,6 +9,7 @@ using EzAuth.Keycloak;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Persistence.Database;
 using MusicPlayerSyncInterface.DTOs;
+using MusicPlayerSyncInterface.DTOs.Composites;
 
 namespace MusicPlayerAvaloniaPort.Services.Song;
 
@@ -65,7 +66,7 @@ public class UpvotedSongSyncService
             if (TryCallApiInit)
             {
                 using var songDbContext = new SongDbContext();
-                var sendObjString = JsonSerializer.Serialize(new UserSongDataAndHistory([], [.. songDbContext.UpvotedSongs], [.. songDbContext.SongHistoryEntries]), jsonOptions);
+                var sendObjString = JsonSerializer.Serialize(new SyncInitRequest([], [.. songDbContext.UpvotedSongs], [.. songDbContext.SongHistoryEntries]), jsonOptions);
                 var sendContent = new StringContent(sendObjString, Encoding.UTF8, "application/json");
                 var res = client.PostAsync($"{Config.Data.SyncServerHost}{endpoint}", sendContent).Result;
                 State = $"Init {res.StatusCode} {res.Content.ReadAsStringAsync().Result}";
@@ -98,14 +99,14 @@ public class UpvotedSongSyncService
         try
         {
             var res = client!.GetStringAsync($"{Config.Data.SyncServerHost}{endpoint}").Result;
-            var pulledData = JsonSerializer.Deserialize<UserSongDataAndHistory>(res, jsonOptions);
+            var pulledData = JsonSerializer.Deserialize<SyncPullResponse>(res, jsonOptions);
 
             if (pulledData == null)
                 throw new Exception("Pulled data was null!");
-            if (pulledData.songs.Count() == 0 || pulledData.historyEntries.Count() == 0)
+            if (pulledData.Songs.Count() == 0 || pulledData.HistoryEntries.Count() == 0)
                 throw new Exception("Pulled data was empty!");
 
-            Console.WriteLine($"Pulled {pulledData.songs.Count()} songs and {pulledData.historyEntries.Count()} history entries, writing into local db...");
+            Console.WriteLine($"Pulled {pulledData.Songs.Count()} songs and {pulledData.HistoryEntries.Count()} history entries, writing into local db...");
 
             using var songDbContext = new SongDbContext();
             songDbContext.SongHistoryEntries.RemoveRange(songDbContext.SongHistoryEntries);
@@ -114,12 +115,12 @@ public class UpvotedSongSyncService
             songDbContext.SaveChanges();
 
             // Add missing user (should just be one, ourselves)
-            User pulledUser = pulledData.users.FirstOrDefault() ?? throw new Exception($"pulledData contains no users!");
+            User pulledUser = pulledData.Users.FirstOrDefault() ?? throw new Exception($"pulledData contains no users!");
             if (!songDbContext.Users.Where(x => x.UserId == pulledUser.UserId).Any())
                 songDbContext.Users.Add(pulledUser);
-            songDbContext.UpvotedSongs.AddRange(pulledData.songs);
+            songDbContext.UpvotedSongs.AddRange(pulledData.Songs);
             songDbContext.SaveChanges();
-            songDbContext.SongHistoryEntries.AddRange(pulledData.historyEntries);
+            songDbContext.SongHistoryEntries.AddRange(pulledData.HistoryEntries);
             songDbContext.SaveChanges();
 
             State = $"Pull Succeeded!";
