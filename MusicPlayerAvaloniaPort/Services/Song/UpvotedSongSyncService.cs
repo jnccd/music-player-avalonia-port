@@ -66,7 +66,7 @@ public class UpvotedSongSyncService
             if (TryCallApiInit)
             {
                 using var songDbContext = new SongDbContext();
-                var sendObjString = JsonSerializer.Serialize(new SyncInitRequest([], [.. songDbContext.UpvotedSongs], [.. songDbContext.SongHistoryEntries]), jsonOptions);
+                var sendObjString = JsonSerializer.Serialize(new SyncInitRequest([.. songDbContext.UpvotedSongs], [.. songDbContext.SongHistoryEntries]), jsonOptions);
                 var sendContent = new StringContent(sendObjString, Encoding.UTF8, "application/json");
                 var res = client.PostAsync($"{Config.Data.SyncServerHost}{endpoint}", sendContent).Result;
                 State = $"Init {res.StatusCode} {res.Content.ReadAsStringAsync().Result}";
@@ -115,7 +115,7 @@ public class UpvotedSongSyncService
             songDbContext.SaveChanges();
 
             // Add missing user (should just be one, ourselves)
-            User pulledUser = pulledData.Users.FirstOrDefault() ?? throw new Exception($"pulledData contains no users!");
+            User pulledUser = pulledData.User ?? throw new Exception($"pulledData contains no user!");
             if (!songDbContext.Users.Where(x => x.UserId == pulledUser.UserId).Any())
                 songDbContext.Users.Add(pulledUser);
             songDbContext.UpvotedSongs.AddRange(pulledData.Songs);
@@ -131,24 +131,24 @@ public class UpvotedSongSyncService
         }
     }
 
-    void SaveUnsyncedData(string newEntryjson, string endpoint, string? error = null, Guid? SongId = null)
+    void SaveUnsyncedData(string newEntryJson, string endpoint, string? error = null, Guid? SongId = null)
     {
         using var songDbContext = new SongDbContext();
-        songDbContext.NotYetSyncedData.Add(new NotYetSyncedData(Guid.NewGuid(), endpoint, newEntryjson, error, SongId));
+        songDbContext.NotYetSyncedData.Add(new NotYetSyncedData(Guid.NewGuid(), endpoint, newEntryJson, error, SongId));
         songDbContext.SaveChanges();
     }
 
     public void UploadNewSong(UpvotedSong newSong)
     {
         var endpoint = $"{ROUTE_VERSION_PREFIX}/sync/new-song";
-        var newSongjson = JsonSerializer.Serialize(newSong, jsonOptions);
+        var newSongJson = JsonSerializer.Serialize(newSong, jsonOptions);
         try
         {
-            var newSongContent = new StringContent(newSongjson, Encoding.UTF8, "application/json");
+            var newSongContent = new StringContent(newSongJson, Encoding.UTF8, "application/json");
             var res = client!.PostAsync($"{Config.Data.SyncServerHost}{endpoint}", newSongContent).Result;
 
             if (!res.IsSuccessStatusCode && res.StatusCode != System.Net.HttpStatusCode.Conflict)
-                SaveUnsyncedData(newSongjson, endpoint, $"{res.IsSuccessStatusCode} {res.Content.ReadAsStringAsync().Result}");
+                SaveUnsyncedData(newSongJson, endpoint, $"{res.IsSuccessStatusCode} {res.Content.ReadAsStringAsync().Result}");
 
             State = $"UploadNewSong {res.StatusCode} {res.Content.ReadAsStringAsync().Result}";
         }
@@ -156,21 +156,21 @@ public class UpvotedSongSyncService
         {
             State = $"UploadNewSong failed: {ex.Message}";
 
-            SaveUnsyncedData(newSongjson, endpoint, ex.Message);
+            SaveUnsyncedData(newSongJson, endpoint, ex.Message);
         }
     }
 
     public void Vote(SongHistoryEntry newEntry)
     {
         var endpoint = $"{ROUTE_VERSION_PREFIX}/sync/vote";
-        var newEntryjson = JsonSerializer.Serialize(newEntry, jsonOptions);
+        var newEntryJson = JsonSerializer.Serialize(newEntry, jsonOptions);
         try
         {
-            var newEntryContent = new StringContent(newEntryjson, Encoding.UTF8, "application/json");
+            var newEntryContent = new StringContent(newEntryJson, Encoding.UTF8, "application/json");
             var res = client!.PostAsync($"{Config.Data.SyncServerHost}{endpoint}", newEntryContent).Result;
 
             if (!res.IsSuccessStatusCode && res.StatusCode != System.Net.HttpStatusCode.Conflict)
-                SaveUnsyncedData(newEntryjson, endpoint, $"{res.IsSuccessStatusCode} {res.Content.ReadAsStringAsync().Result}", newEntry.SongId);
+                SaveUnsyncedData(newEntryJson, endpoint, $"{res.IsSuccessStatusCode} {res.Content.ReadAsStringAsync().Result}", newEntry.SongId);
 
             State = $"Vote {res.StatusCode} {res.Content.ReadAsStringAsync().Result}";
         }
@@ -178,7 +178,7 @@ public class UpvotedSongSyncService
         {
             State = $"Vote failed: {ex.Message}";
 
-            SaveUnsyncedData(newEntryjson, endpoint, ex.Message, newEntry.SongId);
+            SaveUnsyncedData(newEntryJson, endpoint, ex.Message, newEntry.SongId);
         }
     }
 }
