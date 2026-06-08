@@ -12,7 +12,7 @@ namespace MusicPlayerAvaloniaPort.Services;
 public class SongPlaybackService
 {
     readonly AudioLibWrapperService AudioLibWrapper;
-    readonly SongVotingService UpvotedSongManager;
+    readonly SongVotingService SongVotingService;
     readonly SongChoosingService SongChoosingService;
     readonly DbWrapperService DbWrapper;
 
@@ -36,7 +36,7 @@ public class SongPlaybackService
             GetNextSong();
         };
 
-        this.UpvotedSongManager = UpvotedSongManager;
+        this.SongVotingService = UpvotedSongManager;
         this.SongChoosingService = SongChoosingService;
         this.DbWrapper = DbWrapper;
     }
@@ -54,7 +54,7 @@ public class SongPlaybackService
     {
         using var dbContext = DbWrapper.GetContext();
         var upvotedSong = dbContext.GetUpvotedSongByFullPath(fullPath);
-        upvotedSong ??= UpvotedSongManager.RegisterNewUpvotedSong(fullPath);
+        upvotedSong ??= SongVotingService.RegisterNewUpvotedSong(fullPath);
 
         return new AvailableSong(fullPath, upvotedSong.SongId);
     }
@@ -64,7 +64,7 @@ public class SongPlaybackService
         // Score Change
         if (UpvoteLockedIn)
         {
-            UpvotedSongManager.UpvoteSong(CurrentlyPlaying
+            SongVotingService.UpvoteSong(CurrentlyPlaying
                 ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"),
                 AvailableSongs);
             UpvoteLockedIn = false;
@@ -72,7 +72,7 @@ public class SongPlaybackService
         }
         else if (RuntimePlayHistoryIndex > 0 && RuntimePlayHistoryIndex == RuntimePlayHistory.Count - 1) // Last Song in filled RuntimePlayHistory
         {
-            UpvotedSongManager.DownvoteSong(CurrentlyPlaying
+            SongVotingService.DownvoteSong(CurrentlyPlaying
                 ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"),
                 AvailableSongs);
         }
@@ -94,7 +94,7 @@ public class SongPlaybackService
         // Score Change
         if (UpvoteLockedIn)
         {
-            UpvotedSongManager.UpvoteSong(CurrentlyPlaying
+            SongVotingService.UpvoteSong(CurrentlyPlaying
                 ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"),
                 AvailableSongs);
             UpvoteLockedIn = false;
