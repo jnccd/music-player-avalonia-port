@@ -10,6 +10,7 @@ using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.ViewModels;
 using MusicPlayerAvaloniaPort.Views.Main;
 using MusicPlayerAvaloniaPort.Views.Options;
+using MusicPlayerAvaloniaPort.Views.Statistics;
 
 namespace MusicPlayerAvaloniaPort;
 
@@ -54,6 +55,15 @@ public static class AvaloniaWindowManager
         Icon = new WindowIcon("./Assets/icon.ico"),
         SizeToContent = SizeToContent.WidthAndHeight
     };
+    static Func<Window> StatisticsWindowCreator = () => new Window
+    {
+        Content = new StatisticsView
+        {
+            DataContext = new StatisticsViewModel()
+        },
+        Title = "MusicPlayer Statistics",
+        Icon = new WindowIcon("./Assets/icon.ico")
+    };
 
     static readonly Dictionary<Type, (Window? window, Func<Window> createWindow)> Windows = new()
     {
@@ -65,6 +75,10 @@ public static class AvaloniaWindowManager
             typeof(OptionsView),
             (null, OptionsWindowCreator)
         },
+        {
+            typeof(StatisticsView),
+            (null, StatisticsWindowCreator)
+        }
     };
 
     public static Window GetWindow(Type viewType)
@@ -81,5 +95,13 @@ public static class AvaloniaWindowManager
 
         Windows[viewType] = windowTuple;
         return windowTuple.window;
+    }
+
+    public static void ShowWindow(Type viewType)
+    {
+        var window = GetWindow(viewType);
+        window.Show();
+        window.Focus();
+        window.BringIntoView();
     }
 }

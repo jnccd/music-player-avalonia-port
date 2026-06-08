@@ -68,6 +68,8 @@ public class DbWrapperService
 
             throw new Exception("Master Skywalker there are too many of them what are we going to do!?");
         }
+        public UpvotedSong[] DumpUpvotedSongs() =>
+            [.. SongDbContext.UpvotedSongs];
 
         // Sync
         public void RewriteDatabase(SyncPullResponse pulledData)

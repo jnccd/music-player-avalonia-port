@@ -170,7 +170,7 @@
             <Grid
                 Grid.Row="2"
                 Margin="-8,0"
-                ColumnDefinitions="36, *, 36, 36, 36">
+                ColumnDefinitions="36, *, 36, 36, 36, 36">
                 <Button
                     Name="ButtonPlayPause"
                     Grid.Column="0"
@@ -237,8 +237,19 @@
                         Fill="White" />
                 </Button>
                 <Button
-                    Name="ButtonOptions"
+                    Name="ButtonStatistics"
                     Grid.Column="3"
+                    Background="Transparent"
+                    Click="ButtonStatistics_Click">
+                    <Path
+                        Width="{StaticResource BottomGridIconSize}"
+                        Height="{StaticResource BottomGridIconSize}"
+                        Data="m 17.673469,18.612245 h 3.836735 c 0.428327,0 0.77551,-0.347184 0.77551,-0.77551 V 9.265306 c 0,-0.4283266 -0.347183,-0.7755102 -0.77551,-0.7755102 h -3.836735 c -0.428326,0 -0.77551,0.3471836 -0.77551,0.7755102 v 8.571429 c 0,0.428326 0.347184,0.77551 0.77551,0.77551 z m -7.591836,0 h 3.836734 c 0.428327,0 0.775511,-0.347184 0.775511,-0.77551 V 1.9183672 c 0,-0.4283265 -0.347184,-0.7755102 -0.775511,-0.7755102 h -3.836734 c -0.4283269,0 -0.7755106,0.3471837 -0.7755106,0.7755102 V 17.836735 c 0,0.428326 0.3471837,0.77551 0.7755106,0.77551 z m -7.5918371,0 h 3.8367347 c 0.4283265,0 0.7755102,-0.347184 0.7755102,-0.77551 V 7.2244897 c 0,-0.4283266 -0.3471837,-0.7755103 -0.7755102,-0.7755103 H 2.4897959 c -0.4283265,0 -0.7755102,0.3471837 -0.7755102,0.7755103 V 17.836735 c 0,0.428326 0.3471837,0.77551 0.7755102,0.77551 z M 22.77551,20.408163 H 1.2244898 C 0.5482449,20.408163 0,20.956408 0,21.632653 c 0,0.676245 0.5482449,1.22449 1.2244898,1.22449 H 22.77551 c 0.676245,0 1.22449,-0.548245 1.22449,-1.22449 0,-0.676245 -0.548245,-1.22449 -1.22449,-1.22449 z"
+                        Fill="White" />
+                </Button>
+                <Button
+                    Name="ButtonOptions"
+                    Grid.Column="4"
                     Background="Transparent"
                     Click="ButtonOptions_Click">
                     <Path
@@ -249,7 +260,7 @@
                 </Button>
                 <Button
                     Name="ButtonClose"
-                    Grid.Column="4"
+                    Grid.Column="5"
                     Background="Transparent"
                     Click="ButtonClose_Click">
                     <Path

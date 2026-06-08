@@ -13,6 +13,7 @@ using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using MusicPlayerAvaloniaPort.Services.UiUpdateLoop;
 using MusicPlayerAvaloniaPort.ViewModels;
 using MusicPlayerAvaloniaPort.Views.Options;
+using MusicPlayerAvaloniaPort.Views.Statistics;
 using static MusicPlayerAvaloniaPort.Views.Main.UiLoopDiagram;
 
 namespace MusicPlayerAvaloniaPort.Views.Main;
@@ -71,9 +72,12 @@ public partial class MainView : UserControl
 
     void ButtonOptions_Click(object? sender, RoutedEventArgs e)
     {
-        var optionsWIndow = AvaloniaWindowManager.GetWindow(typeof(OptionsView));
-        optionsWIndow.Show();
-        optionsWIndow.Focus();
+        AvaloniaWindowManager.ShowWindow(typeof(OptionsView));
+    }
+
+    void ButtonStatistics_Click(object? sender, RoutedEventArgs e)
+    {
+        AvaloniaWindowManager.ShowWindow(typeof(StatisticsView));
     }
 
     private void MainView_Closing(object? sender, WindowClosingEventArgs e)
