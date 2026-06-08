@@ -10,7 +10,7 @@ using System.Linq;
 namespace MusicPlayerAvaloniaPort.Services;
 
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(SongChoosingService))]
-public class SongChoosingService
+public class SongChoosingService(DbWrapperService DbWrapper)
 {
     List<AvailableSong> SongChoosingList = [];
 
@@ -26,13 +26,12 @@ public class SongChoosingService
 
     public void CreateSongChoosingDataStructure(List<AvailableSong> AvailableSongs)
     {
-        using var songDbContext = new SongDbContext();
+        using var dbContext = DbWrapper.GetContext();
 
         SongChoosingList.Clear();
         foreach (var availableSong in AvailableSongs)
         {
-            var upvotedSong = songDbContext.UpvotedSongs.FirstOrDefault(x => x.SongId == availableSong.UpvotedSongId)
-                ?? throw new InvalidDataException($"SongId {availableSong.UpvotedSongId} not found!");
+            var upvotedSong = dbContext.GetUpvotedSongById(availableSong.UpvotedSongId);
 
             float amount = GetSongChoosingAmount(upvotedSong, AvailableSongs);
             for (int k = 0; k < amount; k++)
@@ -46,7 +45,7 @@ public class SongChoosingService
 
     public void UpdateSongChoosingDataStructure(AvailableSong songToUpdateListFor, List<AvailableSong> AvailableSongs)
     {
-        using var songDbContext = new SongDbContext();
+        using var dbContext = DbWrapper.GetContext();
 
         // Getting Choosing List Count
         int index = SongChoosingList.FindIndex(x => x == songToUpdateListFor); // index may be -1 if not found
@@ -56,8 +55,7 @@ public class SongChoosingService
         int count = i - index;
 
         // Getting target Count
-        var upvotedSong = songDbContext.UpvotedSongs.FirstOrDefault(x => x.SongId == songToUpdateListFor.UpvotedSongId)
-                ?? throw new InvalidDataException($"SongId {songToUpdateListFor.UpvotedSongId} not found!");
+        var upvotedSong = dbContext.GetUpvotedSongById(songToUpdateListFor.UpvotedSongId);
         float amount = GetSongChoosingAmount(upvotedSong, AvailableSongs);
 
         for (int j = 0; j < amount - count; j++)
@@ -105,13 +103,12 @@ public class SongChoosingService
 
     void TestChoosingListIntegrity(List<AvailableSong> AvailableSongs)
     {
-        using var songDbContext = new SongDbContext();
+        using var dbContext = DbWrapper.GetContext();
 
         foreach (var availableSong in AvailableSongs)
         {
             float count = SongChoosingList.FindAll(x => x == availableSong).Count;
-            var upvotedSong = songDbContext.UpvotedSongs.FirstOrDefault(x => x.SongId == availableSong.UpvotedSongId)
-                ?? throw new InvalidDataException($"SongId {availableSong.UpvotedSongId} not found!");
+            var upvotedSong = dbContext.GetUpvotedSongById(availableSong.UpvotedSongId);
             float target = GetSongChoosingAmount(upvotedSong, AvailableSongs) + 1;
 
             if (Math.Abs(count - target) > 2)

@@ -16,8 +16,10 @@ namespace MusicPlayerAvaloniaPort.Services.Song;
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(UpvotedSongSyncService))]
 public class UpvotedSongSyncService
 {
-    readonly HttpClient httpClient;
-    readonly IEzAuth authBackend;
+    readonly HttpClient HttpClient;
+    readonly IEzAuth AuthBackend;
+    readonly DbWrapperService DbWrapper;
+
     private IEzAuthHttpClient? client = null;
     EzAuthAddress? authBackendAddress = null;
     public string State { get => state; private set { OnStateChanged?.Invoke(value); state = value; } }
@@ -30,10 +32,11 @@ public class UpvotedSongSyncService
     };
     const string ROUTE_VERSION_PREFIX = "/v1";
 
-    public UpvotedSongSyncService(HttpClient httpClient, IEzAuth authBackend)
+    public UpvotedSongSyncService(HttpClient HttpClient, IEzAuth AuthBackend, DbWrapperService DbWrapper)
     {
-        this.httpClient = httpClient;
-        this.authBackend = authBackend;
+        this.HttpClient = HttpClient;
+        this.AuthBackend = AuthBackend;
+        this.DbWrapper = DbWrapper;
 
         Init();
     }
@@ -50,7 +53,7 @@ public class UpvotedSongSyncService
             {
                 Config.Data.AuthBackendRefreshToken = authBackendRefreshToken;
                 Config.Save();
-            }, Config.Data.AuthBackendRefreshToken, httpClient);
+            }, Config.Data.AuthBackendRefreshToken, HttpClient);
 
             if (password != null)
                 client.Login(Config.Data.SyncServerUsername ?? throw new Exception($"{nameof(Config.Data.SyncServerUsername)} is null!"), password);
@@ -65,8 +68,9 @@ public class UpvotedSongSyncService
         {
             if (TryCallApiInit)
             {
-                using var songDbContext = new SongDbContext();
-                var sendObjString = JsonSerializer.Serialize(new SyncInitRequest([.. songDbContext.UpvotedSongs], [.. songDbContext.SongHistoryEntries]), jsonOptions);
+                using var dbContext = DbWrapper.GetContext();
+                var initRequest = dbContext.GetSyncInitRequest();
+                var sendObjString = JsonSerializer.Serialize(initRequest, jsonOptions);
                 var sendContent = new StringContent(sendObjString, Encoding.UTF8, "application/json");
                 var res = client.PostAsync($"{Config.Data.SyncServerHost}{endpoint}", sendContent).Result;
                 State = $"Init {res.StatusCode} {res.Content.ReadAsStringAsync().Result}";
@@ -82,14 +86,14 @@ public class UpvotedSongSyncService
     public EzAuthAddress? GetAuthBackendAddress(string? syncServerHost)
     {
         if (syncServerHost == null) return null;
-        var res = httpClient.GetAsync($"{syncServerHost}{ROUTE_VERSION_PREFIX}/authBackend").Result;
+        var res = HttpClient.GetAsync($"{syncServerHost}{ROUTE_VERSION_PREFIX}/authBackend").Result;
         var content = res.Content.ReadAsStringAsync().Result;
         var address = JsonSerializer.Deserialize<EzAuthAddress>(content, jsonOptions);
         return address;
     }
 
     public string GetAccountRegistrationAddress(string? syncServerHost = null) =>
-        authBackend.GetAccountRegistrationAddress(
+        AuthBackend.GetAccountRegistrationAddress(
             GetAuthBackendAddress(syncServerHost)?.RealmUrl
             ?? throw new Exception("Got null from GetAuthBackendAddress!"));
 
@@ -108,20 +112,8 @@ public class UpvotedSongSyncService
 
             Console.WriteLine($"Pulled {pulledData.Songs.Count()} songs and {pulledData.HistoryEntries.Count()} history entries, writing into local db...");
 
-            using var songDbContext = new SongDbContext();
-            songDbContext.SongHistoryEntries.RemoveRange(songDbContext.SongHistoryEntries);
-            songDbContext.SaveChanges();
-            songDbContext.UpvotedSongs.RemoveRange(songDbContext.UpvotedSongs);
-            songDbContext.SaveChanges();
-
-            // Add missing user (should just be one, ourselves)
-            User pulledUser = pulledData.User ?? throw new Exception($"pulledData contains no user!");
-            if (!songDbContext.Users.Where(x => x.UserId == pulledUser.UserId).Any())
-                songDbContext.Users.Add(pulledUser);
-            songDbContext.UpvotedSongs.AddRange(pulledData.Songs);
-            songDbContext.SaveChanges();
-            songDbContext.SongHistoryEntries.AddRange(pulledData.HistoryEntries);
-            songDbContext.SaveChanges();
+            using var dbContext = DbWrapper.GetContext();
+            dbContext.RewriteDatabase(pulledData);
 
             State = $"Pull Succeeded!";
         }
@@ -131,24 +123,18 @@ public class UpvotedSongSyncService
         }
     }
 
-    void SaveUnsyncedData(string newEntryJson, string endpoint, string? error = null, Guid? SongId = null)
-    {
-        using var songDbContext = new SongDbContext();
-        songDbContext.NotYetSyncedData.Add(new NotYetSyncedData(Guid.NewGuid(), endpoint, newEntryJson, error, SongId));
-        songDbContext.SaveChanges();
-    }
-
-    public void UploadNewSong(UpvotedSong newSong)
+    public void UploadNewSongEntry(UpvotedSong newSong)
     {
         var endpoint = $"{ROUTE_VERSION_PREFIX}/sync/new-song";
         var newSongJson = JsonSerializer.Serialize(newSong, jsonOptions);
+        using var dbContext = DbWrapper.GetContext();
         try
         {
             var newSongContent = new StringContent(newSongJson, Encoding.UTF8, "application/json");
             var res = client!.PostAsync($"{Config.Data.SyncServerHost}{endpoint}", newSongContent).Result;
 
             if (!res.IsSuccessStatusCode && res.StatusCode != System.Net.HttpStatusCode.Conflict)
-                SaveUnsyncedData(newSongJson, endpoint, $"{res.IsSuccessStatusCode} {res.Content.ReadAsStringAsync().Result}");
+                dbContext.AddNewNotYetSyncedDataEntry(newSongJson, endpoint, $"{res.IsSuccessStatusCode} {res.Content.ReadAsStringAsync().Result}", newSong.SongId);
 
             State = $"UploadNewSong {res.StatusCode} {res.Content.ReadAsStringAsync().Result}";
         }
@@ -156,7 +142,7 @@ public class UpvotedSongSyncService
         {
             State = $"UploadNewSong failed: {ex.Message}";
 
-            SaveUnsyncedData(newSongJson, endpoint, ex.Message);
+            dbContext.AddNewNotYetSyncedDataEntry(newSongJson, endpoint, ex.Message, newSong.SongId);
         }
     }
 
@@ -164,13 +150,14 @@ public class UpvotedSongSyncService
     {
         var endpoint = $"{ROUTE_VERSION_PREFIX}/sync/vote";
         var newEntryJson = JsonSerializer.Serialize(newEntry, jsonOptions);
+        using var dbContext = DbWrapper.GetContext();
         try
         {
             var newEntryContent = new StringContent(newEntryJson, Encoding.UTF8, "application/json");
             var res = client!.PostAsync($"{Config.Data.SyncServerHost}{endpoint}", newEntryContent).Result;
 
             if (!res.IsSuccessStatusCode && res.StatusCode != System.Net.HttpStatusCode.Conflict)
-                SaveUnsyncedData(newEntryJson, endpoint, $"{res.IsSuccessStatusCode} {res.Content.ReadAsStringAsync().Result}", newEntry.SongId);
+                dbContext.AddNewNotYetSyncedDataEntry(newEntryJson, endpoint, $"{res.IsSuccessStatusCode} {res.Content.ReadAsStringAsync().Result}", newEntry.SongId);
 
             State = $"Vote {res.StatusCode} {res.Content.ReadAsStringAsync().Result}";
         }
@@ -178,7 +165,7 @@ public class UpvotedSongSyncService
         {
             State = $"Vote failed: {ex.Message}";
 
-            SaveUnsyncedData(newEntryJson, endpoint, ex.Message, newEntry.SongId);
+            dbContext.AddNewNotYetSyncedDataEntry(newEntryJson, endpoint, ex.Message, newEntry.SongId);
         }
     }
 }
