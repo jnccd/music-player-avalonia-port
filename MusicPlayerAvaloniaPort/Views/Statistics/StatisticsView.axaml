@@ -17,6 +17,13 @@ x:DataType="vm:StatisticsViewModel">
         <DataGrid.Columns>
             <DataGridTextColumn Header="Name"  Binding="{Binding Name}"/>
             <DataGridTextColumn Header="Score" Binding="{Binding Score}" />
+            <DataGridTextColumn Header="Streak" Binding="{Binding Streak}" />
+            <DataGridTextColumn Header="Upvotes" Binding="{Binding Upvotes}" />
+            <DataGridTextColumn Header="Downvotes" Binding="{Binding Downvotes}" />
+            <DataGridTextColumn Header="Vote Ratio" Binding="{Binding VoteRatio}" />
+            <DataGridTextColumn Header="Volume" Binding="{Binding Volume}" />
+            <DataGridTextColumn Header="Date Added" Binding="{Binding DateAdded}" />
+            <DataGridTextColumn Header="Play Chance" Binding="{Binding PlayChance}" />
         </DataGrid.Columns>
     </DataGrid>
 
