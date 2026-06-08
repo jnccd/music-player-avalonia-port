@@ -1,9 +1,6 @@
-using System.Dynamic;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Extensions.DependencyInjection;
-using MusicPlayerAvaloniaPort.Persistence.Configuration;
-using MusicPlayerAvaloniaPort.Services;
+using MusicPlayerAvaloniaPort.Services.Infrastructure;
 
 namespace MusicPlayerAvaloniaPort.ViewModels;
 #pragma warning disable CS9266 // Property accessor should use 'field' because the other accessor is using it.

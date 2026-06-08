@@ -1,17 +1,15 @@
 using System;
 using System.Linq;
 using System.Net.Http;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using EzAuth.Interfaces;
 using EzAuth.Keycloak;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
-using MusicPlayerAvaloniaPort.Persistence.Database;
 using MusicPlayerSyncInterface.DTOs;
 using MusicPlayerSyncInterface.DTOs.Composites;
 
-namespace MusicPlayerAvaloniaPort.Services.Song;
+namespace MusicPlayerAvaloniaPort.Services.Infrastructure;
 
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(SongSyncService))]
 public class SongSyncService

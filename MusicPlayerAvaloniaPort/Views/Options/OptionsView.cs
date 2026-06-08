@@ -1,18 +1,12 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
-using Avalonia.Controls.Shapes;
 using Avalonia.Interactivity;
-using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml;
-using Avalonia.VisualTree;
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
-using MusicPlayerAvaloniaPort.Services.Song;
+using MusicPlayerAvaloniaPort.Services.Infrastructure;
 
 namespace MusicPlayerAvaloniaPort.Views.Options;
 

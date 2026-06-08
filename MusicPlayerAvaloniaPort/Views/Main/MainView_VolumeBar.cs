@@ -1,19 +1,11 @@
 using System;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
-using Avalonia.Platform.Storage;
-using Avalonia.Threading;
-using Avalonia.VisualTree;
-using Microsoft.Extensions.DependencyInjection;
-using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
-using MusicPlayerAvaloniaPort.Services;
-using static MusicPlayerAvaloniaPort.Views.Main.UiLoopTitle;
 using Path = Avalonia.Controls.Shapes.Path;
 
 namespace MusicPlayerAvaloniaPort.Views.Main;

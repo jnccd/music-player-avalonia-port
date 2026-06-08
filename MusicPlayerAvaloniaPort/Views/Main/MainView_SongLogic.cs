@@ -9,11 +9,8 @@ using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
-using Avalonia.VisualTree;
-using Microsoft.Extensions.DependencyInjection;
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
-using MusicPlayerAvaloniaPort.Services;
 using MusicPlayerAvaloniaPort.Services.Song;
 using static MusicPlayerAvaloniaPort.Views.Main.UiLoopTitle;
 

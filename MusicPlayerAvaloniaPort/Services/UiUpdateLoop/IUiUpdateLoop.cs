@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Avalonia.Controls;
 
 namespace MusicPlayerAvaloniaPort.Services.UiUpdateLoop;
 

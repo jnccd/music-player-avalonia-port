@@ -15,7 +15,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace MusicPlayerAvaloniaPort.Services;
+namespace MusicPlayerAvaloniaPort.Services.Infrastructure;
 
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(AudioLibWrapperService))]
 public class AudioLibWrapperService

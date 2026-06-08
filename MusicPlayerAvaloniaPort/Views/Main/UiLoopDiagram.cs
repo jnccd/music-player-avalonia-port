@@ -4,7 +4,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
-using MusicPlayerAvaloniaPort.Services;
+using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using MusicPlayerAvaloniaPort.Services.UiUpdateLoop;
 using Path = Avalonia.Controls.Shapes.Path;
 

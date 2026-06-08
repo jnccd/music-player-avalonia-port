@@ -1,14 +1,9 @@
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
-using MusicPlayerAvaloniaPort.Helpers;
-using MusicPlayerAvaloniaPort.Services;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Threading.Tasks;
 
 namespace MusicPlayerAvaloniaPort.Services.UiUpdateLoop;
 

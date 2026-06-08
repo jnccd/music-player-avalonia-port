@@ -1,7 +1,6 @@
 using MusicPlayerAvaloniaPort.Helpers;
-using MusicPlayerAvaloniaPort.Persistence.Database;
+using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using MusicPlayerAvaloniaPort.Services.Song;
-using MusicPlayerSyncInterface.DTOs;
 using System;
 using System.Collections.Generic;
 using System.IO;

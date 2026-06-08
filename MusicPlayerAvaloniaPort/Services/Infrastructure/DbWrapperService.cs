@@ -7,7 +7,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 
-namespace MusicPlayerAvaloniaPort.Services;
+namespace MusicPlayerAvaloniaPort.Services.Infrastructure;
 
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(DbWrapperService))]
 public class DbWrapperService

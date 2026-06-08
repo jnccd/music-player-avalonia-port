@@ -2,7 +2,6 @@ using Avalonia.Data.Converters;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 
