@@ -38,9 +38,9 @@ public partial class OptionsView : UserControl
             window.MinHeight = window.Height;
         });
 
-        var stateLabel = this.GetNestedControl<Label>("stateLabel");
-        stateLabel?.Content = syncService.State;
-        syncService.OnStateChanged = state => Dispatcher.Invoke(() => stateLabel?.Content = state);
+        var stateLabel = this.GetNestedControl<TextBlock>("stateLabel");
+        stateLabel?.Text = syncService.State;
+        syncService.OnStateChanged = state => Dispatcher.Invoke(() => stateLabel?.Text = state);
     }
 
     private void LoginButton_Click(object? sender, RoutedEventArgs e)
