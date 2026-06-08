@@ -33,7 +33,7 @@ x:DataType="vm:OptionsViewModel">
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <Label Content="State: " />
-                    <TextBlock  Name="stateLabel" Width="200" Text="" TextWrapping="Wrap" />
+                    <TextBlock Name="stateLabel" Width="200" Text="" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </StackPanel>
             </StackPanel>
         </GroupBox>
