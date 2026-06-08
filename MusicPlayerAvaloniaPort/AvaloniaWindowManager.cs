@@ -43,7 +43,7 @@ public static class AvaloniaWindowManager
         TransparencyLevelHint = [WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.Transparent],
         ExtendClientAreaToDecorationsHint = true,
         ExtendClientAreaTitleBarHeightHint = -1,
-        WindowDecorations = WindowDecorations.BorderOnly,
+        WindowDecorations = WindowDecorations.None,
     };
     static Func<Window> OptionsWindowCreator = () => new Window
     {
