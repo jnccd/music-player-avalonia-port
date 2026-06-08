@@ -13,17 +13,17 @@ x:DataType="vm:StatisticsViewModel">
         <conv:EitherOrConverter x:Key="EitherOrConverter" />
     </UserControl.Resources>
 
-    <DataGrid ItemsSource="{Binding StatisticsSongVMs}" IsReadOnly="True" CanUserResizeColumns="True" CanUserSortColumns="True">
+    <DataGrid ItemsSource="{Binding StatisticsSongVMs}">
         <DataGrid.Columns>
-            <DataGridTextColumn Header="Name"  Binding="{Binding Name}"/>
-            <DataGridTextColumn Header="Score" Binding="{Binding Score}" />
-            <DataGridTextColumn Header="Streak" Binding="{Binding Streak}" />
-            <DataGridTextColumn Header="Upvotes" Binding="{Binding Upvotes}" />
-            <DataGridTextColumn Header="Downvotes" Binding="{Binding Downvotes}" />
-            <DataGridTextColumn Header="Vote Ratio" Binding="{Binding VoteRatio}" />
-            <DataGridTextColumn Header="Volume" Binding="{Binding Volume}" />
-            <DataGridTextColumn Header="Date Added" Binding="{Binding DateAdded}" />
-            <DataGridTextColumn Header="Play Chance" Binding="{Binding PlayChance}" />
+            <DataGridTextColumn Header="Name" Width="*"  Binding="{Binding Name}"/>
+            <DataGridTextColumn Header="Score" Width="100"  Binding="{Binding Score}" />
+            <DataGridTextColumn Header="Streak" Width="80" Binding="{Binding Streak}" />
+            <DataGridTextColumn Header="Upvotes" Width="90" Binding="{Binding Upvotes}" />
+            <DataGridTextColumn Header="Downvotes" Width="100" Binding="{Binding Downvotes}" />
+            <DataGridTextColumn Header="Vote Ratio" Width="100" Binding="{Binding VoteRatio}" />
+            <DataGridTextColumn Header="Volume" Width="85" Binding="{Binding Volume}" />
+            <DataGridTextColumn Header="Date Added" Width="170" Binding="{Binding DateAdded}" />
+            <DataGridTextColumn Header="Play Chance" Width="110" Binding="{Binding PlayChance}" />
         </DataGrid.Columns>
     </DataGrid>
 
