@@ -13,8 +13,8 @@ using MusicPlayerSyncInterface.DTOs.Composites;
 
 namespace MusicPlayerAvaloniaPort.Services.Song;
 
-[RegisterImplementation(ServiceRegisterType.Singleton, typeof(UpvotedSongSyncService))]
-public class UpvotedSongSyncService
+[RegisterImplementation(ServiceRegisterType.Singleton, typeof(SongSyncService))]
+public class SongSyncService
 {
     readonly HttpClient HttpClient;
     readonly IEzAuth AuthBackend;
@@ -32,7 +32,7 @@ public class UpvotedSongSyncService
     };
     const string ROUTE_VERSION_PREFIX = "/v1";
 
-    public UpvotedSongSyncService(HttpClient HttpClient, IEzAuth AuthBackend, DbWrapperService DbWrapper)
+    public SongSyncService(HttpClient HttpClient, IEzAuth AuthBackend, DbWrapperService DbWrapper)
     {
         this.HttpClient = HttpClient;
         this.AuthBackend = AuthBackend;

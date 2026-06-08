@@ -69,7 +69,7 @@ public class DbWrapperService
             throw new Exception("Master Skywalker there are too many of them what are we going to do!?");
         }
 
-        // Mixed
+        // Sync
         public void RewriteDatabase(SyncPullResponse pulledData)
         {
             SongDbContext.SongHistoryEntries.RemoveRange(SongDbContext.SongHistoryEntries);

@@ -20,7 +20,7 @@ public partial class OptionsView : UserControl
 {
     Window? window => TopLevel.GetTopLevel(this) as Window;
 
-    readonly UpvotedSongSyncService syncService = ServiceContainer.GetService<UpvotedSongSyncService>();
+    readonly SongSyncService syncService = ServiceContainer.GetService<SongSyncService>();
 
     public OptionsView()
     {

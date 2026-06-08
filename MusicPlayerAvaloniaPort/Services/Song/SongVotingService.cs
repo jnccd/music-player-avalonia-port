@@ -11,7 +11,7 @@ using System.Linq;
 namespace MusicPlayerAvaloniaPort.Services;
 
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(SongVotingService))]
-public class SongVotingService(AudioLibWrapperService AudioLibWrapper, UpvotedSongSyncService SyncService, SongChoosingService SongChoosingService, DbWrapperService DbWrapper)
+public class SongVotingService(AudioLibWrapperService AudioLibWrapper, SongSyncService SyncService, SongChoosingService SongChoosingService, DbWrapperService DbWrapper)
 {
     public UpvotedSong RegisterNewUpvotedSong([StringSyntax(StringSyntaxAttribute.Uri)] string songPath)
     {
