@@ -19,7 +19,7 @@ x:DataType="vm:StatisticsViewModel">
             <DataGridTextColumn Header="Score" Width="100"  Binding="{Binding Score}" />
             <DataGridTextColumn Header="Streak" Width="80" Binding="{Binding Streak}" />
             <DataGridTextColumn Header="Upvotes" Width="90" Binding="{Binding Upvotes}" />
-            <DataGridTextColumn Header="Downvotes" Width="100" Binding="{Binding Downvotes}" />
+            <DataGridTextColumn Header="Downvotes" Width="115" Binding="{Binding Downvotes}" />
             <DataGridTextColumn Header="Vote Ratio" Width="100" Binding="{Binding VoteRatio}" />
             <DataGridTextColumn Header="Volume" Width="85" Binding="{Binding Volume}" />
             <DataGridTextColumn Header="Date Added" Width="170" Binding="{Binding DateAdded}" />
