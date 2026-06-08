@@ -8,16 +8,22 @@ namespace MusicPlayerAvaloniaPort.ViewModels;
 
 public partial class StatisticsViewModel : ViewModelBase
 {
-    DbWrapperService? dbWrapper = ServiceContainer.GetService<DbWrapperService>();
+    static DbWrapperService? dbWrapper = ServiceContainer.GetService<DbWrapperService>();
 
     // --- Properties ---
 
-    public StatisticsSongViewModel[] StatisticsSongVMs => dbWrapper?
+    public ObservableCollection<StatisticsSongViewModel> StatisticsSongVMs
+    {
+        get; set;
+    } = new(
+        dbWrapper?
             .GetContext()
             .DumpUpvotedSongs()
+            .OrderByDescending(song => song.Score)
             .Select(song => new StatisticsSongViewModel(song))
             .ToArray()
-        ?? [];
+        ?? []
+    );
 
     // --- Commands ---
 

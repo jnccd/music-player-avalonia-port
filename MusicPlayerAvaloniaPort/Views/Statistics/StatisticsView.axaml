@@ -13,26 +13,11 @@ x:DataType="vm:StatisticsViewModel">
         <conv:EitherOrConverter x:Key="EitherOrConverter" />
     </UserControl.Resources>
 
-    <ScrollViewer
-    Name="RootScrollViewer"
-    >
-        <ItemsControl ItemsSource="{Binding StatisticsSongVMs}">
-            <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <VirtualizingStackPanel />
-                </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="vm:StatisticsSongViewModel">
-                    <Grid
-                    Name="NoteContainer"
-                    ColumnDefinitions="*"
-                    >
-                        <TextBlock Text="{Binding SongName}" />
-                    </Grid>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
-    </ScrollViewer>
+    <DataGrid ItemsSource="{Binding StatisticsSongVMs}" IsReadOnly="True" CanUserResizeColumns="True" CanUserSortColumns="True">
+        <DataGrid.Columns>
+            <DataGridTextColumn Header="Name"  Binding="{Binding Name}"/>
+            <DataGridTextColumn Header="Score" Binding="{Binding Score}" />
+        </DataGrid.Columns>
+    </DataGrid>
 
 </UserControl>
