@@ -101,7 +101,8 @@ public static class AvaloniaWindowManager
     {
         var window = GetWindow(viewType);
         window.Show();
-        window.Focus();
+        window.Focus(Avalonia.Input.NavigationMethod.Pointer);
         window.BringIntoView();
+        window.Activate();
     }
 }
