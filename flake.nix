@@ -2,7 +2,7 @@
   description = "Nix Dev shell for Avalonia .NET Desktop development";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     numtide-utils = {
       url = "github:numtide/flake-utils";
     };
