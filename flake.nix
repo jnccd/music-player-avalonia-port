@@ -3,11 +3,10 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
-    numtide-utils.url = {
+    numtide-utils = {
       url = "github:numtide/flake-utils";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
-    jnccd-utils.url = {
+    jnccd-utils = {
       url = "github:jnccd/nix-utils";
       inputs.nixpkgs.follows = "nixpkgs";
     };
