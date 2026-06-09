@@ -14,15 +14,29 @@
 
   outputs =
     { self, nixpkgs, ... }@inputs:
-    (inputs.numtide-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ] (system: {
-      devShells = rec {
-        gui = inputs.jnccd-utils.lib.mkUnfrozenDotnetShell {
-          inherit system nixpkgs;
-          dotnetVersion = "10.0";
-          includeAndroidSdk = false;
-        };
+    (inputs.numtide-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ] (
+      system:
+      let
+        pkgs = import nixpkgs { inherit system; };
+      in
+      {
+        devShells = rec {
+          desktop = inputs.jnccd-utils.lib.mkUnfrozenDotnetShell {
+            inherit system nixpkgs;
+            dotnetVersion = "10.0";
+            includeAndroidSdk = false;
 
-        default = gui;
-      };
-    }));
+            command = "cd music-player-avalonia-port ; bash ./start_desktop_app.sh";
+          };
+
+          dev = inputs.jnccd-utils.lib.mkUnfrozenDotnetShell {
+            inherit system nixpkgs;
+            dotnetVersion = "10.0";
+            includeAndroidSdk = false;
+          };
+
+          default = dev;
+        };
+      }
+    ));
 }
