@@ -15,7 +15,7 @@ class Program
         try
         {
             BuildAvaloniaApp()
-        .StartWithClassicDesktopLifetime(args);
+                .StartWithClassicDesktopLifetime(args);
         }
         catch (Exception ex)
         {
