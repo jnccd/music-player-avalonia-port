@@ -2,6 +2,7 @@ using SoundFlow.Abstracts;
 using SoundFlow.Abstracts.Devices;
 using SoundFlow.Backends.MiniAudio;
 using SoundFlow.Backends.MiniAudio.Devices;
+using SoundFlow.Backends.MiniAudio.Enums;
 using SoundFlow.Components;
 using SoundFlow.Enums;
 using SoundFlow.Metadata.Models;
@@ -82,6 +83,31 @@ public class AudioLibWrapperService
     }
     public event EventHandler<EventArgs>? PlaybackEnded;
 
+    // Force format
+    bool forceAudioFormat = false;
+    private static readonly DeviceConfig DeviceConfig = new MiniAudioDeviceConfig
+    {
+        PeriodSizeInFrames = 960, // 10ms at 48kHz = 480 frames @ 2 channels = 960 frames
+
+        Playback = new DeviceSubConfig
+        {
+            ShareMode = ShareMode.Shared // Use shared mode for better compatibility with other applications
+        },
+        Pulse = new PulseSettings()
+        {
+            StreamNamePlayback = "music-player"
+        },
+        Capture = new DeviceSubConfig
+        {
+            ShareMode = ShareMode.Shared // Use shared mode for better compatibility with other applications
+        },
+        Wasapi = new WasapiSettings
+        {
+            Usage = WasapiUsage.ProAudio // Use ProAudio mode for lower latency on Windows
+        }
+    };
+    private static readonly AudioFormat PlaybackDeviceFormat = AudioFormat.DvdHq;
+
     public AudioLibWrapperService()
     {
         fftZeroResult = arrayPool.Rent(FFT_BUFFER_SIZE);
@@ -90,11 +116,25 @@ public class AudioLibWrapperService
         {
             throw new InvalidOperationException("No default playback device found.");
         }
-        playbackDeviceInfo = Engine.PlaybackDevices.FirstOrDefault(d => d.IsDefault);
-        var playbackDeviceInfoFormat = playbackDeviceInfo.SupportedDataFormats.First();
-        playBackFormat = AudioFormat.GetFormatFromNativeFormat(playbackDeviceInfoFormat);
-        playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, GetCurrentAudioFormat());
-        playbackDevice.Start();
+
+        if (!Engine.PlaybackDevices.Any(x => x.SupportedDataFormats.Any(x => x.SampleRate > 0)))
+        {
+            forceAudioFormat = true;
+        }
+
+        if (forceAudioFormat)
+        {
+            playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, PlaybackDeviceFormat, DeviceConfig);
+            playbackDevice.Start();
+        }
+        else
+        {
+            playbackDeviceInfo = Engine.PlaybackDevices.FirstOrDefault(d => d.IsDefault);
+            var playbackDeviceInfoFormat = playbackDeviceInfo.SupportedDataFormats.First();
+            playBackFormat = AudioFormat.GetFormatFromNativeFormat(playbackDeviceInfoFormat);
+            playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, GetCurrentAudioFormat());
+            playbackDevice.Start();
+        }
     }
 
     private void SoundPlayer_PlaybackEnded(object? sender, EventArgs e)
@@ -160,11 +200,17 @@ public class AudioLibWrapperService
             });
         }
 
-        playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, GetCurrentAudioFormat(), new MiniAudioDeviceConfig
-        {
-            PeriodSizeInFrames = GetCurrentPeriodSizeInFrames()
-        });
-        soundPlayer = new SoundPlayer(Engine, GetCurrentAudioFormat(), playerDataProvider);
+        if (forceAudioFormat)
+            playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, PlaybackDeviceFormat, DeviceConfig);
+        else
+            playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, GetCurrentAudioFormat(), new MiniAudioDeviceConfig
+            {
+                PeriodSizeInFrames = GetCurrentPeriodSizeInFrames()
+            });
+        if (forceAudioFormat)
+            soundPlayer = new SoundPlayer(Engine, PlaybackDeviceFormat, playerDataProvider);
+        else
+            soundPlayer = new SoundPlayer(Engine, GetCurrentAudioFormat(), playerDataProvider);
         playbackDevice.MasterMixer.AddComponent(soundPlayer);
         playbackDevice.Start();
         soundPlayer.Volume = Volume;
