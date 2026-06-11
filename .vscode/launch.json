@@ -9,6 +9,11 @@
             "type": "dotnet",
             "request": "launch",
             "projectPath": "${workspaceFolder}/MusicPlayerAvaloniaPort/MusicPlayerAvaloniaPort.csproj"
+        }, 
+        {
+            "name": ".NET Core Attach",
+            "type": "coreclr",
+            "request": "attach"
         }
 
     ]
