@@ -22,18 +22,24 @@ public partial class MainView : UserControl
     {
         if (Config.Data.SongLibraryPath == null)
         {
-            // Get the StorageProvider from your window
-            var storageProvider = TopLevel.GetTopLevel(window)!.StorageProvider;
-
             string folder;
             var envVar = Environment.GetEnvironmentVariable("MUSIC_FOLDER");
             if (!string.IsNullOrWhiteSpace(envVar))
             {
+                Console.WriteLine("For music folder, using env var");
                 folder = envVar;
+            }
+            if (OperatingSystem.IsLinux())
+            {
+                Console.WriteLine("For music folder, showing MessageBox");
+                var mb = new MessageBox(e => Console.WriteLine(e), window, null);
+                folder = mb.GetText("Input the song library path, FolderPicker doesnt work on Linux");
             }
             else
             {
-                // Use folder dialog
+                Console.WriteLine("For music folder, showing OpenFolderPicker");
+                // Get the StorageProvider from your window
+                var storageProvider = TopLevel.GetTopLevel(window)!.StorageProvider;
                 var folders = storageProvider?.OpenFolderPickerAsync(new FolderPickerOpenOptions
                 {
                     Title = "Select your Music Root Folder",

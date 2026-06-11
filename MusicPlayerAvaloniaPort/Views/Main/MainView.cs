@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Interactivity;
@@ -42,6 +43,11 @@ public partial class MainView : UserControl
     {
         Debug.WriteLine("MainView loaded!");
 
+        SetupUi();
+    }
+
+    void SetupUi()
+    {
         // Setup 
         MapLocalSongLibrary();
 
