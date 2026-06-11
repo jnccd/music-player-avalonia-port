@@ -19,7 +19,7 @@ class Program
         }
         catch (Exception ex)
         {
-            File.AppendAllText("./error.log", ex.ToString());
+            File.AppendAllText("./error.log", $"---{DateTime.Now}---\n{ex}");
         }
     }
 
