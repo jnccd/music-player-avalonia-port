@@ -25,22 +25,32 @@ public partial class MainView : UserControl
             // Get the StorageProvider from your window
             var storageProvider = TopLevel.GetTopLevel(window)!.StorageProvider;
 
-            // Use folder dialog
-            var folders = storageProvider?.OpenFolderPickerAsync(new FolderPickerOpenOptions
+            string folder;
+            var envVar = Environment.GetEnvironmentVariable("MUSIC_FOLDER");
+            if (!string.IsNullOrWhiteSpace(envVar))
             {
-                Title = "Select your Music Root Folder",
-                AllowMultiple = false
-            }).Result;
-            var folder = folders?.FirstOrDefault();
+                folder = envVar;
+            }
+            else
+            {
+                // Use folder dialog
+                var folders = storageProvider?.OpenFolderPickerAsync(new FolderPickerOpenOptions
+                {
+                    Title = "Select your Music Root Folder",
+                    AllowMultiple = false
+                }).Result;
+                var storageFolder = folders![0];
+                folder = storageFolder!.Path.AbsolutePath;
+            }
 
-            if (folder == null || !HelperFuncs.DirOrSubDirsContainMp3(folder.Path.AbsolutePath))
+            if (folder == null || !HelperFuncs.DirOrSubDirsContainMp3(folder))
                 window?.Close();
 
             // Set SongLibraryPath
-            Config.Data.SongLibraryPath = folder!.Path.AbsolutePath;
+            Config.Data.SongLibraryPath = folder;
         }
 
-        songPlaybackService.UpdateAvailableSongPaths(Config.Data.SongLibraryPath);
+        songPlaybackService.UpdateAvailableSongPaths(Config.Data.SongLibraryPath!);
     }
 
     void UpdateUiForNewSong(AvailableSong song)
