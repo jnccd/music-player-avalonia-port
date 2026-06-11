@@ -34,8 +34,8 @@ public partial class OptionsView : UserControl
             if (window == null)
                 throw new InvalidDataException(nameof(window));
 
-            window.MinWidth = window.Width;
-            window.MinHeight = window.Height;
+            window.MinWidth = double.IsNormal(window.Width) ? window.Width : 0;
+            window.MinHeight = double.IsNormal(window.Height) ? window.Height : 0;
         });
 
         var stateLabel = this.GetNestedControl<TextBlock>("stateLabel");
