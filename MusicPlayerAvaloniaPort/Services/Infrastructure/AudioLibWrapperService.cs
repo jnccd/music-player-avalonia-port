@@ -99,10 +99,11 @@ public class AudioLibWrapperService
 
     private void SoundPlayer_PlaybackEnded(object? sender, EventArgs e)
     {
-        Task.Run(() =>
-        {
-            PlaybackEnded?.Invoke(this, EventArgs.Empty);
-        });
+        if (PlayProgress > 0.9)
+            Task.Run(() =>
+            {
+                PlaybackEnded?.Invoke(this, EventArgs.Empty);
+            });
     }
 
     private AudioFormat GetCurrentAudioFormat()
