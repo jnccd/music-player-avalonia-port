@@ -21,6 +21,13 @@ public class DbWrapperService
         // Create
         public UpvotedSong AddNewUpvotedSong([StringSyntax(StringSyntaxAttribute.Uri)] string songPath)
         {
+            // Add empty local user if necessary
+            if (!SongDbContext.Users.Any(x => x.UserId == ""))
+            {
+                SongDbContext.Users.Add(new User("", "", ""));
+                SongDbContext.SaveChanges();
+            }
+
             var songFileName = Path.GetFileName(songPath);
             var newUpvotedSong = new UpvotedSong(songFileName, 0, 0, 0, 0, parent.GetSongAgeFromPath(songPath), -1) { Path = songPath };
 
