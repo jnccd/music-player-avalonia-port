@@ -23,6 +23,8 @@
         <sys:Double x:Key="VolumeIconSize">32</sys:Double>
         <sys:Double x:Key="BottomGridIconSize">24</sys:Double>
 
+        <FontFamily x:Key="BigNoodleTitling">avares://MusicPlayerAvaloniaPort/Assets/bignoodletitling#bignoodletitling</FontFamily>
+
         <conv:AddMultiplyConverter x:Key="AddMultiplyConverter" />
         <conv:EitherOrConverter x:Key="EitherOrConverter" />
     </UserControl.Resources>
@@ -66,14 +68,14 @@
                     <TextBlock
                         Name="TitleCanvasText1"
                         Canvas.Left="0"
-                        FontFamily="BigNoodleTitling"
+                        FontFamily="{StaticResource BigNoodleTitling}"
                         FontSize="35">
                         PANAM - 大貫妙子 (Taeko Onuki) – Summer Connection (Official Audio)
                     </TextBlock>
                     <TextBlock
                         Name="TitleCanvasText2"
                         Canvas.Left="90"
-                        FontFamily="BigNoodleTitling"
+                        FontFamily="{StaticResource BigNoodleTitling}"
                         FontSize="35">
                         PANAM - 大貫妙子 (Taeko Onuki) – Summer Connection (Official Audio)
                     </TextBlock>
