@@ -29,7 +29,7 @@ public partial class MainView : UserControl
                 Console.WriteLine("For music folder, using env var");
                 folder = envVar;
             }
-            if (OperatingSystem.IsLinux())
+            else if (OperatingSystem.IsLinux())
             {
                 Console.WriteLine("For music folder, showing MessageBox");
                 var mb = new MessageBox(e => Console.WriteLine(e), window, null);
