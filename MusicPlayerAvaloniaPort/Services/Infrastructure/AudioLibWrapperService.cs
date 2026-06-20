@@ -71,6 +71,7 @@ public class AudioLibWrapperService
             }
         }
     }
+    public float? SongDurationSeconds => soundPlayer?.Duration;
     /// <summary>
     /// Same unit as PlayProgress but may land outside of any bounds due to the nature of what it represents.
     /// Forward seeking results in positive numbers and backwards seeking in negative.
