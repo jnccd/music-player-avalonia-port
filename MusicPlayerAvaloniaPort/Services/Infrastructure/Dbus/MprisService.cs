@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Threading.Tasks;
 using SoundFlow.Enums;
 using Tmds2.DBus.Protocol;
@@ -8,9 +9,15 @@ namespace MusicPlayerAvaloniaPort.Services.Infrastructure;
 
 public class MprisService(AudioLibWrapperService audioLibWrapperService, SongPlaybackService songPlaybackService, DbWrapperService dbWrapperService)
 {
+    MprisHandler? Handler;
+
     public void Init()
     {
         Task.Run(RunMprisServiceAsync);
+        songPlaybackService.NewSongStarted += (sender, args) =>
+        {
+            Handler?.EmitAllProperties();
+        };
     }
 
     private async Task RunMprisServiceAsync()
@@ -27,7 +34,7 @@ public class MprisService(AudioLibWrapperService audioLibWrapperService, SongPla
                 return new PlayerStatus(
                     Identity: "MusicPlayerAvaloniaPort",
                     DesktopEntry: "music-player-avalonia-port",
-                    CurrentSongTitle: currentSong?.Name ?? string.Empty,
+                    CurrentSongTitle: Path.GetFileNameWithoutExtension(currentSong?.Name) ?? string.Empty,
                     CurrentSongArtist: currentSong?.Artist ?? string.Empty,
                     CurrentSongAlbum: currentSong?.Album ?? string.Empty,
                     CurrentSongPosition: TimeSpan.FromSeconds((audioLibWrapperService.SongDurationSeconds ?? 0) * (audioLibWrapperService.PlayProgress ?? 0)),
@@ -77,6 +84,7 @@ public class MprisService(AudioLibWrapperService audioLibWrapperService, SongPla
                         break;
                 }
             });
+            Handler = handler;
 
             connection.AddMethodHandler(handler);
 

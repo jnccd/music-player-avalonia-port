@@ -38,6 +38,11 @@ internal class MprisHandler : DBusHandler,
     DBusConnection Connection;
     Func<PlayerStatus> GetPlayerStatus;
     Action<MprisEvent> HandleMprisEvent;
+    private void EmitMprisEvent(MprisEvent @event)
+    {
+        HandleMprisEvent(@event);
+        EmitAllProperties();
+    }
 
     PlayerStatus? PlayerStatusCache
     {
@@ -75,22 +80,6 @@ internal class MprisHandler : DBusHandler,
             PlayerProperty.Volume);
         Connection.EmitPropertyChanged(Path, this,
             PlayerProperty.Position);
-        Connection.EmitPropertyChanged(Path, this,
-            PlayerProperty.MinimumRate);
-        Connection.EmitPropertyChanged(Path, this,
-            PlayerProperty.MaximumRate);
-        Connection.EmitPropertyChanged(Path, this,
-            PlayerProperty.CanGoNext);
-        Connection.EmitPropertyChanged(Path, this,
-            PlayerProperty.CanGoPrevious);
-        Connection.EmitPropertyChanged(Path, this,
-            PlayerProperty.CanPlay);
-        Connection.EmitPropertyChanged(Path, this,
-            PlayerProperty.CanPause);
-        Connection.EmitPropertyChanged(Path, this,
-            PlayerProperty.CanSeek);
-        Connection.EmitPropertyChanged(Path, this,
-            PlayerProperty.CanControl);
     }
 
     private void EmitProperty(PlayerProperty property)
@@ -107,21 +96,21 @@ internal class MprisHandler : DBusHandler,
     // === IPlayerHandler (methods) ===
     public ValueTask NextAsync()
     {
-        HandleMprisEvent(new MprisEvent(MprisEventType.Next));
+        EmitMprisEvent(new MprisEvent(MprisEventType.Next));
         Console.WriteLine("MprisHandler Next");
         return default;
     }
 
     public ValueTask PreviousAsync()
     {
-        HandleMprisEvent(new MprisEvent(MprisEventType.Previous));
+        EmitMprisEvent(new MprisEvent(MprisEventType.Previous));
         Console.WriteLine("MprisHandler Previous");
         return default;
     }
 
     public ValueTask PauseAsync()
     {
-        HandleMprisEvent(new MprisEvent(MprisEventType.Pause));
+        EmitMprisEvent(new MprisEvent(MprisEventType.Pause));
         Console.WriteLine("MprisHandler Pause");
         EmitProperty(PlayerProperty.PlaybackStatus);
         return default;
@@ -129,7 +118,7 @@ internal class MprisHandler : DBusHandler,
 
     public ValueTask PlayPauseAsync()
     {
-        HandleMprisEvent(new MprisEvent(MprisEventType.PlayPause));
+        EmitMprisEvent(new MprisEvent(MprisEventType.PlayPause));
         Console.WriteLine("MprisHandler PlayPause");
         EmitProperty(PlayerProperty.PlaybackStatus);
         return default;
@@ -137,7 +126,7 @@ internal class MprisHandler : DBusHandler,
 
     public ValueTask StopAsync()
     {
-        HandleMprisEvent(new MprisEvent(MprisEventType.Stop));
+        EmitMprisEvent(new MprisEvent(MprisEventType.Stop));
         Console.WriteLine("MprisHandler Stop (or like)");
         EmitProperty(PlayerProperty.PlaybackStatus);
         return default;
@@ -145,7 +134,7 @@ internal class MprisHandler : DBusHandler,
 
     public ValueTask PlayAsync()
     {
-        HandleMprisEvent(new MprisEvent(MprisEventType.Play));
+        EmitMprisEvent(new MprisEvent(MprisEventType.Play));
         Console.WriteLine("MprisHandler Play");
         EmitProperty(PlayerProperty.PlaybackStatus);
         return default;
@@ -153,14 +142,14 @@ internal class MprisHandler : DBusHandler,
 
     public ValueTask SeekAsync(long offset)
     {
-        HandleMprisEvent(new MprisEvent(MprisEventType.Seek, TimeSpan.FromMicroseconds(offset)));
+        EmitMprisEvent(new MprisEvent(MprisEventType.Seek, TimeSpan.FromMicroseconds(offset)));
         Console.WriteLine($"MprisHandler Seek: {offset}");
         return default;
     }
 
     public ValueTask SetPositionAsync(ObjectPath trackId, long position)
     {
-        HandleMprisEvent(new MprisEvent(MprisEventType.SetPosition, TimeSpan.FromMicroseconds(position)));
+        EmitMprisEvent(new MprisEvent(MprisEventType.SetPosition, TimeSpan.FromMicroseconds(position)));
         Console.WriteLine($"MprisHandler SetPosition: {trackId}, {position}");
         return default;
     }
@@ -191,17 +180,21 @@ internal class MprisHandler : DBusHandler,
     {
         // ["mpris:trackid"] = new ObjectPath("/org/mpris/MediaPlayer2/TrackList/1"),
         ["xesam:title"] = PlayerStatusCache!.CurrentSongTitle,
-        ["xesam:artist"] = VariantValue.Array(new string[] { string.IsNullOrWhiteSpace(PlayerStatusCache!.CurrentSongArtist) ? "Unknown Artist" : PlayerStatusCache.CurrentSongArtist }),
-        ["xesam:album"] = string.IsNullOrWhiteSpace(PlayerStatusCache!.CurrentSongAlbum) ? "Unknown Album" : PlayerStatusCache.CurrentSongAlbum,
+        ["xesam:artist"] = VariantValue.Array(new string[] { PlayerStatusCache!.CurrentSongArtist }),
+        ["xesam:album"] = PlayerStatusCache!.CurrentSongAlbum,
         ["mpris:length"] = (long)PlayerStatusCache!.CurrentSongLength.TotalMicroseconds
     };
 
     public double Volume
     {
         get => PlayerStatusCache!.Volume;
-        set => HandleMprisEvent(new(MprisEventType.SetVolume, Volume: value));
+        set => EmitMprisEvent(new(MprisEventType.SetVolume, Volume: value));
     }
-    public long Position => (long)PlayerStatusCache!.CurrentSongPosition.TotalMicroseconds;
+    public long Position
+    {
+        get => (long)PlayerStatusCache!.CurrentSongPosition.TotalMicroseconds;
+        set => EmitMprisEvent(new MprisEvent(MprisEventType.SetPosition, TimeSpan.FromMicroseconds(value)));
+    }
     public double MinimumRate => 1.0;
     public double MaximumRate => 1.0;
     public bool CanGoNext => true;

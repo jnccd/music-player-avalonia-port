@@ -63,7 +63,7 @@
       <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true" />
     </property>
 
-    <property name="Position" type="x" tp:type="Time_In_Us" tp:name-for-bindings="Position" access="read">
+    <property name="Position" type="x" tp:type="Time_In_Us" tp:name-for-bindings="Position" access="readwrite">
         <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="false"/>
     </property>
 
