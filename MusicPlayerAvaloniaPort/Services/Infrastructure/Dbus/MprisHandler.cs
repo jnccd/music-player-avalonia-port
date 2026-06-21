@@ -35,7 +35,7 @@ internal class MprisHandler : DBusHandler,
                        IPlayerProperties,
                        IDisposable
 {
-    DBusConnection Connection;
+    new DBusConnection Connection;
     Func<PlayerStatus> GetPlayerStatus;
     Action<MprisEvent> HandleMprisEvent;
     private void EmitMprisEvent(MprisEvent @event)
