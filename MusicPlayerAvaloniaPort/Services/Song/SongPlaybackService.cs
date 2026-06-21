@@ -1,4 +1,6 @@
+using Avalonia.Diagnostics;
 using MusicPlayerAvaloniaPort.Helpers;
+using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using System;
 using System.Collections.Generic;
@@ -56,7 +58,6 @@ public class SongPlaybackService
 
         SongChoosingService.CreateSongChoosingDataStructure(AvailableSongs);
     }
-
     AvailableSong CreateAvailableSong(string fullPath)
     {
         using var dbContext = DbWrapper.GetContext();

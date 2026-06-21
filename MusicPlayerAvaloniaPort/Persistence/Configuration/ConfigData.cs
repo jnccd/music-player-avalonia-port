@@ -12,7 +12,7 @@ public class ConfigData
     public Color PrimaryColor { get; set; }
 
     public string? SongLibraryPath { get; set; }
-    public double Volume { get; set; } = 0.8;
+    public float Volume { get; set; } = 0.8f;
 
     // Sync settings
     public string? AuthBackendRefreshToken { get; set; }

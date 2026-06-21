@@ -14,7 +14,6 @@ public partial class MainView : UserControl
 {
     void LoadVolume()
     {
-        audioLibWrapper.Volume = (float)(Config.Data.Volume * MAX_VOLUME);
         UpdateVolumeUi();
     }
 
@@ -44,10 +43,10 @@ public partial class MainView : UserControl
         var targetPercentage = (clickPoint.X - 3) / (eventRoot.Bounds.Width - 7); // I love magic numbers
         var clampedTargetPercentage = double.Clamp(targetPercentage, 0, 1);
         var targetVolume = clampedTargetPercentage * MAX_VOLUME;
-        audioLibWrapper.Volume = (float)targetVolume;
+        songVolumeService.UserDefinedVolume = (float)targetVolume;
         //Console.WriteLine($"Volume set to {audioLibWrapper.Volume}");
 
-        Config.Data.Volume = clampedTargetPercentage;
+        Config.Data.Volume = (float)clampedTargetPercentage;
         UpdateVolumeUi();
 
         e.Handled = true;
@@ -61,7 +60,7 @@ public partial class MainView : UserControl
             return;
 
         var totalWidth = (this.FindResource("VolumeBarWidth") as double?) ?? 100;
-        var volumePercent = audioLibWrapper.Volume / MAX_VOLUME;
+        var volumePercent = (double)songVolumeService.UserDefinedVolume;
         volumeBarUserRectangle.Width = totalWidth * volumePercent;
         volumeBarRealRectangle.Width = totalWidth * volumePercent * 0.8;
 
@@ -73,8 +72,8 @@ public partial class MainView : UserControl
             Console.WriteLine("Volume arcs not found!");
             return;
         }
-        volumeIconArc1.IsVisible = audioLibWrapper.Volume > 0.1;
-        volumeIconArc2.IsVisible = audioLibWrapper.Volume > 0.5;
-        volumeIconArc3.IsVisible = audioLibWrapper.Volume > 0.9;
+        volumeIconArc1.IsVisible = songVolumeService.UserDefinedVolume > 0.1;
+        volumeIconArc2.IsVisible = songVolumeService.UserDefinedVolume > 0.5;
+        volumeIconArc3.IsVisible = songVolumeService.UserDefinedVolume > 0.9;
     }
 }

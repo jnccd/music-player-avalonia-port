@@ -26,6 +26,7 @@ public partial class MainView : UserControl
     MainViewModel? viewModel => DataContext as MainViewModel;
 
     SongPlaybackService songPlaybackService = ServiceContainer.GetService<SongPlaybackService>();
+    SongVolumeService songVolumeService = ServiceContainer.GetService<SongVolumeService>();
     AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
     UiUpdateLoopService uiUpdateLoop = ServiceContainer.GetService<UiUpdateLoopService>();
     MprisService mprisService = ServiceContainer.GetService<MprisService>();

@@ -1,13 +1,15 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
+using MusicPlayerAvaloniaPort.Services.Song;
 
 namespace MusicPlayerAvaloniaPort.ViewModels;
 #pragma warning disable CS9266 // Property accessor should use 'field' because the other accessor is using it.
 
 public partial class MainViewModel : ViewModelBase
 {
-    AudioLibWrapperService? audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
+    AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
+    SongVolumeService songVolumeService = ServiceContainer.GetService<SongVolumeService>();
 
     public MainViewModel()
     {
@@ -22,10 +24,10 @@ public partial class MainViewModel : ViewModelBase
     // Playback
     public float VolumeMultiplier
     {
-        get => audioLibWrapper?.Volume ?? 0;
+        get => songVolumeService.UserDefinedVolume;
         set
         {
-            audioLibWrapper?.Volume = value;
+            songVolumeService.UserDefinedVolume = value;
             field = value;
             SetProperty(ref field, value);
         }

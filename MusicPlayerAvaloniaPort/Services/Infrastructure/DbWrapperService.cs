@@ -18,6 +18,11 @@ public class DbWrapperService
     {
         SongDbContext SongDbContext { get; } = new SongDbContext();
 
+        public void SaveChanges()
+        {
+            SongDbContext.SaveChanges();
+        }
+
         // Create
         public UpvotedSong AddNewUpvotedSong([StringSyntax(StringSyntaxAttribute.Uri)] string songPath)
         {

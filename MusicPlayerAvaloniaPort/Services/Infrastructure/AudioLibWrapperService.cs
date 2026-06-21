@@ -10,6 +10,7 @@ using SoundFlow.Structs;
 using SoundFlow.Visualization;
 using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -234,4 +235,6 @@ public class AudioLibWrapperService
 
         return re;
     }
+
+    public IReadOnlyList<float>? GetCurrentSongSampleData() => globalSampleArray == null ? null : Array.AsReadOnly(globalSampleArray);
 }

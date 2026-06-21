@@ -8,7 +8,7 @@ using Tmds2.DBus.Protocol;
 
 namespace MusicPlayerAvaloniaPort.Services.Infrastructure;
 
-public class MprisService(AudioLibWrapperService audioLibWrapperService, SongPlaybackService songPlaybackService, DbWrapperService dbWrapperService, SongInfoService songInfoService)
+public class MprisService(AudioLibWrapperService audioLibWrapperService, SongPlaybackService songPlaybackService, DbWrapperService dbWrapperService, SongInfoService songInfoService, SongVolumeService songVolumeService)
 {
     MprisHandler? Handler;
 
@@ -42,7 +42,7 @@ public class MprisService(AudioLibWrapperService audioLibWrapperService, SongPla
                     CurrentSongPosition: TimeSpan.FromSeconds((audioLibWrapperService.SongDurationSeconds ?? 0) * (audioLibWrapperService.PlayProgress ?? 0)),
                     CurrentSongLength: TimeSpan.FromSeconds(audioLibWrapperService.SongDurationSeconds ?? 0),
                     CurrentSongCoverArtUrl: songInfoService.GetCoverArtUrlOfSong(songPlaybackService.CurrentlyPlaying) ?? "",
-                    Volume: audioLibWrapperService.Volume,
+                    Volume: songVolumeService.UserDefinedVolume,
                     PlaybackStatus: audioLibWrapperService.PlayState switch
                     {
                         PlaybackState.Playing => PlaybackStatus.Playing,
@@ -83,7 +83,7 @@ public class MprisService(AudioLibWrapperService audioLibWrapperService, SongPla
                         audioLibWrapperService.PlayProgress = (float)((mprisEvent.Position?.TotalSeconds ?? 0) / (audioLibWrapperService.SongDurationSeconds ?? 1));
                         break;
                     case MprisEventType.SetVolume:
-                        audioLibWrapperService.Volume = (float)(mprisEvent.Volume ?? 0);
+                        songVolumeService.UserDefinedVolume = (float)(mprisEvent.Volume ?? 0);
                         break;
                 }
             });
