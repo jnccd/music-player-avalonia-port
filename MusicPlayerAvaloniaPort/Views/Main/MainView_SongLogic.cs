@@ -127,7 +127,7 @@ public partial class MainView : UserControl
 
     private void DurationBarStackPanel_PointerMoved(object? sender, PointerEventArgs e)
     {
-        Debug.WriteLine("DurationBarStackPanel_PointerMoved!");
+        //Debug.WriteLine("DurationBarStackPanel_PointerMoved!");
         DurationBarStackPanel_PointerDown(sender, e);
     }
 

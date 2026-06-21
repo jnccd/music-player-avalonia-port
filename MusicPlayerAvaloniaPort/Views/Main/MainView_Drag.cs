@@ -23,7 +23,7 @@ public partial class MainView : UserControl
     }
     private void MainView_PointerMoved(object? sender, PointerEventArgs e)
     {
-        Debug.WriteLine("MainView_PointerMoved!");
+        //Debug.WriteLine("MainView_PointerMoved!");
         if (e.Properties.IsLeftButtonPressed == false)
             isMovingWindow = false;
         if (!isMovingWindow)
