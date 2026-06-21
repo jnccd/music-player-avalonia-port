@@ -82,6 +82,7 @@ public class AudioLibWrapperService
         get => soundPlayer?.State;
     }
     public event EventHandler<EventArgs>? PlaybackEnded;
+    public event EventHandler<PlaybackState>? PlaybackStateChanged;
 
     public AudioLibWrapperService()
     {
@@ -145,6 +146,11 @@ public class AudioLibWrapperService
             soundPlayer.Pause();
         else
             soundPlayer.Play();
+
+        Task.Run(() =>
+        {
+            PlaybackStateChanged?.Invoke(this, PlayState!.Value);
+        });
     }
 
     public void PlaySong(string songPath)
@@ -206,6 +212,11 @@ public class AudioLibWrapperService
             Debug.WriteLine($"{DateTime.Now:HH:mm:ss.ffff} Done Reading!");
 
             arrayPool.Return(sampleBuffer);
+        });
+
+        Task.Run(() =>
+        {
+            PlaybackStateChanged?.Invoke(this, PlayState!.Value);
         });
     }
 
