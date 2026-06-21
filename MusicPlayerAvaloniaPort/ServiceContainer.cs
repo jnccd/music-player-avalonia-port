@@ -1,6 +1,7 @@
 using EzAuth.Interfaces;
 using EzAuth.Keycloak;
 using Microsoft.Extensions.DependencyInjection;
+using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using System;
 using System.Linq;
 using System.Net.Http;
@@ -48,6 +49,8 @@ public static class ServiceContainer
 
         serviceCollection.AddSingleton<HttpClient>(new HttpClient());
         serviceCollection.AddSingleton<IEzAuth>(new EzKeycloak());
+        if (OperatingSystem.IsLinux())
+            serviceCollection.AddSingleton<MprisService>();
         Services = serviceCollection.BuildServiceProvider();
     }
 

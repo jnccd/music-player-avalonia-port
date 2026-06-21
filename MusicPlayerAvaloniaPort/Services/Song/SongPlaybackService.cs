@@ -20,7 +20,7 @@ public class SongPlaybackService
 
     int RuntimePlayHistoryIndex = 0;
     readonly List<AvailableSong> RuntimePlayHistory = [];
-    AvailableSong? CurrentlyPlaying => RuntimePlayHistoryIndex >= 0 && RuntimePlayHistoryIndex < RuntimePlayHistory.Count ?
+    public AvailableSong? CurrentlyPlaying => RuntimePlayHistoryIndex >= 0 && RuntimePlayHistoryIndex < RuntimePlayHistory.Count ?
         RuntimePlayHistory[RuntimePlayHistoryIndex] :
         null;
     public bool UpvoteLockedIn { get; set; } = false;

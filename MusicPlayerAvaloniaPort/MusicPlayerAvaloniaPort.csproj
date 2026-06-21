@@ -8,7 +8,7 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationIcon>Assets/icon.ico</ApplicationIcon>
   </PropertyGroup>
-  
+
   <ItemGroup>
     <AvaloniaResource Include="Assets/**" />
     <None Update="Assets/**">
@@ -20,6 +20,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <!-- Packages -->
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.0.4" />
     <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.0.0" />
@@ -29,14 +30,34 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
     <PackageReference Include="taglib-sharp-netstandard2.0" Version="2.1.0" />
+
+    <!-- Version clash with avalonia, I used references instead, see below -->
+    <!-- <PackageReference Include="Tmds.DBus" Version="0.94.1" />
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.94.1" />
+    <PackageReference Include="Tmds.DBus.Generator" Version="0.94.1" /> -->
   </ItemGroup>
-  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64' Or '$(RuntimeIdentifier)' == 'linux-arm64'">
+  <ItemGroup
+    Condition="'$(RuntimeIdentifier)' == 'linux-x64' Or '$(RuntimeIdentifier)' == 'linux-arm64'">
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.4" />
   </ItemGroup>
 
+  <!-- References -->
   <ItemGroup>
     <ProjectReference Include="..\SoundFlow\Src\SoundFlow.csproj" />
     <ProjectReference Include="..\MusicPlayerSyncInterface\MusicPlayerSyncInterface.csproj" />
-    <ProjectReference Include="..\EzAuth\EzAuth.csproj" /> 
+    <ProjectReference Include="..\EzAuth\EzAuth.csproj" />
+
+    <ProjectReference Include="../Tmds.DBus/src/Tmds2.DBus/Tmds2.DBus.csproj" />
+    <ProjectReference Include="../Tmds.DBus/src/Tmds2.DBus.Protocol/Tmds2.DBus.Protocol.csproj" />
+    <ProjectReference Include="../Tmds.DBus/src/Tmds2.DBus.Generator/Tmds2.DBus.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <Import Project="../Tmds.DBus/src/Tmds2.DBus.Generator/Tmds2.DBus.Generator.props" />
+
+  <!-- Other -->
+  <ItemGroup>
+    <AdditionalFiles Include="DbusXml/org.mpris.MediaPlayer2.xml" DBusGeneratorMode="Handler"
+      Namespace="Dbus.Mpris" />
+    <AdditionalFiles Include="DbusXml/org.mpris.MediaPlayer2.Player.xml"
+      DBusGeneratorMode="Handler" Namespace="Dbus.Mpris" />
   </ItemGroup>
 </Project>
