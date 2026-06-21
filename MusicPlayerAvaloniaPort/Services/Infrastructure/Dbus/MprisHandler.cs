@@ -191,8 +191,8 @@ internal class MprisHandler : DBusHandler,
     {
         // ["mpris:trackid"] = new ObjectPath("/org/mpris/MediaPlayer2/TrackList/1"),
         ["xesam:title"] = PlayerStatusCache!.CurrentSongTitle,
-        ["xesam:artist"] = VariantValue.Array(new string[] { PlayerStatusCache!.CurrentSongArtist }),
-        ["xesam:album"] = PlayerStatusCache!.CurrentSongAlbum,
+        ["xesam:artist"] = VariantValue.Array(new string[] { string.IsNullOrWhiteSpace(PlayerStatusCache!.CurrentSongArtist) ? "Unknown Artist" : PlayerStatusCache.CurrentSongArtist }),
+        ["xesam:album"] = string.IsNullOrWhiteSpace(PlayerStatusCache!.CurrentSongAlbum) ? "Unknown Album" : PlayerStatusCache.CurrentSongAlbum,
         ["mpris:length"] = (long)PlayerStatusCache!.CurrentSongLength.TotalMicroseconds
     };
 
