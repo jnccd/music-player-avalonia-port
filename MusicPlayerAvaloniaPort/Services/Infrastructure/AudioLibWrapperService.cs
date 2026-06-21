@@ -83,6 +83,7 @@ public class AudioLibWrapperService
         get => soundPlayer?.State;
     }
     public event EventHandler<EventArgs>? PlaybackEnded;
+    public event EventHandler<EventArgs>? FinishedReading;
     public event EventHandler<PlaybackState>? PlaybackStateChanged;
 
     public AudioLibWrapperService()
@@ -210,7 +211,12 @@ public class AudioLibWrapperService
                 Buffer.BlockCopy(sampleBuffer, 0, globalSampleArray, globalSampleArrayWriteHead * sizeof(float), bytesRead / sizeof(float) * sizeof(float));
                 globalSampleArrayWriteHead += bytesRead / sizeof(float);
             }
+
             Debug.WriteLine($"{DateTime.Now:HH:mm:ss.ffff} Done Reading!");
+            Task.Run(() =>
+            {
+                FinishedReading?.Invoke(this, EventArgs.Empty);
+            });
 
             arrayPool.Return(sampleBuffer);
         });

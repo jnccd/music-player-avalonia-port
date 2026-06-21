@@ -4,6 +4,7 @@ using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 
@@ -40,8 +41,11 @@ public class SongVolumeService
         songPlaybackService.NewSongStarted += (e, s) =>
         {
             var hadDbVolumeData = UpdateAudioLibVolume();
-            if (!hadDbVolumeData)
-                SetCurrentSongsVolume();
+        };
+
+        audioLibWrapperService.FinishedReading += (s, e) =>
+        {
+            SetCurrentSongsVolumeIfNecessary();
         };
     }
 
@@ -53,6 +57,7 @@ public class SongVolumeService
         if (currentUpvotedSong.Volume > 0)
         {
             var volumeMultiplier = BASE_VOLUME / currentUpvotedSong.Volume;
+            Debug.WriteLine($"Applying volume multiplier of {volumeMultiplier}");
             audioLibWrapperService.Volume = UserDefinedVolume * volumeMultiplier;
         }
         else
@@ -63,11 +68,14 @@ public class SongVolumeService
         return currentUpvotedSong.Volume > 0;
     }
 
-    private void SetCurrentSongsVolume()
+    private void SetCurrentSongsVolumeIfNecessary()
     {
         var currentSong = songPlaybackService.CurrentlyPlaying;
         var dbContext = dbWrapperService.GetContext();
         var currentUpvotedSong = dbContext.GetUpvotedSongById(currentSong?.UpvotedSongId);
+
+        if (currentUpvotedSong.Volume > 0) // Not necessary
+            return;
 
         var samples = audioLibWrapperService.GetCurrentSongSampleData();
 
