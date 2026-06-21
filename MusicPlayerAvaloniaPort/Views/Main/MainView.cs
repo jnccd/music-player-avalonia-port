@@ -27,6 +27,7 @@ public partial class MainView : UserControl
     SongPlaybackService songPlaybackService = ServiceContainer.GetService<SongPlaybackService>();
     AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
     UiUpdateLoopService uiUpdateLoop = ServiceContainer.GetService<UiUpdateLoopService>();
+    MprisService mprisService = ServiceContainer.GetService<MprisService>();
 
     const double MAX_VOLUME = 1;
 
@@ -74,6 +75,8 @@ public partial class MainView : UserControl
         MainView_ScalingChanged(null, EventArgs.Empty);
         songPlaybackService.GetNextSong();
         LoadVolume();
+
+        mprisService.Init();
     }
 
     void ButtonOptions_Click(object? sender, RoutedEventArgs e)
