@@ -9,6 +9,14 @@ public partial class MainViewModel : ViewModelBase
 {
     AudioLibWrapperService? audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
 
+    public MainViewModel()
+    {
+        audioLibWrapper.PlaybackStateChanged += (e, s) =>
+        {
+            Playing = s == SoundFlow.Enums.PlaybackState.Playing;
+        };
+    }
+
     // --- Properties ---
 
     // Playback
