@@ -34,12 +34,14 @@ public partial class MainView : UserControl
             }
             else if (FolderPickerFallbackEnabled)
             {
+#pragma warning disable CS0162 // Unreachable code detected
                 Console.WriteLine("For music folder, showing MessageBox");
                 Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     var mb = new MessageBox(e => Console.WriteLine(e), window, null);
                     folder = mb.GetText("Input the song library path, FolderPicker doesnt work on Linux");
                 }).Wait();
+#pragma warning restore CS0162 // Unreachable code detected
             }
             else
             {

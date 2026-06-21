@@ -94,7 +94,7 @@ public class MessageBox(Action<Exception>? OnError, Window? OriginWindow, Contro
         button.Click += (s, e) => { currentWindow.Close(); tcs.SetResult(textBox.Text); };
 
         currentWindow.ShowActivated = TakeFocus;
-        currentWindow.ShowDialog(OriginWindow);
+        currentWindow.ShowDialog(OriginWindow!);
         textBox.Focus();
 
         return tcs.Task.Result; // Blocking
