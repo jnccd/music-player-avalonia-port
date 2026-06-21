@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -18,35 +19,42 @@ namespace MusicPlayerAvaloniaPort.Views.Main;
 
 public partial class MainView : UserControl
 {
+    const bool FolderPickerFallbackEnabled = false;
+
     void MapLocalSongLibrary()
     {
         if (Config.Data.SongLibraryPath == null)
         {
-            string folder;
+            string? folder = null;
             var envVar = Environment.GetEnvironmentVariable("MUSIC_FOLDER");
             if (!string.IsNullOrWhiteSpace(envVar))
             {
                 Console.WriteLine("For music folder, using env var");
                 folder = envVar;
             }
-            else if (OperatingSystem.IsLinux())
+            else if (FolderPickerFallbackEnabled)
             {
                 Console.WriteLine("For music folder, showing MessageBox");
-                var mb = new MessageBox(e => Console.WriteLine(e), window, null);
-                folder = mb.GetText("Input the song library path, FolderPicker doesnt work on Linux");
+                Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    var mb = new MessageBox(e => Console.WriteLine(e), window, null);
+                    folder = mb.GetText("Input the song library path, FolderPicker doesnt work on Linux");
+                }).Wait();
             }
             else
             {
                 Console.WriteLine("For music folder, showing OpenFolderPicker");
-                // Get the StorageProvider from your window
-                var storageProvider = TopLevel.GetTopLevel(window)!.StorageProvider;
-                var folders = storageProvider?.OpenFolderPickerAsync(new FolderPickerOpenOptions
+                Dispatcher.UIThread.InvokeAsync(async () =>
                 {
-                    Title = "Select your Music Root Folder",
-                    AllowMultiple = false
-                }).Result;
-                var storageFolder = folders![0];
-                folder = storageFolder!.Path.AbsolutePath;
+                    var storageProvider = TopLevel.GetTopLevel(window)!.StorageProvider;
+                    var folders = await storageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions // If this isnt awaited it straight up doesnt work at all on linux
+                    {
+                        Title = "Select your Music Root Folder",
+                        AllowMultiple = false
+                    });
+                    var storageFolder = folders![0];
+                    folder = storageFolder!.Path.AbsolutePath;
+                }).Wait();
             }
 
             if (folder == null || !HelperFuncs.DirOrSubDirsContainMp3(folder))

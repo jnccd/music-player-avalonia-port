@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
@@ -48,8 +49,14 @@ public partial class MainView : UserControl
 
     void SetupUi()
     {
-        // Setup 
-        MapLocalSongLibrary();
+        // Song Setup Thread (so it doesnt block the UI)
+        Task.Run(() =>
+        {
+            Thread.CurrentThread.Name = "SongSetupThread";
+
+            MapLocalSongLibrary();
+            songPlaybackService.GetNextSong();
+        });
 
         // Events
         window?.Closing += MainView_Closing;
@@ -72,7 +79,6 @@ public partial class MainView : UserControl
 
         // Initial Update
         MainView_ScalingChanged(null, EventArgs.Empty);
-        songPlaybackService.GetNextSong();
         LoadVolume();
     }
 
