@@ -1,18 +1,19 @@
 using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using SoundFlow.Enums;
 using Tmds2.DBus.Protocol;
 
 namespace MusicPlayerAvaloniaPort.Services.Infrastructure;
 
-public class MprisService
+public class MprisService(AudioLibWrapperService audioLibWrapperService, SongPlaybackService songPlaybackService, DbWrapperService dbWrapperService)
 {
-    public MprisService(AudioLibWrapperService audioLibWrapperService, SongPlaybackService songPlaybackService, DbWrapperService dbWrapperService)
+    public void Init()
     {
-        Task.Run(() => RunMprisServiceAsync(audioLibWrapperService, songPlaybackService, dbWrapperService));
+        Task.Run(RunMprisServiceAsync);
     }
 
-    private async Task RunMprisServiceAsync(AudioLibWrapperService audioLibWrapperService, SongPlaybackService songPlaybackService, DbWrapperService dbWrapperService)
+    private async Task RunMprisServiceAsync()
     {
         while (true)
         {
@@ -80,12 +81,14 @@ public class MprisService
             connection.AddMethodHandler(handler);
 
             await connection.RequestNameAsync(
-                "org.mpris.MediaPlayer2.MyMusicPlayer",
+                "org.mpris.MediaPlayer2.MusicPlayerAvaloniaPort",
                 RequestNameOptions.ReplaceExisting);
 
             Console.WriteLine("MPRIS service running...");
+            Debug.WriteLine("MPRIS service running...");
             Exception? reason = await connection.DisconnectedAsync();
             Console.WriteLine($"Connection lost: {reason}. Reconnecting...");
+            Debug.WriteLine($"Connection lost: {reason}. Reconnecting...");
         }
     }
 }
