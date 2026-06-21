@@ -25,7 +25,8 @@ public class SongPlaybackService
         null;
     public bool UpvoteLockedIn
     {
-        get; set
+        get;
+        set
         {
             field = value;
             UpvoteLockedInChanged?.Invoke(this, value);
