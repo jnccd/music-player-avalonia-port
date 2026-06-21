@@ -11,7 +11,7 @@ public enum PlaybackStatus
     Stopped
 }
 
-public record PlayerStatus(string Identity, string DesktopEntry, string CurrentSongTitle, string CurrentSongArtist, string CurrentSongAlbum, TimeSpan CurrentSongPosition, TimeSpan CurrentSongLength, double Volume, PlaybackStatus PlaybackStatus);
+public record PlayerStatus(string Identity, string DesktopEntry, string CurrentSongTitle, string CurrentSongArtist, string CurrentSongAlbum, TimeSpan CurrentSongPosition, TimeSpan CurrentSongLength, string CurrentSongCoverArtUrl, double Volume, PlaybackStatus PlaybackStatus);
 
 public enum MprisEventType
 {
@@ -55,9 +55,14 @@ internal class MprisHandler : DBusHandler,
             }
             return field;
         }
+        set;
     } = null;
     DateTime PlayerStatusCacheLastUpdated { get; set; } = DateTime.MinValue;
     TimeSpan PlayerStatusCacheDuration { get; set; } = TimeSpan.FromSeconds(1);
+    public void ClearCache()
+    {
+        PlayerStatusCache = null;
+    }
 
     public MprisHandler(DBusConnection connection, Func<PlayerStatus> GetPlayerStatus, Action<MprisEvent> HandleMprisEvent)
         : base(connection, path: "/org/mpris/MediaPlayer2", handlesChildPaths: true)
@@ -182,7 +187,8 @@ internal class MprisHandler : DBusHandler,
         ["xesam:title"] = PlayerStatusCache!.CurrentSongTitle,
         ["xesam:artist"] = VariantValue.Array(new string[] { PlayerStatusCache!.CurrentSongArtist }),
         ["xesam:album"] = PlayerStatusCache!.CurrentSongAlbum,
-        ["mpris:length"] = (long)PlayerStatusCache!.CurrentSongLength.TotalMicroseconds
+        ["mpris:length"] = (long)PlayerStatusCache!.CurrentSongLength.TotalMicroseconds,
+        ["mpris:artUrl"] = PlayerStatusCache.CurrentSongCoverArtUrl,
     };
 
     public double Volume

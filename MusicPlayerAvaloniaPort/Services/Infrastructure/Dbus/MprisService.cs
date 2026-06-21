@@ -7,7 +7,7 @@ using Tmds2.DBus.Protocol;
 
 namespace MusicPlayerAvaloniaPort.Services.Infrastructure;
 
-public class MprisService(AudioLibWrapperService audioLibWrapperService, SongPlaybackService songPlaybackService, DbWrapperService dbWrapperService)
+public class MprisService(AudioLibWrapperService audioLibWrapperService, SongPlaybackService songPlaybackService, DbWrapperService dbWrapperService, SongInfoService songInfoService)
 {
     MprisHandler? Handler;
 
@@ -16,6 +16,7 @@ public class MprisService(AudioLibWrapperService audioLibWrapperService, SongPla
         Task.Run(RunMprisServiceAsync);
         songPlaybackService.NewSongStarted += (sender, args) =>
         {
+            Handler?.ClearCache();
             Handler?.EmitAllProperties();
         };
     }
@@ -39,6 +40,7 @@ public class MprisService(AudioLibWrapperService audioLibWrapperService, SongPla
                     CurrentSongAlbum: currentSong?.Album ?? string.Empty,
                     CurrentSongPosition: TimeSpan.FromSeconds((audioLibWrapperService.SongDurationSeconds ?? 0) * (audioLibWrapperService.PlayProgress ?? 0)),
                     CurrentSongLength: TimeSpan.FromSeconds(audioLibWrapperService.SongDurationSeconds ?? 0),
+                    CurrentSongCoverArtUrl: songInfoService.GetCoverArtUrlOfSong(songPlaybackService.CurrentlyPlaying) ?? "",
                     Volume: audioLibWrapperService.Volume,
                     PlaybackStatus: audioLibWrapperService.PlayState switch
                     {
