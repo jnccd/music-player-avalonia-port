@@ -122,21 +122,24 @@ public class AudioLibWrapperService
         return (uint?)(playerDataProvider?.FormatInfo?.SampleRate / 100 * playerDataProvider?.FormatInfo?.ChannelCount) ?? 960;
     }
 
-    public void TogglePlayPause()
+    public void TogglePlayPause(bool UpdateAudioDevicesInfo = false)
     {
         if (soundPlayer == null)
             throw new Exception("Sound Player gon");
 
-        Engine.UpdateAudioDevicesInfo();
-        if (playbackDeviceInfo.Name != Engine.PlaybackDevices.First(d => d.IsDefault).Name)
+        if (UpdateAudioDevicesInfo)
         {
-            playbackDevice.Dispose();
-            playbackDeviceInfo = Engine.PlaybackDevices.FirstOrDefault(d => d.IsDefault);
-            var playbackDeviceInfoFormat = playbackDeviceInfo.SupportedDataFormats.First();
-            playBackFormat = AudioFormat.GetFormatFromNativeFormat(playbackDeviceInfoFormat);
-            playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, playBackFormat);
-            playbackDevice.MasterMixer.AddComponent(soundPlayer);
-            playbackDevice.Start();
+            Engine.UpdateAudioDevicesInfo();
+            if (playbackDeviceInfo.Name != Engine.PlaybackDevices.First(d => d.IsDefault).Name)
+            {
+                playbackDevice.Dispose();
+                playbackDeviceInfo = Engine.PlaybackDevices.FirstOrDefault(d => d.IsDefault);
+                var playbackDeviceInfoFormat = playbackDeviceInfo.SupportedDataFormats.First();
+                playBackFormat = AudioFormat.GetFormatFromNativeFormat(playbackDeviceInfoFormat);
+                playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, playBackFormat);
+                playbackDevice.MasterMixer.AddComponent(soundPlayer);
+                playbackDevice.Start();
+            }
         }
         if (soundPlayer.State == PlaybackState.Playing)
             soundPlayer.Pause();
