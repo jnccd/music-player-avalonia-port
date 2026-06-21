@@ -57,7 +57,10 @@ public class UiLoopTitle() : IUiUpdateLoop(typeof(MainView), typeof(Input))
 
         var currentTime = stopwatch.Elapsed;
         if (audioLibWrapper.PlayState != SoundFlow.Enums.PlaybackState.Playing)
+        {
+            titleLastUpdateTime = stopwatch.Elapsed;
             return;
+        }
         var movement = (currentTime! - titleLastUpdateTime!).Value.Milliseconds / 69.0;
 
         if (input.titleCanvas!.Bounds.Width > titleCanvasText1!.DesiredSize.Width)
