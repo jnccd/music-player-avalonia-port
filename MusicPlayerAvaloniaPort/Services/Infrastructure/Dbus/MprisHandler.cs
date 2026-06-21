@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Dbus.Mpris;
-using Tmds.DBus.Protocol;
+using Tmds2.DBus.Protocol;
 
 public enum PlaybackStatus
 {
@@ -199,6 +199,8 @@ internal class MprisHandler : DBusHandler,
     public bool Fullscreen { get; set; } = false;
 
     public bool CanSetFullscreen => false;
+
+    Dictionary<string, Tmds2.DBus.Protocol.VariantValue> IPlayerProperties.Metadata => throw new NotImplementedException();
 
     public void Dispose() { }
 

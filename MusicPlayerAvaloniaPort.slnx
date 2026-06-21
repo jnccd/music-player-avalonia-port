@@ -8,6 +8,12 @@
   <Project Path="MusicPlayerAvaloniaPort/MusicPlayerAvaloniaPort.csproj" />
   
   <Project Path="MusicPlayerSyncInterface/MusicPlayerSyncInterface.csproj" />
+  <Folder Name="/Tmds.DBus/" />
+  <Folder Name="/Tmds.DBus/src/">
+    <Project Path="Tmds.DBus/src/Tmds2.DBus.Generator/Tmds2.DBus.Generator.csproj" />
+    <Project Path="Tmds.DBus/src/Tmds2.DBus.Protocol/Tmds2.DBus.Protocol.csproj" />
+    <Project Path="Tmds.DBus/src/Tmds2.DBus/Tmds2.DBus.csproj" />
+  </Folder>
   <Project Path="EzAuth/EzAuth.csproj" />
 
   <Folder Name="/SoundFlow/" />

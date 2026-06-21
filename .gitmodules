@@ -7,3 +7,7 @@
 [submodule "EzAuth"]
 	path = EzAuth
 	url = https://github.com/jnccd/ez-auth
+[submodule "Tmds.DBus"]
+	path = Tmds.DBus
+	url = git@github.com:jnccd/Tmds.DBus.git
+	branch = 0.94.1v2

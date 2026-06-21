@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using SoundFlow.Enums;
-using Tmds.DBus.Protocol;
+using Tmds2.DBus.Protocol;
 
 namespace MusicPlayerAvaloniaPort.Services.Infrastructure;
 
