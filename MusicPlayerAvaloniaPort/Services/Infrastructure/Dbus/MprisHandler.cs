@@ -39,6 +39,21 @@ internal class MprisHandler : DBusHandler,
     Func<PlayerStatus> GetPlayerStatus;
     Action<MprisEvent> HandleMprisEvent;
 
+    PlayerStatus? PlayerStatusCache
+    {
+        get
+        {
+            if (field == null || PlayerStatusCacheLastUpdated + PlayerStatusCacheDuration < DateTime.Now)
+            {
+                field = GetPlayerStatus();
+                PlayerStatusCacheLastUpdated = DateTime.Now;
+            }
+            return field;
+        }
+    } = null;
+    DateTime PlayerStatusCacheLastUpdated { get; set; } = DateTime.MinValue;
+    TimeSpan PlayerStatusCacheDuration { get; set; } = TimeSpan.FromSeconds(1);
+
     public MprisHandler(DBusConnection connection, Func<PlayerStatus> GetPlayerStatus, Action<MprisEvent> HandleMprisEvent)
         : base(connection, path: "/org/mpris/MediaPlayer2", handlesChildPaths: true)
     {
@@ -47,10 +62,10 @@ internal class MprisHandler : DBusHandler,
         this.GetPlayerStatus = GetPlayerStatus;
         this.HandleMprisEvent = HandleMprisEvent;
 
-        EmitAllProperties();
+        //EmitAllProperties();
     }
 
-    private void EmitAllProperties()
+    public void EmitAllProperties()
     {
         Connection.EmitPropertyChanged(Path, this,
             PlayerProperty.PlaybackStatus);
@@ -157,8 +172,8 @@ internal class MprisHandler : DBusHandler,
     }
 
     // === IMediaPlayer2Properties ===
-    public string Identity => GetPlayerStatus().Identity;
-    public string DesktopEntry => GetPlayerStatus().DesktopEntry;
+    public string Identity => PlayerStatusCache!.Identity;
+    public string DesktopEntry => PlayerStatusCache!.DesktopEntry;
     public bool CanQuit => false;
     public bool CanRaise => false;
     public bool HasTrackList => false;
@@ -167,26 +182,26 @@ internal class MprisHandler : DBusHandler,
 
     // === IPlayerProperties ===
 
-    public string PlaybackStatus => GetPlayerStatus().PlaybackStatus.ToString();
+    public string PlaybackStatus => PlayerStatusCache!.PlaybackStatus.ToString();
     public string LoopStatus { get; set; } = "None";
     public double Rate { get; set; } = 1.0;
     public bool Shuffle { get; set; } = false;
 
     public Dictionary<string, VariantValue> Metadata => new()
     {
-        ["mpris:trackid"] = new ObjectPath("/org/mpris/MediaPlayer2/TrackList/1"),
-        ["xesam:title"] = GetPlayerStatus().CurrentSongTitle,
-        ["xesam:artist"] = VariantValue.Array(new string[] { GetPlayerStatus().CurrentSongArtist }), // Must be string[]
-        ["xesam:album"] = GetPlayerStatus().CurrentSongAlbum,
-        ["mpris:length"] = GetPlayerStatus().CurrentSongLength.TotalMilliseconds
+        // ["mpris:trackid"] = new ObjectPath("/org/mpris/MediaPlayer2/TrackList/1"),
+        ["xesam:title"] = PlayerStatusCache!.CurrentSongTitle,
+        ["xesam:artist"] = VariantValue.Array(new string[] { PlayerStatusCache!.CurrentSongArtist }),
+        ["xesam:album"] = PlayerStatusCache!.CurrentSongAlbum,
+        ["mpris:length"] = (long)PlayerStatusCache!.CurrentSongLength.TotalMicroseconds
     };
 
     public double Volume
     {
-        get => GetPlayerStatus().Volume;
+        get => PlayerStatusCache!.Volume;
         set => HandleMprisEvent(new(MprisEventType.SetVolume, Volume: value));
     }
-    public long Position => (long)GetPlayerStatus().CurrentSongPosition.TotalMicroseconds;
+    public long Position => (long)PlayerStatusCache!.CurrentSongPosition.TotalMicroseconds;
     public double MinimumRate => 1.0;
     public double MaximumRate => 1.0;
     public bool CanGoNext => true;
@@ -200,7 +215,7 @@ internal class MprisHandler : DBusHandler,
 
     public bool CanSetFullscreen => false;
 
-    Dictionary<string, Tmds2.DBus.Protocol.VariantValue> IPlayerProperties.Metadata => throw new NotImplementedException();
+    Dictionary<string, Tmds2.DBus.Protocol.VariantValue> IPlayerProperties.Metadata => Metadata;
 
     public void Dispose() { }
 
