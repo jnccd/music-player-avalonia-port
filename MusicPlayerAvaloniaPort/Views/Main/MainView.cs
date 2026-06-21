@@ -57,6 +57,8 @@ public partial class MainView : UserControl
 
             MapLocalSongLibrary();
             songPlaybackService.GetNextSong();
+
+            mprisService.Init();
         });
 
         // Events
@@ -81,8 +83,6 @@ public partial class MainView : UserControl
         // Initial Update
         MainView_ScalingChanged(null, EventArgs.Empty);
         LoadVolume();
-
-        mprisService.Init();
     }
 
     void ButtonOptions_Click(object? sender, RoutedEventArgs e)
