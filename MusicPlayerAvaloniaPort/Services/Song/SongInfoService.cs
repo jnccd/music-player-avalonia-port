@@ -1,12 +1,11 @@
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
-using MusicPlayerAvaloniaPort.Services.Song;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace MusicPlayerAvaloniaPort.Services;
+namespace MusicPlayerAvaloniaPort.Services.Song;
 
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(SongInfoService))]
 public class SongInfoService()

@@ -1,11 +1,10 @@
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
-using MusicPlayerAvaloniaPort.Services.Song;
 using MusicPlayerSyncInterface.DTOs;
 using System;
 using System.Collections.Generic;
 
-namespace MusicPlayerAvaloniaPort.Services;
+namespace MusicPlayerAvaloniaPort.Services.Song;
 
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(SongChoosingService))]
 public class SongChoosingService(DbWrapperService DbWrapper)

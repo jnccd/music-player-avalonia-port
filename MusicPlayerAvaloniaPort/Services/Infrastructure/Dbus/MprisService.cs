@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
+using MusicPlayerAvaloniaPort.Services.Song;
 using SoundFlow.Enums;
 using Tmds2.DBus.Protocol;
 
