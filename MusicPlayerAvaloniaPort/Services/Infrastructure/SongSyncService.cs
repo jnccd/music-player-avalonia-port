@@ -39,7 +39,7 @@ public class SongSyncService
         Init();
     }
 
-    public void Init(string? password = null, bool TryCallApiInit = false)
+    public void Init(string? password = null, bool TryCallApiInit = false, bool RetryUnsyncedEntries = true)
     {
         var endpoint = $"{ROUTE_VERSION_PREFIX}/sync/init";
         try
@@ -62,6 +62,7 @@ public class SongSyncService
             return;
         }
 
+        // Init
         try
         {
             if (TryCallApiInit)
@@ -78,6 +79,32 @@ public class SongSyncService
         {
             State = $"API Init failed: {ex.Message}";
             return;
+        }
+
+        // Retry unsynced entries
+        if (RetryUnsyncedEntries)
+        {
+            using var dbContext = DbWrapper.GetContext();
+            foreach (var unsyncedData in dbContext.GetNotYetSyncedDataEntries())
+            {
+                try
+                {
+                    var sendContent = new StringContent(unsyncedData.Body, Encoding.UTF8, "application/json");
+                    var res = client.PostAsync($"{Config.Data.SyncServerHost}{ROUTE_VERSION_PREFIX}{unsyncedData.Endpoint}", sendContent).Result;
+
+                    Console.WriteLine($"Synced data for endpoint {unsyncedData.Endpoint}: {res.StatusCode}, {unsyncedData.Body}");
+
+                    if (res.IsSuccessStatusCode || res.StatusCode == System.Net.HttpStatusCode.Conflict)
+                    {
+                        dbContext.RemoveNotYetSyncedDataEntries(unsyncedData);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    State = $"API Retry Unsynced Entries failed: {ex.Message}";
+                    Console.WriteLine($"API Retry Unsynced Entries failed for endpoint {unsyncedData.Endpoint}: {ex.Message}, {unsyncedData.Body}");
+                }
+            }
         }
     }
 

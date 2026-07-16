@@ -3,6 +3,8 @@ using MusicPlayerAvaloniaPort.Persistence.Database;
 using MusicPlayerSyncInterface.DTOs;
 using MusicPlayerSyncInterface.DTOs.Composites;
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
@@ -106,6 +108,15 @@ public class DbWrapperService
             var historyEntries = SongDbContext.SongHistoryEntries.ToArray();
 
             return new SyncInitRequest(songs, historyEntries);
+        }
+        public IEnumerable<NotYetSyncedData> GetNotYetSyncedDataEntries()
+        {
+            return SongDbContext.NotYetSyncedData.ToArray();
+        }
+        public void RemoveNotYetSyncedDataEntries(NotYetSyncedData unsyncedData)
+        {
+            SongDbContext.NotYetSyncedData.Remove(unsyncedData);
+            SongDbContext.SaveChanges();
         }
 
         public void Dispose()
