@@ -90,7 +90,11 @@ public class SongSyncService
                 try
                 {
                     var sendContent = new StringContent(unsyncedData.Body, Encoding.UTF8, "application/json");
-                    var res = client.PostAsync($"{Config.Data.SyncServerHost}{ROUTE_VERSION_PREFIX}{unsyncedData.Endpoint}", sendContent).Result;
+                    HttpResponseMessage res;
+                    if (unsyncedData.Endpoint == "/sync/volume") // Horrible way to do this, TODO: change unsyncedData to include HTTP method type (POST/PUT) instead of hardcoding it here
+                        res = client.PutAsync($"{Config.Data.SyncServerHost}{ROUTE_VERSION_PREFIX}{unsyncedData.Endpoint}", sendContent).Result;
+                    else
+                        res = client.PostAsync($"{Config.Data.SyncServerHost}{ROUTE_VERSION_PREFIX}{unsyncedData.Endpoint}", sendContent).Result;
 
                     Console.WriteLine($"Synced data for endpoint {unsyncedData.Endpoint}: {res.StatusCode}, {unsyncedData.Body}");
 
