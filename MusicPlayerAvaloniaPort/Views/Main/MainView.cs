@@ -29,7 +29,7 @@ public partial class MainView : UserControl
     SongVolumeService songVolumeService = ServiceContainer.GetService<SongVolumeService>();
     AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
     UiUpdateLoopService uiUpdateLoop = ServiceContainer.GetService<UiUpdateLoopService>();
-    MprisService mprisService = ServiceContainer.GetService<MprisService>();
+    MprisService? mprisService = ServiceContainer.TryGetService<MprisService>();
 
     const double MAX_VOLUME = 1;
 
@@ -59,7 +59,7 @@ public partial class MainView : UserControl
             MapLocalSongLibrary();
             songPlaybackService.GetNextSong();
 
-            mprisService.Init();
+            mprisService?.Init();
         });
 
         // Events

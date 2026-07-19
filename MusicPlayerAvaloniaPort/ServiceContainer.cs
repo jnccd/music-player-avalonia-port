@@ -60,4 +60,10 @@ public static class ServiceContainer
             ?? throw new Exception($"Service of type {typeof(TRequested)} not found. Make sure it is decorated with [RegisterImplementation] and that its dependencies can be resolved.");
         return service;
     }
+
+    public static TRequested? TryGetService<TRequested>()
+    {
+        var service = Services.GetService<TRequested>();
+        return service;
+    }
 }
