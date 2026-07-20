@@ -29,9 +29,9 @@
         <conv:AddMultiplyConverter x:Key="AddMultiplyConverter" />
         <conv:EitherOrConverter x:Key="EitherOrConverter" />
     </UserControl.Resources>
-    <Border BorderBrush="#0AE3E3E3" BorderThickness="1">
+    <Border Name="CosmeticBorder" BorderBrush="#0AE3E3E3" BorderThickness="1">
         <Border
-            Name="WindowBorder"
+            Name="ResizeWindowBorder"
             BorderBrush="#00000000"
             BorderThickness="12"
             Cursor="SizeAll"
