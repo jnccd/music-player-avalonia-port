@@ -188,7 +188,7 @@ public class SongDownloadRequestProcessorService(SongPlaybackService songPlaybac
             }
 
             // Play it
-            songPlaybackService.PlaySpecificSong(downloadedSongs.First());
+            songPlaybackService.PlaySpecificSong(downloadedSongs.First(), secondToStartAt: songRequest.PlaybackProgressSeconds);
         }
         catch (Exception e)
         {

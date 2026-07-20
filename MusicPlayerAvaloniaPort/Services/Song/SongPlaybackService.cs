@@ -76,7 +76,7 @@ public class SongPlaybackService
         return newAvailableSong;
     }
 
-    public void PlaySpecificSong(AvailableSong availableSong)
+    public void PlaySpecificSong(AvailableSong availableSong, float? secondToStartAt = null)
     {
         // Update RuntimePlayHistory
         RuntimePlayHistory.Add(availableSong);
@@ -85,6 +85,9 @@ public class SongPlaybackService
         // Invoke Events
         AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"));
         NewSongStarted?.Invoke(this, CurrentlyPlaying);
+
+        if (secondToStartAt != null)
+            AudioLibWrapper.PlayProgress = secondToStartAt / AudioLibWrapper.SongDurationSeconds;
     }
     public void GetNextSong()
     {
