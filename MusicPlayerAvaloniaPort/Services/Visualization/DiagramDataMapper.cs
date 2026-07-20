@@ -9,7 +9,7 @@ using System.Linq;
 namespace MusicPlayerAvaloniaPort.Services.Visualization;
 
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(DiagramDataMapper))]
-public class DiagramDataMapper(AudioLibWrapperService audioLibWrapperService, SongVolumeService songVolumeService, SongPlaybackService songPlaybackService, DbWrapperService dbWrapperService)
+public class DiagramDataMapper(AudioLibWrapperService audioLibWrapperService, SongPlaybackService songPlaybackService, DbWrapperService dbWrapperService)
 {
     private float[]? smoothedData;
     private float[]? mappedData;
