@@ -15,6 +15,10 @@ public class DiagramDataMapper(AudioLibWrapperService audioLibWrapperService, So
     private float[]? mappedData;
     private const float THETA = 3.0f;
     private GaussianCache gaussianCache = new GaussianCache(THETA);
+    private float[] hammingWindowFactorArray = Enumerable
+        .Range(0, AudioLibWrapperService.FFT_BUFFER_SIZE)
+        .Select(i => (float)HammingWindowCache.ComputeHammingWindow(i, AudioLibWrapperService.FFT_BUFFER_SIZE))
+        .ToArray();
 
     public float[] GetScaledAndSlicedFftData(int targetArraySize)
     {
@@ -27,7 +31,7 @@ public class DiagramDataMapper(AudioLibWrapperService audioLibWrapperService, So
         var currentSong = songPlaybackService.CurrentlyPlaying;
         var currentUpvotedSong = dbWrapperService.GetContext().GetUpvotedSongById(currentSong?.UpvotedSongId);
 
-        var fftData = audioLibWrapperService.GetCurrentFftSpectrumData();
+        var fftData = audioLibWrapperService.GetCurrentFftSpectrumData(hammingWindowFactorArray);
         for (int i = 0; i < fftData.Length; i++)
         {
             fftData[i] = fftData[i] * (float)Math.Sqrt(i + 1) / 100;

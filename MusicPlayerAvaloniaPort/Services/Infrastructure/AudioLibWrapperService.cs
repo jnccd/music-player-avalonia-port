@@ -38,7 +38,7 @@ public class AudioLibWrapperService
     bool CancelReading = false;
 
     // FFT Vars
-    const int FFT_BUFFER_SIZE = 16384 / 4;
+    public const int FFT_BUFFER_SIZE = 16384 / 4;
     private static readonly AudioFormat AnalyzeFormat = AudioFormat.Studio;
     SpectrumAnalyzer spectrumAnalyzer = new SpectrumAnalyzer(AnalyzeFormat, FFT_BUFFER_SIZE);
     float[] fftZeroResult;
@@ -227,7 +227,7 @@ public class AudioLibWrapperService
         });
     }
 
-    public float[] GetCurrentFftSpectrumData()
+    public float[] GetCurrentFftSpectrumData(float[]? factorArray = null)
     {
         if (globalSampleArrayWriteHead <= (playerDataProvider!.Position / 4) + (FFT_BUFFER_SIZE / 2) + 1
             || playerDataProvider!.Position / 4 <= FFT_BUFFER_SIZE / 2 + 1)
@@ -236,7 +236,23 @@ public class AudioLibWrapperService
         Memory<float> memorySlice = globalSampleArray.AsMemory((playerDataProvider!.Position / 4) - (FFT_BUFFER_SIZE / 2), FFT_BUFFER_SIZE);
         Span<float> sampleBufferSpan = memorySlice.Span;
 
-        spectrumAnalyzer.Process(sampleBufferSpan, AnalyzeFormat.Channels);
+        if (factorArray == null)
+        {
+            spectrumAnalyzer.Process(sampleBufferSpan, AnalyzeFormat.Channels);
+        }
+        else
+        {
+            Span<float> workingSpan = arrayPool.Rent(FFT_BUFFER_SIZE);
+            sampleBufferSpan.CopyTo(workingSpan);
+
+            for (int i = 0; i < FFT_BUFFER_SIZE; i++)
+            {
+                workingSpan[i] *= factorArray[i];
+            }
+
+            spectrumAnalyzer.Process(workingSpan, AnalyzeFormat.Channels);
+        }
+
         var re = spectrumAnalyzer.SpectrumData.ToArray();
 
         return re;
