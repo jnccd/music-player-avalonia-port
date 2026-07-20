@@ -41,10 +41,13 @@ public class CustomRenderControl_Title : Control
 
     public CustomRenderControl_Title()
     {
-        stopwatch.Start();
-        titleLastUpdateTime = stopwatch.Elapsed;
+        this.Loaded += (s, e) =>
+        {
+            stopwatch.Start();
+            titleLastUpdateTime = stopwatch.Elapsed;
 
-        titleInitialOpacityMask = this.OpacityMask as LinearGradientBrush;
+            titleInitialOpacityMask = this.OpacityMask as LinearGradientBrush;
+        };
     }
 
     public override void Render(DrawingContext context)
@@ -98,6 +101,7 @@ public class CustomRenderControl_Title : Control
         }
 
         titleLastUpdateTime = stopwatch.Elapsed;
+        frameCounter++;
     }
 
     private void Draw(DrawingContext context)
