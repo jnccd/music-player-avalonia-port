@@ -78,69 +78,78 @@ public class SongPlaybackService
 
     public void PlaySpecificSong(AvailableSong availableSong, float? secondToStartAt = null)
     {
-        // Update RuntimePlayHistory
-        RuntimePlayHistory.Add(availableSong);
-        RuntimePlayHistoryIndex = RuntimePlayHistory.Count - 1;
+        lock (RuntimePlayHistory)
+        {
+            // Update RuntimePlayHistory
+            RuntimePlayHistory.Add(availableSong);
+            RuntimePlayHistoryIndex = RuntimePlayHistory.Count - 1;
 
-        // Invoke Events
-        AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"));
-        NewSongStarted?.Invoke(this, CurrentlyPlaying);
+            // Invoke Events
+            AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"));
+            NewSongStarted?.Invoke(this, CurrentlyPlaying);
 
-        if (secondToStartAt != null)
-            AudioLibWrapper.PlayProgress = secondToStartAt / AudioLibWrapper.SongDurationSeconds;
+            if (secondToStartAt != null)
+                AudioLibWrapper.PlayProgress = secondToStartAt / AudioLibWrapper.SongDurationSeconds;
+        }
     }
     public void GetNextSong()
     {
-        // Score Change
-        if (UpvoteLockedIn)
+        lock (RuntimePlayHistory)
         {
-            SongVotingService.UpvoteSong(CurrentlyPlaying
-                ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"),
-                AvailableSongs);
-            UpvoteLockedIn = false;
-        }
-        else if (RuntimePlayHistoryIndex > 0 && RuntimePlayHistoryIndex == RuntimePlayHistory.Count - 1) // Last Song in filled RuntimePlayHistory
-        {
-            SongVotingService.DownvoteSong(CurrentlyPlaying
-                ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"),
-                AvailableSongs);
-        }
+            // Score Change
+            if (UpvoteLockedIn)
+            {
+                SongVotingService.UpvoteSong(CurrentlyPlaying
+                    ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"),
+                    AvailableSongs);
+                UpvoteLockedIn = false;
+            }
+            else if (RuntimePlayHistoryIndex > 0 && RuntimePlayHistoryIndex == RuntimePlayHistory.Count - 1) // Last Song in filled RuntimePlayHistory
+            {
+                SongVotingService.DownvoteSong(CurrentlyPlaying
+                    ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"),
+                    AvailableSongs);
+            }
 
-        // Update RuntimePlayHistory
-        RuntimePlayHistoryIndex++;
-        while (RuntimePlayHistoryIndex >= RuntimePlayHistory.Count)
-        {
-            var nextSong = ChooseNextSong();
-            RuntimePlayHistory.Add(nextSong);
-        }
+            // Update RuntimePlayHistory
+            RuntimePlayHistoryIndex++;
+            while (RuntimePlayHistoryIndex >= RuntimePlayHistory.Count)
+            {
+                var nextSong = ChooseNextSong();
+                RuntimePlayHistory.Add(nextSong);
+            }
 
-        // Invoke Events
-        AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"));
-        NewSongStarted?.Invoke(this, CurrentlyPlaying);
+            // Invoke Events
+            AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"));
+            NewSongStarted?.Invoke(this, CurrentlyPlaying);
+        }
     }
     public void GetPreviousSong()
     {
-        // Score Change
-        if (UpvoteLockedIn)
+        lock (RuntimePlayHistory)
         {
-            SongVotingService.UpvoteSong(CurrentlyPlaying
-                ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"),
-                AvailableSongs);
-            UpvoteLockedIn = false;
-        }
+            // Score Change
+            if (UpvoteLockedIn)
+            {
+                SongVotingService.UpvoteSong(CurrentlyPlaying
+                    ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"),
+                    AvailableSongs);
+                UpvoteLockedIn = false;
+            }
 
-        // Update RuntimePlayHistory
-        RuntimePlayHistoryIndex--;
-        while (RuntimePlayHistoryIndex < 0)
-        {
-            var newPreviousSong = ChooseNextSong();
-            RuntimePlayHistory.Insert(0, newPreviousSong);
-            RuntimePlayHistoryIndex++;
-        }
+            // Update RuntimePlayHistory
+            RuntimePlayHistoryIndex--;
+            while (RuntimePlayHistoryIndex < 0)
+            {
+                var newPreviousSong = ChooseNextSong();
+                RuntimePlayHistory.Insert(0, newPreviousSong);
+                RuntimePlayHistoryIndex++;
+            }
 
-        // Invoke Events
-        AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"));
-        NewSongStarted?.Invoke(this, CurrentlyPlaying);
+            // Invoke Events
+            AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"));
+            NewSongStarted?.Invoke(this, CurrentlyPlaying);
+        }
     }
 
     AvailableSong ChooseNextSong()
