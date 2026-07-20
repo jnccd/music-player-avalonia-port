@@ -13,7 +13,6 @@ using Avalonia.Threading;
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Services.Song;
-using static MusicPlayerAvaloniaPort.Views.Main.UiLoopTitle;
 
 namespace MusicPlayerAvaloniaPort.Views.Main;
 
@@ -74,7 +73,10 @@ public partial class MainView : UserControl
         Dispatcher.UIThread.Post(() =>
         {
             var songName = Path.GetFileNameWithoutExtension(song.FilePath);
-            uiUpdateLoop.InvokeEvent(new UpdateTitleEventArgs(songName));
+
+            var titleControl = this.GetLogicalDescendants().OfType<CustomRenderControl_Title>().FirstOrDefault(x => x.Name == "CustomRenderControl_Title");
+            titleControl!.UpdateTitleText(songName);
+            titleControl.InvalidateVisual();
         });
     }
 
@@ -137,7 +139,7 @@ public partial class MainView : UserControl
     {
         if (!e.Properties.IsLeftButtonPressed)
             return;
-        if (sender is not StackPanel eventRoot)
+        if (sender is not Control eventRoot)
         {
             Debug.WriteLine("eventRoot null?");
             return;

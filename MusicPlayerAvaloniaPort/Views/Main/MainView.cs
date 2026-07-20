@@ -12,11 +12,9 @@ using Avalonia.Media;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using MusicPlayerAvaloniaPort.Services.Song;
-using MusicPlayerAvaloniaPort.Services.UiUpdateLoop;
 using MusicPlayerAvaloniaPort.ViewModels;
 using MusicPlayerAvaloniaPort.Views.Options;
 using MusicPlayerAvaloniaPort.Views.Statistics;
-using static MusicPlayerAvaloniaPort.Views.Main.UiLoopDiagram;
 
 namespace MusicPlayerAvaloniaPort.Views.Main;
 
@@ -28,7 +26,6 @@ public partial class MainView : UserControl
     SongPlaybackService songPlaybackService = ServiceContainer.GetService<SongPlaybackService>();
     SongVolumeService songVolumeService = ServiceContainer.GetService<SongVolumeService>();
     AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
-    UiUpdateLoopService uiUpdateLoop = ServiceContainer.GetService<UiUpdateLoopService>();
     MprisService? mprisService = ServiceContainer.TryGetService<MprisService>();
 
     const double MAX_VOLUME = 1;
@@ -68,19 +65,6 @@ public partial class MainView : UserControl
         songPlaybackService.NewSongStarted += (s, song) => UpdateUiForNewSong(song);
         songPlaybackService.UpvoteLockedInChanged += (s, lockedIn) => UpdateUiForNewUpvoteLockedInState(lockedIn);
 
-        // Ui loops
-        uiUpdateLoop.AddInput(new UiLoopDiagram.Input(this.GetLogicalDescendants().OfType<Canvas>().FirstOrDefault(x => x.Name == "DiagramCanvas")!));
-        uiUpdateLoop.AddInput(new UiLoopPlayProgress.Input(
-            this.GetLogicalDescendants().OfType<Rectangle>().FirstOrDefault(x => x.Name == "DurationBarBackRectangle")!,
-            this.GetLogicalDescendants().OfType<Rectangle>().FirstOrDefault(x => x.Name == "DurationBarAntiAliasingRectangle")!,
-            this.GetLogicalDescendants().OfType<Rectangle>().FirstOrDefault(x => x.Name == "DurationBarDurationRectangle")!,
-            this.FindResource("PrimaryColor") as SolidColorBrush,
-            PixelScale: 1 / window!.RenderScaling));
-        uiUpdateLoop.AddInput(new UiLoopTitle.Input(this.GetLogicalDescendants().OfType<Canvas>().FirstOrDefault(x => x.Name == "TitleCanvas")!));
-
-        uiUpdateLoop.Init();
-        uiUpdateLoop.StartLoopThread();
-
         // Initial Update
         MainView_ScalingChanged(null, EventArgs.Empty);
         LoadVolume();
@@ -113,7 +97,8 @@ public partial class MainView : UserControl
 
     private void MainView_SizeChanged(object? sender, SizeChangedEventArgs e)
     {
-        uiUpdateLoop.InvokeEvent(new UpdateDiagramScalingEventArgs());
+        var diagramControl = this.GetLogicalDescendants().OfType<CustomRenderControl_Diagram>().FirstOrDefault(x => x.Name == "CustomRenderControl_Diagram");
+        diagramControl?.UpdateDiagramScaling();
     }
 
     void ButtonClose_Click(object? sender, RoutedEventArgs e)

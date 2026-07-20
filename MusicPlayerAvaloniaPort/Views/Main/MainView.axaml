@@ -1,20 +1,21 @@
 <UserControl
-    x:Class="MusicPlayerAvaloniaPort.Views.Main.MainView"
-    xmlns="https://github.com/avaloniaui"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:conv="clr-namespace:MusicPlayerAvaloniaPort.Converters;assembly=MusicPlayerAvaloniaPort"
-    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:sys="clr-namespace:System;assembly=mscorlib"
-    xmlns:vm="using:MusicPlayerAvaloniaPort.ViewModels"
-    x:DataType="vm:MainViewModel"
-    Background="Transparent"
-    PointerMoved="MainView_PointerMoved"
-    PointerPressed="MainView_PointerPressed"
-    PointerReleased="MainView_PointerReleased"
-    PointerWheelChanged="MainView_PointerWheelChanged"
-    SizeChanged="MainView_SizeChanged"
-    mc:Ignorable="d">
+x:Class="MusicPlayerAvaloniaPort.Views.Main.MainView"
+xmlns="https://github.com/avaloniaui"
+xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+xmlns:conv="clr-namespace:MusicPlayerAvaloniaPort.Converters;assembly=MusicPlayerAvaloniaPort"
+xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+xmlns:sys="clr-namespace:System;assembly=mscorlib"
+xmlns:vm="using:MusicPlayerAvaloniaPort.ViewModels"
+xmlns:vsmain="using:MusicPlayerAvaloniaPort.Views.Main"
+x:DataType="vm:MainViewModel"
+Background="Transparent"
+PointerMoved="MainView_PointerMoved"
+PointerPressed="MainView_PointerPressed"
+PointerReleased="MainView_PointerReleased"
+PointerWheelChanged="MainView_PointerWheelChanged"
+SizeChanged="MainView_SizeChanged"
+mc:Ignorable="d">
     <UserControl.Resources>
         <SolidColorBrush x:Key="PrimaryColor" Color="#007B82" />
         <SolidColorBrush x:Key="PrimaryColorBrighter" Color="#66AFB4" />
@@ -30,30 +31,30 @@
     </UserControl.Resources>
     <Border BorderBrush="#0AE3E3E3" BorderThickness="1">
         <Grid
-            Name="RootGrid"
-            Margin="32,12"
-            HorizontalAlignment="Stretch"
-            VerticalAlignment="Stretch"
-            ColumnDefinitions="*"
-            ColumnSpacing="8"
-            RowDefinitions="40, *, 40"
-            RowSpacing="8">
+        Name="RootGrid"
+        Margin="32,12"
+        HorizontalAlignment="Stretch"
+        VerticalAlignment="Stretch"
+        ColumnDefinitions="*"
+        ColumnSpacing="8"
+        RowDefinitions="40, *, 40"
+        RowSpacing="8">
             <Grid.Effect>
                 <DropShadowEffect
-                    BlurRadius="1"
-                    OffsetX="5"
-                    OffsetY="5"
-                    Opacity="0.5"
-                    Color="Black" />
+                BlurRadius="1"
+                OffsetX="5"
+                OffsetY="5"
+                Opacity="0.5"
+                Color="Black" />
             </Grid.Effect>
             <Grid Grid.Row="0" ColumnDefinitions="*, 24, 32, 6, 100">
-                <Canvas
-                    Name="TitleCanvas"
-                    Grid.Column="0"
-                    Height="40"
-                    HorizontalAlignment="Stretch"
-                    ClipToBounds="True">
-                    <Canvas.OpacityMask>
+                <vsmain:CustomRenderControl_Title
+                Name="CustomRenderControl_Title"
+                Grid.Column="0"
+                Height="40"
+                HorizontalAlignment="Stretch"
+                ClipToBounds="True">
+                    <vsmain:CustomRenderControl_Title.OpacityMask>
                         <LinearGradientBrush StartPoint="0%,50%" EndPoint="100%,50%">
                             <GradientStop Offset="0.0" Color="rgba(255, 255, 255, 0)" />
                             <!--  Fully transparent at the start  -->
@@ -64,212 +65,212 @@
                             <GradientStop Offset="1.0" Color="rgba(255, 255, 255, 0)" />
                             <!--  Fully transparent at the end  -->
                         </LinearGradientBrush>
-                    </Canvas.OpacityMask>
-                    <TextBlock
-                        Name="TitleCanvasText1"
-                        Canvas.Left="0"
-                        FontFamily="{StaticResource BigNoodleTitling}"
-                        FontSize="35">
-                        PANAM - 大貫妙子 (Taeko Onuki) – Summer Connection (Official Audio)
+                    </vsmain:CustomRenderControl_Title.OpacityMask>
+                    <!-- <TextBlock
+                    Name="TitleCanvasText1"
+                    Canvas.Left="0"
+                    FontFamily="{StaticResource BigNoodleTitling}"
+                    FontSize="35">
+                    PANAM - 大貫妙子 (Taeko Onuki) – Summer Connection (Official Audio)
                     </TextBlock>
                     <TextBlock
-                        Name="TitleCanvasText2"
-                        Canvas.Left="90"
-                        FontFamily="{StaticResource BigNoodleTitling}"
-                        FontSize="35">
-                        PANAM - 大貫妙子 (Taeko Onuki) – Summer Connection (Official Audio)
-                    </TextBlock>
-                </Canvas>
+                    Name="TitleCanvasText2"
+                    Canvas.Left="90"
+                    FontFamily="{StaticResource BigNoodleTitling}"
+                    FontSize="35">
+                    PANAM - 大貫妙子 (Taeko Onuki) – Summer Connection (Official Audio)
+                    </TextBlock> -->
+                </vsmain:CustomRenderControl_Title>
                 <Rectangle Grid.Column="1" Fill="Transparent" />
                 <Grid
-                    Name="VolumeIconContainer"
-                    Grid.Column="2"
+                Name="VolumeIconContainer"
+                Grid.Column="2"
+                Width="{StaticResource VolumeIconSize}"
+                Height="{StaticResource VolumeIconSize}">
+                    <Path
+                    Name="VolumeIconBasePath"
                     Width="{StaticResource VolumeIconSize}"
-                    Height="{StaticResource VolumeIconSize}">
+                    Height="{StaticResource VolumeIconSize}"
+                    Data="M 17.093556,2.7351522 C 16.19156,2.3177162 15.559829,3.2255709 14.93504,3.7121682 12.709386,5.6431002 10.483733,7.5740336 8.2580796,9.5049656 5.8201277,9.5194189 3.3794223,9.4758589 0.94321828,9.5270989 0.03906495,9.6777229 -0.04081105,10.651352 0.01279295,11.386232 c 0.01490666,2.777914 -0.02990667,5.558693 0.0226,8.334802 0.154524,0.911899 1.13723735,0.978571 1.87602795,0.928089 2.0750507,0 4.1501028,0 6.2251547,0 2.6262904,2.259752 5.2290694,4.54894 7.8701124,6.790226 0.829383,0.562256 1.96228,-0.28746 1.763855,-1.237687 -0.0076,-7.525256 0.0152,-15.051538 -0.01147,-22.5761511 C 17.707503,3.2407456 17.44806,2.8934202 17.093497,2.7351536 Z"
+                    Fill="White" />
                     <Path
-                        Name="VolumeIconBasePath"
-                        Width="{StaticResource VolumeIconSize}"
-                        Height="{StaticResource VolumeIconSize}"
-                        Data="M 17.093556,2.7351522 C 16.19156,2.3177162 15.559829,3.2255709 14.93504,3.7121682 12.709386,5.6431002 10.483733,7.5740336 8.2580796,9.5049656 5.8201277,9.5194189 3.3794223,9.4758589 0.94321828,9.5270989 0.03906495,9.6777229 -0.04081105,10.651352 0.01279295,11.386232 c 0.01490666,2.777914 -0.02990667,5.558693 0.0226,8.334802 0.154524,0.911899 1.13723735,0.978571 1.87602795,0.928089 2.0750507,0 4.1501028,0 6.2251547,0 2.6262904,2.259752 5.2290694,4.54894 7.8701124,6.790226 0.829383,0.562256 1.96228,-0.28746 1.763855,-1.237687 -0.0076,-7.525256 0.0152,-15.051538 -0.01147,-22.5761511 C 17.707503,3.2407456 17.44806,2.8934202 17.093497,2.7351536 Z"
-                        Fill="White" />
+                    Name="VolumeIconVolumeArc1Path"
+                    Width="{StaticResource VolumeIconSize}"
+                    Height="{StaticResource VolumeIconSize}"
+                    Data="m 20.830213,9.0569665 a 1.1568125,1.1568125 0 0 0 -0.867922,0.1735827 1.1568125,1.1568125 0 0 0 -0.329808,1.5969818 c 1.721724,2.623158 1.721724,6.004016 0,8.627174 a 1.1568125,1.1568125 0 0 0 0.329806,1.614341 1.1568125,1.1568125 0 0 0 1.596982,-0.347169 c 2.224212,-3.38873 2.224212,-7.772784 0,-11.1615144 A 1.1568125,1.1568125 0 0 0 20.830213,9.0569665 Z"
+                    Fill="White" />
                     <Path
-                        Name="VolumeIconVolumeArc1Path"
-                        Width="{StaticResource VolumeIconSize}"
-                        Height="{StaticResource VolumeIconSize}"
-                        Data="m 20.830213,9.0569665 a 1.1568125,1.1568125 0 0 0 -0.867922,0.1735827 1.1568125,1.1568125 0 0 0 -0.329808,1.5969818 c 1.721724,2.623158 1.721724,6.004016 0,8.627174 a 1.1568125,1.1568125 0 0 0 0.329806,1.614341 1.1568125,1.1568125 0 0 0 1.596982,-0.347169 c 2.224212,-3.38873 2.224212,-7.772784 0,-11.1615144 A 1.1568125,1.1568125 0 0 0 20.830213,9.0569665 Z"
-                        Fill="White" />
+                    Name="VolumeIconVolumeArc2Path"
+                    Width="{StaticResource VolumeIconSize}"
+                    Height="{StaticResource VolumeIconSize}"
+                    Data="m 23.190969,5.9845124 a 1.1568125,1.1568125 0 0 0 -0.243018,1.6143402 c 3.312073,4.4933854 3.312073,10.6085064 0,15.1018934 a 1.1568125,1.1568125 0 0 0 0.243021,1.61434 1.1568125,1.1568125 0 0 0 1.61434,-0.243021 c 3.908027,-5.301896 3.908027,-12.542639 0,-17.8445356 a 1.1568125,1.1568125 0 0 0 -1.614343,-0.243017 z"
+                    Fill="White" />
                     <Path
-                        Name="VolumeIconVolumeArc2Path"
-                        Width="{StaticResource VolumeIconSize}"
-                        Height="{StaticResource VolumeIconSize}"
-                        Data="m 23.190969,5.9845124 a 1.1568125,1.1568125 0 0 0 -0.243018,1.6143402 c 3.312073,4.4933854 3.312073,10.6085064 0,15.1018934 a 1.1568125,1.1568125 0 0 0 0.243021,1.61434 1.1568125,1.1568125 0 0 0 1.61434,-0.243021 c 3.908027,-5.301896 3.908027,-12.542639 0,-17.8445356 a 1.1568125,1.1568125 0 0 0 -1.614343,-0.243017 z"
-                        Fill="White" />
-                    <Path
-                        Name="VolumeIconVolumeArc3Path"
-                        Width="{StaticResource VolumeIconSize}"
-                        Height="{StaticResource VolumeIconSize}"
-                        Data="M 27.009839,2.7558317 A 1.1568125,1.1568125 0 0 0 26.159273,2.9988512 1.1568125,1.1568125 0 0 0 25.985691,4.63055 c 4.940373,6.149673 4.940373,14.888825 0,21.038499 a 1.1568125,1.1568125 0 0 0 0.173582,1.614341 1.1568125,1.1568125 0 0 0 1.631699,-0.173583 c 5.612037,-6.985749 5.612037,-16.951619 0,-23.9373682 A 1.1568125,1.1568125 0 0 0 27.009839,2.7558317 Z"
-                        Fill="White" />
+                    Name="VolumeIconVolumeArc3Path"
+                    Width="{StaticResource VolumeIconSize}"
+                    Height="{StaticResource VolumeIconSize}"
+                    Data="M 27.009839,2.7558317 A 1.1568125,1.1568125 0 0 0 26.159273,2.9988512 1.1568125,1.1568125 0 0 0 25.985691,4.63055 c 4.940373,6.149673 4.940373,14.888825 0,21.038499 a 1.1568125,1.1568125 0 0 0 0.173582,1.614341 1.1568125,1.1568125 0 0 0 1.631699,-0.173583 c 5.612037,-6.985749 5.612037,-16.951619 0,-23.9373682 A 1.1568125,1.1568125 0 0 0 27.009839,2.7558317 Z"
+                    Fill="White" />
                 </Grid>
                 <Rectangle Grid.Column="3" Fill="Transparent" />
                 <StackPanel
-                    Name="VolumeBarStackPanel"
-                    Grid.Column="4"
-                    Margin="0,0,-6,0"
-                    VerticalAlignment="Center"
-                    PointerMoved="VolumeBarStackPanel_PointerMoved"
-                    PointerPressed="VolumeBarStackPanel_PointerPressed"
-                    Spacing="0">
+                Name="VolumeBarStackPanel"
+                Grid.Column="4"
+                Margin="0,0,-6,0"
+                VerticalAlignment="Center"
+                PointerMoved="VolumeBarStackPanel_PointerMoved"
+                PointerPressed="VolumeBarStackPanel_PointerPressed"
+                Spacing="0">
                     <Rectangle
-                        Name="VolumeBarBackRectangle"
-                        Width="{StaticResource VolumeBarWidth}"
-                        Height="{StaticResource VolumeBarHeight}"
-                        Margin="4,0"
-                        HorizontalAlignment="Stretch"
-                        Fill="White">
+                    Name="VolumeBarBackRectangle"
+                    Width="{StaticResource VolumeBarWidth}"
+                    Height="{StaticResource VolumeBarHeight}"
+                    Margin="4,0"
+                    HorizontalAlignment="Stretch"
+                    Fill="White">
                         <Rectangle.RenderTransform>
                             <TranslateTransform X="0" Y="{StaticResource VolumeBarHeight}" />
                         </Rectangle.RenderTransform>
                     </Rectangle>
                     <Rectangle
-                        Name="VolumeBarUserRectangle"
-                        Width="50"
-                        Height="{StaticResource VolumeBarHeight}"
-                        MinWidth="0"
-                        Margin="3,0"
-                        HorizontalAlignment="Left"
-                        Fill="{StaticResource PrimaryColorBrighter}">
+                    Name="VolumeBarUserRectangle"
+                    Width="50"
+                    Height="{StaticResource VolumeBarHeight}"
+                    MinWidth="0"
+                    Margin="3,0"
+                    HorizontalAlignment="Left"
+                    Fill="{StaticResource PrimaryColorBrighter}">
                         <Rectangle.RenderTransform>
                             <TranslateTransform X="0" Y="0" />
                         </Rectangle.RenderTransform>
                     </Rectangle>
                     <Rectangle
-                        Name="VolumeBarRealRectangle"
-                        Width="40"
-                        Height="{StaticResource VolumeBarHeight}"
-                        MinWidth="0"
-                        Margin="3,0"
-                        HorizontalAlignment="Left"
-                        Fill="{StaticResource PrimaryColor}">
+                    Name="VolumeBarRealRectangle"
+                    Width="40"
+                    Height="{StaticResource VolumeBarHeight}"
+                    MinWidth="0"
+                    Margin="3,0"
+                    HorizontalAlignment="Left"
+                    Fill="{StaticResource PrimaryColor}">
                         <Rectangle.RenderTransform>
                             <TranslateTransform X="0" Y="{Binding Source={StaticResource VolumeBarHeight}, Converter={StaticResource AddMultiplyConverter}, ConverterParameter='0,-1'}" />
                         </Rectangle.RenderTransform>
                     </Rectangle>
                 </StackPanel>
             </Grid>
-            <Canvas
-                Name="DiagramCanvas"
-                Grid.Row="1"
-                Margin="12,0"
+            <vsmain:CustomRenderControl_Diagram
+            Name="DiagramCanvas"
+            Grid.Row="1"
+            Margin="12,0"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch">
+                <!-- <Path
+                Name="MyPath"
                 HorizontalAlignment="Stretch"
-                VerticalAlignment="Stretch">
-                <Path
-                    Name="MyPath"
-                    HorizontalAlignment="Stretch"
-                    VerticalAlignment="Stretch"
-                    Fill="{StaticResource PrimaryColor}" />
-            </Canvas>
+                VerticalAlignment="Stretch"
+                Fill="{StaticResource PrimaryColor}" /> -->
+            </vsmain:CustomRenderControl_Diagram>
             <Grid
-                Grid.Row="2"
-                Margin="-8,0"
-                ColumnDefinitions="36, *, 36, 36, 36, 36">
+            Grid.Row="2"
+            Margin="-8,0"
+            ColumnDefinitions="36, *, 36, 36, 36, 36">
                 <Button
-                    Name="ButtonPlayPause"
-                    Grid.Column="0"
-                    Background="Transparent"
-                    Command="{Binding PlayPause}">
+                Name="ButtonPlayPause"
+                Grid.Column="0"
+                Background="Transparent"
+                Command="{Binding PlayPause}">
                     <Path
-                        Width="{StaticResource BottomGridIconSize}"
-                        Height="{StaticResource BottomGridIconSize}"
-                        Data="{Binding Playing, Converter={StaticResource EitherOrConverter}, ConverterParameter='m 16.000001,0 h 6.666666 c 0.738667,0 1.333332,0.38228571 1.333332,0.85714286 V 23.142857 C 24.000001,23.617714 23.405334,24 22.666667,24 h -6.666666 c -0.738666,0 -1.333334,-0.382286 -1.333334,-0.857143 V 0.85714286 C 14.666667,0.38228571 15.261335,0 16.000001,0 Z M 1.3333335,0 h 6.666667 c 0.738666,0 1.333334,0.38228571 1.333334,0.85714286 V 23.142857 C 9.3333345,23.617714 8.7386665,24 8.0000005,24 H 1.3333335 C 0.5946667,24 0,23.617714 0,23.142857 V 0.85714286 C 0,0.38228571 0.5946667,0 1.3333335,0 Z|M 3.3316381,0.38623723 21.774304,11.034042 c 0.743436,0.429254 0.743436,1.502629 0,1.931884 L 3.3316381,23.61373 c -0.743436,0.429255 -1.67309,-0.107433 -1.67309,-0.965942 V 1.3521793 c 0,-0.85850908 0.929177,-1.39519661 1.67309,-0.96594207 z m 0,23.22749277 18.4426659,-10.647804 m 0,0 L 3.3316381,23.61373 c -0.825574,0.391919 -2.0271605,-0.183848 -1.67309,-0.965942'}"
-                        Fill="White" />
+                    Width="{StaticResource BottomGridIconSize}"
+                    Height="{StaticResource BottomGridIconSize}"
+                    Data="{Binding Playing, Converter={StaticResource EitherOrConverter}, ConverterParameter='m 16.000001,0 h 6.666666 c 0.738667,0 1.333332,0.38228571 1.333332,0.85714286 V 23.142857 C 24.000001,23.617714 23.405334,24 22.666667,24 h -6.666666 c -0.738666,0 -1.333334,-0.382286 -1.333334,-0.857143 V 0.85714286 C 14.666667,0.38228571 15.261335,0 16.000001,0 Z M 1.3333335,0 h 6.666667 c 0.738666,0 1.333334,0.38228571 1.333334,0.85714286 V 23.142857 C 9.3333345,23.617714 8.7386665,24 8.0000005,24 H 1.3333335 C 0.5946667,24 0,23.617714 0,23.142857 V 0.85714286 C 0,0.38228571 0.5946667,0 1.3333335,0 Z|M 3.3316381,0.38623723 21.774304,11.034042 c 0.743436,0.429254 0.743436,1.502629 0,1.931884 L 3.3316381,23.61373 c -0.743436,0.429255 -1.67309,-0.107433 -1.67309,-0.965942 V 1.3521793 c 0,-0.85850908 0.929177,-1.39519661 1.67309,-0.96594207 z m 0,23.22749277 18.4426659,-10.647804 m 0,0 L 3.3316381,23.61373 c -0.825574,0.391919 -2.0271605,-0.183848 -1.67309,-0.965942'}"
+                    Fill="White" />
                 </Button>
-                <StackPanel
-                    Name="DurationBarStackPanel"
-                    Grid.Column="1"
-                    Height="24"
-                    VerticalAlignment="Center"
-                    Background="#01000000"
-                    PointerMoved="DurationBarStackPanel_PointerMoved"
-                    PointerPressed="DurationBarStackPanel_PointerPressed"
-                    Spacing="0">
-                    <Rectangle
-                        Name="DurationBarBackRectangle"
-                        Height="4"
-                        MinWidth="3"
-                        Margin="4,0"
-                        HorizontalAlignment="Stretch"
-                        Fill="White">
-                        <Rectangle.RenderTransform>
-                            <TranslateTransform X="0" Y="12" />
-                        </Rectangle.RenderTransform>
+                <vsmain:CustomRenderControl_PlayProgress
+                Name="DurationBarStackPanel"
+                Grid.Column="1"
+                Height="4"
+                MinWidth="3"
+                Margin="4,0"
+                VerticalAlignment="Center"
+                PointerMoved="DurationBarStackPanel_PointerMoved"
+                PointerPressed="DurationBarStackPanel_PointerPressed">
+                    <!-- <Rectangle
+                    Name="DurationBarBackRectangle"
+                    Height="4"
+                    MinWidth="3"
+                    Margin="4,0"
+                    HorizontalAlignment="Stretch"
+                    Fill="White">
+                    <Rectangle.RenderTransform>
+                    <TranslateTransform X="0" Y="12" />
+                    </Rectangle.RenderTransform>
                     </Rectangle>
                     <Rectangle
-                        Name="DurationBarAntiAliasingRectangle"
-                        Height="4"
-                        MinWidth="3"
-                        Margin="4,0"
-                        HorizontalAlignment="Left"
-                        Fill="{StaticResource PrimaryColor}">
-                        <Rectangle.RenderTransform>
-                            <TranslateTransform X="0" Y="8" />
-                        </Rectangle.RenderTransform>
+                    Name="DurationBarAntiAliasingRectangle"
+                    Height="4"
+                    MinWidth="3"
+                    Margin="4,0"
+                    HorizontalAlignment="Left"
+                    Fill="{StaticResource PrimaryColor}">
+                    <Rectangle.RenderTransform>
+                    <TranslateTransform X="0" Y="8" />
+                    </Rectangle.RenderTransform>
                     </Rectangle>
                     <Rectangle
-                        Name="DurationBarDurationRectangle"
-                        Height="4"
-                        MinWidth="3"
-                        Margin="4,0"
-                        HorizontalAlignment="Left"
-                        Fill="{StaticResource PrimaryColor}">
-                        <Rectangle.RenderTransform>
-                            <TranslateTransform X="0" Y="4" />
-                        </Rectangle.RenderTransform>
-                    </Rectangle>
-                </StackPanel>
+                    Name="DurationBarDurationRectangle"
+                    Height="4"
+                    MinWidth="3"
+                    Margin="4,0"
+                    HorizontalAlignment="Left"
+                    Fill="{StaticResource PrimaryColor}">
+                    <Rectangle.RenderTransform>
+                    <TranslateTransform X="0" Y="4" />
+                    </Rectangle.RenderTransform>
+                    </Rectangle> -->
+                </vsmain:CustomRenderControl_PlayProgress>
                 <Button
-                    Name="ButtonUpvote"
-                    Grid.Column="2"
-                    Background="Transparent"
-                    Click="ButtonUpvote_Click">
+                Name="ButtonUpvote"
+                Grid.Column="2"
+                Background="Transparent"
+                Click="ButtonUpvote_Click">
                     <Path
-                        Width="{StaticResource BottomGridIconSize}"
-                        Height="{StaticResource BottomGridIconSize}"
-                        Data="m 1.3325005,14.390991 h 5.3337496 v 8.407882 A 1.3334375,1.2011262 0 0 0 7.9996875,24 H 16.00031 a 1.3334375,1.2011262 0 0 0 1.33344,-1.201127 v -8.407882 h 5.333749 a 1.3347707,1.2023272 0 0 0 1.041415,-1.951829 L 13.041415,0.42790119 c -0.508042,-0.57053493 -1.57479,-0.57053493 -2.082829,0 L 0.29108587,12.439162 a 1.3347707,1.2023272 0 0 0 1.04141463,1.951829 z"
-                        Fill="White" />
+                    Width="{StaticResource BottomGridIconSize}"
+                    Height="{StaticResource BottomGridIconSize}"
+                    Data="m 1.3325005,14.390991 h 5.3337496 v 8.407882 A 1.3334375,1.2011262 0 0 0 7.9996875,24 H 16.00031 a 1.3334375,1.2011262 0 0 0 1.33344,-1.201127 v -8.407882 h 5.333749 a 1.3347707,1.2023272 0 0 0 1.041415,-1.951829 L 13.041415,0.42790119 c -0.508042,-0.57053493 -1.57479,-0.57053493 -2.082829,0 L 0.29108587,12.439162 a 1.3347707,1.2023272 0 0 0 1.04141463,1.951829 z"
+                    Fill="White" />
                 </Button>
                 <Button
-                    Name="ButtonStatistics"
-                    Grid.Column="3"
-                    Background="Transparent"
-                    Click="ButtonStatistics_Click">
+                Name="ButtonStatistics"
+                Grid.Column="3"
+                Background="Transparent"
+                Click="ButtonStatistics_Click">
                     <Path
-                        Width="{StaticResource BottomGridIconSize}"
-                        Height="{StaticResource BottomGridIconSize}"
-                        Data="m 17.673469,18.612245 h 3.836735 c 0.428327,0 0.77551,-0.347184 0.77551,-0.77551 V 9.265306 c 0,-0.4283266 -0.347183,-0.7755102 -0.77551,-0.7755102 h -3.836735 c -0.428326,0 -0.77551,0.3471836 -0.77551,0.7755102 v 8.571429 c 0,0.428326 0.347184,0.77551 0.77551,0.77551 z m -7.591836,0 h 3.836734 c 0.428327,0 0.775511,-0.347184 0.775511,-0.77551 V 1.9183672 c 0,-0.4283265 -0.347184,-0.7755102 -0.775511,-0.7755102 h -3.836734 c -0.4283269,0 -0.7755106,0.3471837 -0.7755106,0.7755102 V 17.836735 c 0,0.428326 0.3471837,0.77551 0.7755106,0.77551 z m -7.5918371,0 h 3.8367347 c 0.4283265,0 0.7755102,-0.347184 0.7755102,-0.77551 V 7.2244897 c 0,-0.4283266 -0.3471837,-0.7755103 -0.7755102,-0.7755103 H 2.4897959 c -0.4283265,0 -0.7755102,0.3471837 -0.7755102,0.7755103 V 17.836735 c 0,0.428326 0.3471837,0.77551 0.7755102,0.77551 z M 22.77551,20.408163 H 1.2244898 C 0.5482449,20.408163 0,20.956408 0,21.632653 c 0,0.676245 0.5482449,1.22449 1.2244898,1.22449 H 22.77551 c 0.676245,0 1.22449,-0.548245 1.22449,-1.22449 0,-0.676245 -0.548245,-1.22449 -1.22449,-1.22449 z"
-                        Fill="White" />
+                    Width="{StaticResource BottomGridIconSize}"
+                    Height="{StaticResource BottomGridIconSize}"
+                    Data="m 17.673469,18.612245 h 3.836735 c 0.428327,0 0.77551,-0.347184 0.77551,-0.77551 V 9.265306 c 0,-0.4283266 -0.347183,-0.7755102 -0.77551,-0.7755102 h -3.836735 c -0.428326,0 -0.77551,0.3471836 -0.77551,0.7755102 v 8.571429 c 0,0.428326 0.347184,0.77551 0.77551,0.77551 z m -7.591836,0 h 3.836734 c 0.428327,0 0.775511,-0.347184 0.775511,-0.77551 V 1.9183672 c 0,-0.4283265 -0.347184,-0.7755102 -0.775511,-0.7755102 h -3.836734 c -0.4283269,0 -0.7755106,0.3471837 -0.7755106,0.7755102 V 17.836735 c 0,0.428326 0.3471837,0.77551 0.7755106,0.77551 z m -7.5918371,0 h 3.8367347 c 0.4283265,0 0.7755102,-0.347184 0.7755102,-0.77551 V 7.2244897 c 0,-0.4283266 -0.3471837,-0.7755103 -0.7755102,-0.7755103 H 2.4897959 c -0.4283265,0 -0.7755102,0.3471837 -0.7755102,0.7755103 V 17.836735 c 0,0.428326 0.3471837,0.77551 0.7755102,0.77551 z M 22.77551,20.408163 H 1.2244898 C 0.5482449,20.408163 0,20.956408 0,21.632653 c 0,0.676245 0.5482449,1.22449 1.2244898,1.22449 H 22.77551 c 0.676245,0 1.22449,-0.548245 1.22449,-1.22449 0,-0.676245 -0.548245,-1.22449 -1.22449,-1.22449 z"
+                    Fill="White" />
                 </Button>
                 <Button
-                    Name="ButtonOptions"
-                    Grid.Column="4"
-                    Background="Transparent"
-                    Click="ButtonOptions_Click">
+                Name="ButtonOptions"
+                Grid.Column="4"
+                Background="Transparent"
+                Click="ButtonOptions_Click">
                     <Path
-                        Width="{StaticResource BottomGridIconSize}"
-                        Height="{StaticResource BottomGridIconSize}"
-                        Data="M 9.2859459,23.919788 C 9.2861889,23.905808 9.1850731,23.125364 9.0612429,22.185471 8.8021246,20.218706 8.8337019,20.28679 7.9934408,19.883174 7.7058338,19.745025 7.1721323,19.431978 6.8074375,19.187519 5.9595065,18.619139 6.001004,18.616961 4.1082099,19.329113 3.2686305,19.645001 2.5411121,19.902741 2.4915023,19.90187 2.4248683,19.900699 0.12953748,16.049639 1.4698048e-4,15.721924 -0.0110852,15.693475 0.62288576,15.201731 1.408972,14.629156 3.1075992,13.391903 2.9697015,13.63883 2.9895337,11.798905 3.008563,10.033487 3.1907103,10.366784 1.4663481,9.0117324 0.76815158,8.4630714 0.18132381,7.9888928 0.16228622,7.9580071 0.1353352,7.9142828 2.5788353,3.912677 2.7039017,3.7957218 2.7203328,3.7803435 3.4736009,4.0694934 4.3778298,4.4382507 6.3942334,5.2605646 6.1553313,5.2466431 7.1881876,4.6020328 7.4709195,4.4255771 7.9892438,4.1483193 8.3400196,3.9858999 9.1425841,3.6142935 9.1151041,3.6706257 9.3507466,1.9139851 9.4594351,1.1037492 9.5680314,0.33869458 9.5920726,0.21386456 c 0.03786,-0.19657255 5.1959884,-0.30693197 5.1925864,-0.1110999 -2.43e-4,0.0139742 0.100873,0.7944239 0.224703,1.73431644 0.259117,1.9667644 0.22754,1.8986812 1.067802,2.3022965 0.287606,0.1381522 0.82002,0.450332 1.183139,0.6937351 0.842462,0.5647163 0.775633,0.5680588 2.669239,-0.1335074 0.861579,-0.3192099 1.606356,-0.5796811 1.65506,-0.5788257 0.165756,0.00292 2.520777,4.1895993 2.411726,4.2874945 -0.05271,0.047318 -0.675174,0.5056365 -1.383249,1.0184813 -1.651623,1.1962346 -1.507167,0.9344486 -1.528679,2.7702776 -0.02108,1.798176 -0.204357,1.458852 1.519856,2.813788 0.698196,0.54866 1.285026,1.022839 1.304063,1.053725 0.02696,0.04372 -2.416549,4.045329 -2.541615,4.162284 -0.01643,0.01537 -0.7697,-0.273771 -1.67393,-0.642528 -2.016403,-0.822314 -1.777501,-0.808392 -2.810356,-0.163783 -0.282732,0.176456 -0.804705,0.455403 -1.159938,0.619883 -0.809393,0.374771 -0.787707,0.327353 -1.028133,2.248022 -0.103492,0.826778 -0.204945,1.55812 -0.225451,1.625201 -0.03393,0.110993 -5.1848784,0.117118 -5.1829501,0.0062 z m 3.6489521,-7.51352 c 1.735608,-0.323035 3.227041,-1.712242 3.622401,-3.37411 C 17.584686,8.7136351 12.120638,5.7243521 8.8196821,8.7990481 5.5186716,11.873798 8.4246796,17.245725 12.934898,16.406268 Z"
-                        Fill="White" />
+                    Width="{StaticResource BottomGridIconSize}"
+                    Height="{StaticResource BottomGridIconSize}"
+                    Data="M 9.2859459,23.919788 C 9.2861889,23.905808 9.1850731,23.125364 9.0612429,22.185471 8.8021246,20.218706 8.8337019,20.28679 7.9934408,19.883174 7.7058338,19.745025 7.1721323,19.431978 6.8074375,19.187519 5.9595065,18.619139 6.001004,18.616961 4.1082099,19.329113 3.2686305,19.645001 2.5411121,19.902741 2.4915023,19.90187 2.4248683,19.900699 0.12953748,16.049639 1.4698048e-4,15.721924 -0.0110852,15.693475 0.62288576,15.201731 1.408972,14.629156 3.1075992,13.391903 2.9697015,13.63883 2.9895337,11.798905 3.008563,10.033487 3.1907103,10.366784 1.4663481,9.0117324 0.76815158,8.4630714 0.18132381,7.9888928 0.16228622,7.9580071 0.1353352,7.9142828 2.5788353,3.912677 2.7039017,3.7957218 2.7203328,3.7803435 3.4736009,4.0694934 4.3778298,4.4382507 6.3942334,5.2605646 6.1553313,5.2466431 7.1881876,4.6020328 7.4709195,4.4255771 7.9892438,4.1483193 8.3400196,3.9858999 9.1425841,3.6142935 9.1151041,3.6706257 9.3507466,1.9139851 9.4594351,1.1037492 9.5680314,0.33869458 9.5920726,0.21386456 c 0.03786,-0.19657255 5.1959884,-0.30693197 5.1925864,-0.1110999 -2.43e-4,0.0139742 0.100873,0.7944239 0.224703,1.73431644 0.259117,1.9667644 0.22754,1.8986812 1.067802,2.3022965 0.287606,0.1381522 0.82002,0.450332 1.183139,0.6937351 0.842462,0.5647163 0.775633,0.5680588 2.669239,-0.1335074 0.861579,-0.3192099 1.606356,-0.5796811 1.65506,-0.5788257 0.165756,0.00292 2.520777,4.1895993 2.411726,4.2874945 -0.05271,0.047318 -0.675174,0.5056365 -1.383249,1.0184813 -1.651623,1.1962346 -1.507167,0.9344486 -1.528679,2.7702776 -0.02108,1.798176 -0.204357,1.458852 1.519856,2.813788 0.698196,0.54866 1.285026,1.022839 1.304063,1.053725 0.02696,0.04372 -2.416549,4.045329 -2.541615,4.162284 -0.01643,0.01537 -0.7697,-0.273771 -1.67393,-0.642528 -2.016403,-0.822314 -1.777501,-0.808392 -2.810356,-0.163783 -0.282732,0.176456 -0.804705,0.455403 -1.159938,0.619883 -0.809393,0.374771 -0.787707,0.327353 -1.028133,2.248022 -0.103492,0.826778 -0.204945,1.55812 -0.225451,1.625201 -0.03393,0.110993 -5.1848784,0.117118 -5.1829501,0.0062 z m 3.6489521,-7.51352 c 1.735608,-0.323035 3.227041,-1.712242 3.622401,-3.37411 C 17.584686,8.7136351 12.120638,5.7243521 8.8196821,8.7990481 5.5186716,11.873798 8.4246796,17.245725 12.934898,16.406268 Z"
+                    Fill="White" />
                 </Button>
                 <Button
-                    Name="ButtonClose"
-                    Grid.Column="5"
-                    Background="Transparent"
-                    Click="ButtonClose_Click">
+                Name="ButtonClose"
+                Grid.Column="5"
+                Background="Transparent"
+                Click="ButtonClose_Click">
                     <Path
-                        Width="{StaticResource BottomGridIconSize}"
-                        Height="{StaticResource BottomGridIconSize}"
-                        Data="M 1.2832031,0.20703125 0.20703125,1.2832031 c -0.27547893,0.2756544 -0.27547893,0.7223925 0,0.9980469 L 9.9257813,12 0.20703125,21.71875 c -0.275479,0.275654 -0.275479,0.722393 0,0.998047 l 1.07617185,1.076172 c 0.2756383,0.275518 0.7224086,0.275518 0.9980469,0 L 12,14.074219 l 9.71875,9.71875 c 0.275638,0.275518 0.722409,0.275518 0.998047,0 l 1.076172,-1.076172 c 0.275479,-0.275654 0.275479,-0.722393 0,-0.998047 L 14.074219,12 23.792969,2.28125 c 0.275479,-0.2756544 0.275479,-0.7223925 0,-0.9980469 L 22.716797,0.20703125 c -0.275654,-0.275479 -0.722393,-0.275479 -0.998047,0 L 12,9.9257813 2.28125,0.20703125 c -0.2756544,-0.27547893 -0.7223925,-0.27547893 -0.9980469,0 z"
-                        Fill="White" />
+                    Width="{StaticResource BottomGridIconSize}"
+                    Height="{StaticResource BottomGridIconSize}"
+                    Data="M 1.2832031,0.20703125 0.20703125,1.2832031 c -0.27547893,0.2756544 -0.27547893,0.7223925 0,0.9980469 L 9.9257813,12 0.20703125,21.71875 c -0.275479,0.275654 -0.275479,0.722393 0,0.998047 l 1.07617185,1.076172 c 0.2756383,0.275518 0.7224086,0.275518 0.9980469,0 L 12,14.074219 l 9.71875,9.71875 c 0.275638,0.275518 0.722409,0.275518 0.998047,0 l 1.076172,-1.076172 c 0.275479,-0.275654 0.275479,-0.722393 0,-0.998047 L 14.074219,12 23.792969,2.28125 c 0.275479,-0.2756544 0.275479,-0.7223925 0,-0.9980469 L 22.716797,0.20703125 c -0.275654,-0.275479 -0.722393,-0.275479 -0.998047,0 L 12,9.9257813 2.28125,0.20703125 c -0.2756544,-0.27547893 -0.7223925,-0.27547893 -0.9980469,0 z"
+                    Fill="White" />
                 </Button>
             </Grid>
         </Grid>
