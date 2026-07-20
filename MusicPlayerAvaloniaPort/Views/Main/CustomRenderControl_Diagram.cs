@@ -14,7 +14,7 @@ namespace MusicPlayerAvaloniaPort.Views.Main;
 public class CustomRenderControl_Diagram : Control
 {
     AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
-    DiagramDataMapper diagramDataMapper = ServiceContainer.GetService<DiagramDataMapper>();
+    DiagramDataMapperService diagramDataMapper = ServiceContainer.GetService<DiagramDataMapperService>();
     Window? window => TopLevel.GetTopLevel(this) as Window;
     UserControl? view => window?.Content as UserControl;
 

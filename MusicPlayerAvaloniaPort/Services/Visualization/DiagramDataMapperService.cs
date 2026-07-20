@@ -8,8 +8,8 @@ using System.Linq;
 
 namespace MusicPlayerAvaloniaPort.Services.Visualization;
 
-[RegisterImplementation(ServiceRegisterType.Singleton, typeof(DiagramDataMapper))]
-public class DiagramDataMapper(AudioLibWrapperService audioLibWrapperService, SongPlaybackService songPlaybackService, DbWrapperService dbWrapperService)
+[RegisterImplementation(ServiceRegisterType.Singleton, typeof(DiagramDataMapperService))]
+public class DiagramDataMapperService(AudioLibWrapperService audioLibWrapperService, SongPlaybackService songPlaybackService, DbWrapperService dbWrapperService)
 {
     private const double FFT_WINDOW_START_VALUE = 70;
     private const double FFT_WINDOW_LENGTH_DIVISOR = 3;
