@@ -52,14 +52,18 @@ public class CustomRenderControl_Title : Control
 
     public override void Render(DrawingContext context)
     {
-        base.Render(context);
-        Dispatcher.UIThread.InvokeAsync(InvalidateVisual, DispatcherPriority.Background);
 
-        if (rawTitleText == null || formattedTitleText == null)
-            return;
+        Program.WrapInTry(() =>
+        {
+            base.Render(context);
+            Dispatcher.UIThread.InvokeAsync(InvalidateVisual, DispatcherPriority.Background);
 
-        Update();
-        Draw(context);
+            if (rawTitleText == null || formattedTitleText == null)
+                return;
+
+            Update();
+            Draw(context);
+        });
     }
 
     private void Update()

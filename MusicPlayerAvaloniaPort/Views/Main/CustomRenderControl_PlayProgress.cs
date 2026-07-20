@@ -34,11 +34,14 @@ public class CustomRenderControl_PlayProgress : Control
 
     public override void Render(DrawingContext context)
     {
-        base.Render(context);
-        Dispatcher.UIThread.InvokeAsync(InvalidateVisual, DispatcherPriority.Background);
+        Program.WrapInTry(() =>
+        {
+            base.Render(context);
+            Dispatcher.UIThread.InvokeAsync(InvalidateVisual, DispatcherPriority.Background);
 
-        Update();
-        Draw(context);
+            Update();
+            Draw(context);
+        });
     }
 
     public void Update()

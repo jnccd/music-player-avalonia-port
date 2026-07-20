@@ -20,7 +20,7 @@ public class CustomRenderControl_Diagram : Control
 
     PathGeometry? diagramGeometry;
     PathFigure? diagramFigure;
-    int diagramThickness = 10;
+    const int diagramThickness = 10;
     int diagramNumBorderSegments = 3;
     int diagramFftDataSpace = 0;
     SolidColorBrush? PrimaryColorBrush;
@@ -52,11 +52,14 @@ public class CustomRenderControl_Diagram : Control
 
     public override void Render(DrawingContext context)
     {
-        base.Render(context);
-        Dispatcher.UIThread.InvokeAsync(InvalidateVisual, DispatcherPriority.Background);
+        Program.WrapInTry(() =>
+        {
+            base.Render(context);
+            Dispatcher.UIThread.InvokeAsync(InvalidateVisual, DispatcherPriority.Background);
 
-        Update();
-        Draw(context);
+            Update();
+            Draw(context);
+        });
     }
 
     public void Update()
@@ -64,41 +67,60 @@ public class CustomRenderControl_Diagram : Control
         if (audioLibWrapper.PlayState != SoundFlow.Enums.PlaybackState.Playing)
             return;
 
-        var controlWidth = this.Bounds.Width;
-        var controlHeight = this.Bounds.Height;
-        diagramFftDataSpace = (int)controlWidth;
+        var controlWidth = (int)this.Bounds.Width;
+        var controlHeight = (int)this.Bounds.Height;
 
         float[] fftData = diagramDataMapper.GetScaledAndSlicedFftData(diagramFftDataSpace);
         float[] smoothedData = diagramDataMapper.SmoothenFftData(fftData, diagramFftDataSpace, 1);
 
-        while (diagramFigure!.Segments?.Count < diagramFftDataSpace + diagramNumBorderSegments)
+        lock (diagramGeometry!)
         {
-            diagramFigure.Segments!.Add(new LineSegment() { Point = new Point(diagramFigure.Segments.Count, controlHeight - diagramThickness) });
-        }
-        while (diagramFigure.Segments?.Count - 1 > diagramFftDataSpace + diagramNumBorderSegments)
-        {
-            diagramFigure.Segments!.RemoveAt(diagramFigure.Segments.Count - 1);
-        }
-        for (int i = 0; i < controlWidth; i++)
-        {
-            var sampleFrom = (int)(i / (float)diagramFftDataSpace * smoothedData.Length);
-            var sampledListVal = smoothedData[sampleFrom] * (controlHeight - diagramThickness);
-            (diagramFigure.Segments![i + diagramNumBorderSegments] as LineSegment)!.Point = new Point(i, controlHeight - diagramThickness - sampledListVal);
+            for (int i = 0; i < diagramFftDataSpace; i++)
+            {
+                var sampleFrom = (int)(i / (float)diagramFftDataSpace * smoothedData.Length);
+                var sampledListVal = smoothedData[sampleFrom] * (controlHeight - diagramThickness);
+                (diagramFigure?.Segments?[i + diagramNumBorderSegments] as LineSegment)!.Point = new Point(i, controlHeight - diagramThickness - sampledListVal);
+            }
         }
     }
 
     private void Draw(DrawingContext context)
     {
-        context.DrawGeometry(PrimaryColorBrush, null, diagramGeometry!);
+        if (diagramFigure == null || diagramGeometry == null)
+            return;
+
+        lock (diagramGeometry!)
+        {
+            context.DrawGeometry(PrimaryColorBrush, null, diagramGeometry!);
+        }
     }
 
     public void UpdateDiagramScaling()
     {
-        var controlWidth = this.Bounds.Width;
-        var controlHeight = this.Bounds.Height;
-        diagramFigure?.StartPoint = new Point(controlWidth, controlHeight - diagramThickness);
-        diagramFigure?.Segments![0] = new LineSegment() { Point = new Point(controlWidth, controlHeight) };
-        diagramFigure?.Segments![1] = new LineSegment() { Point = new Point(0, controlHeight) };
-        diagramFigure?.Segments![2] = new LineSegment() { Point = new Point(0, controlHeight - diagramThickness) };
+        if (diagramFigure == null || diagramGeometry == null)
+            return;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            lock (diagramGeometry!)
+            {
+                var controlWidth = (int)this.Bounds.Width;
+                var controlHeight = (int)this.Bounds.Height;
+                diagramFigure?.StartPoint = new Point(controlWidth, controlHeight - diagramThickness);
+                diagramFigure?.Segments![0] = new LineSegment() { Point = new Point(controlWidth, controlHeight) };
+                diagramFigure?.Segments![1] = new LineSegment() { Point = new Point(0, controlHeight) };
+                diagramFigure?.Segments![2] = new LineSegment() { Point = new Point(0, controlHeight - diagramThickness) };
+
+                diagramFftDataSpace = (int)controlWidth;
+                while (diagramFigure!.Segments?.Count < diagramFftDataSpace + diagramNumBorderSegments)
+                {
+                    diagramFigure.Segments!.Add(new LineSegment() { Point = new Point(diagramFigure.Segments.Count, controlHeight - diagramThickness) });
+                }
+                while (diagramFigure.Segments?.Count - 1 > diagramFftDataSpace + diagramNumBorderSegments)
+                {
+                    diagramFigure.Segments!.RemoveAt(diagramFigure.Segments.Count - 1);
+                }
+            }
+        });
     }
 }

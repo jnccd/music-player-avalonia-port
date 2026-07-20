@@ -1,6 +1,7 @@
 ﻿using Avalonia;
 using System;
 using System.IO;
+using System.Net;
 
 namespace MusicPlayerAvaloniaPort;
 
@@ -12,14 +13,25 @@ class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        try
+        WrapInTry(() =>
         {
             BuildAvaloniaApp()
                 .StartWithClassicDesktopLifetime(args);
+        });
+    }
+
+    public static void WrapInTry(Action action, bool EndProgramOnError = true)
+    {
+        try
+        {
+            action();
         }
         catch (Exception ex)
         {
-            File.AppendAllText("./error.log", $"---{DateTime.Now}---\n{ex}");
+            File.AppendAllText("./error.log", $"\n\n---{DateTime.Now}---\n{ex}");
+
+            if (EndProgramOnError)
+                Environment.Exit(1);
         }
     }
 
