@@ -9,6 +9,7 @@ using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Avalonia.Threading;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using MusicPlayerAvaloniaPort.Services.Song;
@@ -98,7 +99,7 @@ public partial class MainView : UserControl
     private void MainView_SizeChanged(object? sender, SizeChangedEventArgs e)
     {
         var diagramControl = this.GetLogicalDescendants().OfType<CustomRenderControl_Diagram>().FirstOrDefault(x => x.Name == "CustomRenderControl_Diagram");
-        diagramControl?.UpdateDiagramScaling();
+        diagramControl!.UpdateDiagramScaling();
     }
 
     void ButtonClose_Click(object? sender, RoutedEventArgs e)
