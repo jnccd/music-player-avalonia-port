@@ -20,6 +20,13 @@ public partial class OptionsViewModel : ViewModelBase
         set { Config.Data.SyncServerUsername = value; SetProperty(ref _syncServerUsername, value); }
     }
 
+    private string? _downloadFolderPath;
+    public string? DownloadFolderPath
+    {
+        get { return Config.Data.DownloadFolderPath; }
+        set { SetProperty(ref _downloadFolderPath, value); }
+    }
+
     // --- Commands ---
 
     // ...

@@ -47,11 +47,17 @@ public static class ServiceContainer
                 serviceCollection.AddTransient(declaringType, attr.serviceType);
         }
 
+        // Custom services
         serviceCollection.AddSingleton<HttpClient>(new HttpClient());
         serviceCollection.AddSingleton<IEzAuth>(new EzKeycloak());
         if (OperatingSystem.IsLinux())
             serviceCollection.AddSingleton<MprisService>();
+
         Services = serviceCollection.BuildServiceProvider();
+
+        // Init 
+        var songDownloadRequestProcessorService = ServiceContainer.GetService<SongDownloadRequestProcessorService>();
+        songDownloadRequestProcessorService.Init();
     }
 
     public static TRequested GetService<TRequested>()

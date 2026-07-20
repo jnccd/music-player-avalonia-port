@@ -15,6 +15,7 @@ public partial class OptionsView : UserControl
     Window? window => TopLevel.GetTopLevel(this) as Window;
 
     readonly SongSyncService syncService = ServiceContainer.GetService<SongSyncService>();
+    readonly SongDownloadRequestProcessorService songDownloadRequestProcessorService = ServiceContainer.GetService<SongDownloadRequestProcessorService>();
 
     public OptionsView()
     {
@@ -41,6 +42,20 @@ public partial class OptionsView : UserControl
         var stateLabel = this.GetNestedControl<TextBlock>("stateLabel");
         stateLabel?.Text = syncService.State;
         syncService.OnStateChanged = state => Dispatcher.Invoke(() => stateLabel?.Text = state);
+    }
+
+    private void DownloadFolderSaveButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var downloadFolderTextBox = this.GetNestedControl<TextBox>("downloadFolderTextBox");
+        if (!Directory.Exists(downloadFolderTextBox.Text))
+        {
+            new MessageBox(_ => { }, window, this).Show("Invalid folder path", $"{downloadFolderTextBox.Text} doesn't exist!");
+            return;
+        }
+        Config.Data.DownloadFolderPath = downloadFolderTextBox.Text;
+
+        songDownloadRequestProcessorService.Init();
+        Config.Save();
     }
 
     private void LoginButton_Click(object? sender, RoutedEventArgs e)

@@ -14,6 +14,8 @@ public class ConfigData
     public string? SongLibraryPath { get; set; }
     public float Volume { get; set; } = 0.8f;
 
+    public string? DownloadFolderPath { get; set; }
+
     // Sync settings
     public string? AuthBackendRefreshToken { get; set; }
     public string? SyncServerHost { get; set; }

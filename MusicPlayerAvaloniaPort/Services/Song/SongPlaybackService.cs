@@ -66,7 +66,26 @@ public class SongPlaybackService
 
         return new AvailableSong(fullPath, upvotedSong.SongId);
     }
+    public AvailableSong? RegisterNewSong(string fullPath)
+    {
+        var newAvailableSong = CreateAvailableSong(fullPath);
+        AvailableSongs.Add(newAvailableSong);
 
+        SongChoosingService.CreateSongChoosingDataStructure(AvailableSongs);
+
+        return newAvailableSong;
+    }
+
+    public void PlaySpecificSong(AvailableSong availableSong)
+    {
+        // Update RuntimePlayHistory
+        RuntimePlayHistory.Add(availableSong);
+        RuntimePlayHistoryIndex = RuntimePlayHistory.Count - 1;
+
+        // Invoke Events
+        AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"));
+        NewSongStarted?.Invoke(this, CurrentlyPlaying);
+    }
     public void GetNextSong()
     {
         // Score Change

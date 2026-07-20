@@ -66,7 +66,7 @@ public partial class MainView : UserControl
         songPlaybackService.NewSongStarted += (s, song) => UpdateUiForNewSong(song);
         songPlaybackService.UpvoteLockedInChanged += (s, lockedIn) => UpdateUiForNewUpvoteLockedInState(lockedIn);
 
-        // Initial Update
+        // Inits
         MainView_ScalingChanged(null, EventArgs.Empty);
         LoadVolume();
 

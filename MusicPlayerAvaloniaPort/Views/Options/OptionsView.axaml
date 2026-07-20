@@ -1,19 +1,19 @@
 <UserControl
-x:Class="MusicPlayerAvaloniaPort.Views.Options.OptionsView"
-xmlns="https://github.com/avaloniaui"
-xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-xmlns:conv="clr-namespace:MusicPlayerAvaloniaPort.Converters;assembly=MusicPlayerAvaloniaPort"
-xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-xmlns:sys="clr-namespace:System;assembly=mscorlib"
-xmlns:vm="using:MusicPlayerAvaloniaPort.ViewModels"
-x:DataType="vm:OptionsViewModel">
+    x:Class="MusicPlayerAvaloniaPort.Views.Options.OptionsView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:conv="clr-namespace:MusicPlayerAvaloniaPort.Converters;assembly=MusicPlayerAvaloniaPort"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:sys="clr-namespace:System;assembly=mscorlib"
+    xmlns:vm="using:MusicPlayerAvaloniaPort.ViewModels"
+    x:DataType="vm:OptionsViewModel">
     <UserControl.Resources>
         <conv:AddMultiplyConverter x:Key="AddMultiplyConverter" />
         <conv:EitherOrConverter x:Key="EitherOrConverter" />
     </UserControl.Resources>
-    <WrapPanel Margin="8">
-        <GroupBox Header="Sync Server Connection">
+    <WrapPanel Margin="5">
+        <GroupBox Header="Sync Server Connection" Margin="3">
             <StackPanel Spacing="8">
                 <StackPanel Orientation="Horizontal">
                     <Label Content="Host" Target="hostTextBox" />
@@ -34,6 +34,15 @@ x:DataType="vm:OptionsViewModel">
                 <StackPanel Orientation="Horizontal">
                     <Label Content="State: " />
                     <TextBlock Name="stateLabel" Width="200" Text="" TextWrapping="Wrap" VerticalAlignment="Center" />
+                </StackPanel>
+            </StackPanel>
+        </GroupBox>
+        <GroupBox Header="Download Folder" Margin="3">
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal">
+                    <Label Content="Download Folder Path" Target="downloadFolderTextBox" />
+                    <TextBox x:Name="downloadFolderTextBox" MinWidth="200" Text="{Binding DownloadFolderPath}" />
+                    <Button Margin="4,0,0,0" Click="DownloadFolderSaveButton_Click">Save</Button>
                 </StackPanel>
             </StackPanel>
         </GroupBox>
