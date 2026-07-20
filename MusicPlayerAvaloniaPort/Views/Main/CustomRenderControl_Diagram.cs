@@ -7,12 +7,14 @@ using Avalonia.Media;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using Path = Avalonia.Controls.Shapes.Path;
 using Avalonia.Threading;
+using MusicPlayerAvaloniaPort.Services.Visualization;
 
 namespace MusicPlayerAvaloniaPort.Views.Main;
 
 public class CustomRenderControl_Diagram : Control
 {
     AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
+    DiagramDataMapper diagramDataMapper = ServiceContainer.GetService<DiagramDataMapper>();
     Window? window => TopLevel.GetTopLevel(this) as Window;
     UserControl? view => window?.Content as UserControl;
 
@@ -20,7 +22,7 @@ public class CustomRenderControl_Diagram : Control
     PathFigure? diagramFigure;
     int diagramThickness = 10;
     int diagramNumBorderSegments = 3;
-    double diagramFftDataSpace = 0;
+    int diagramFftDataSpace = 0;
     SolidColorBrush? PrimaryColorBrush;
 
     public CustomRenderControl_Diagram() : base()
@@ -31,7 +33,7 @@ public class CustomRenderControl_Diagram : Control
 
             var controlWidth = this.Bounds.Width;
             var controlHeight = this.Bounds.Height;
-            diagramFftDataSpace = controlWidth - diagramThickness * 2;
+            diagramFftDataSpace = (int)controlWidth;
 
             diagramFigure = new PathFigure() { IsClosed = true, IsFilled = true };
             diagramGeometry = new PathGeometry();
@@ -61,10 +63,14 @@ public class CustomRenderControl_Diagram : Control
     {
         if (audioLibWrapper.PlayState != SoundFlow.Enums.PlaybackState.Playing)
             return;
-        float[] fftData = audioLibWrapper.GetCurrentFftSpectrumData();
+
         var controlWidth = this.Bounds.Width;
         var controlHeight = this.Bounds.Height;
-        diagramFftDataSpace = controlWidth;
+        diagramFftDataSpace = (int)controlWidth;
+
+        float[] fftData = diagramDataMapper.GetScaledAndSlicedFftData(diagramFftDataSpace);
+        float[] smoothedData = diagramDataMapper.SmoothenFftData(fftData, diagramFftDataSpace, 1);
+
         while (diagramFigure!.Segments?.Count < diagramFftDataSpace + diagramNumBorderSegments)
         {
             diagramFigure.Segments!.Add(new LineSegment() { Point = new Point(diagramFigure.Segments.Count, controlHeight - diagramThickness) });
@@ -75,7 +81,8 @@ public class CustomRenderControl_Diagram : Control
         }
         for (int i = 0; i < controlWidth; i++)
         {
-            var sampledListVal = fftData[(int)(i / diagramFftDataSpace * fftData.Length / 4)] / 200 * controlHeight;
+            var sampleFrom = (int)(i / (float)diagramFftDataSpace * smoothedData.Length);
+            var sampledListVal = smoothedData[sampleFrom] * (controlHeight - diagramThickness);
             (diagramFigure.Segments![i + diagramNumBorderSegments] as LineSegment)!.Point = new Point(i, controlHeight - diagramThickness - sampledListVal);
         }
     }
