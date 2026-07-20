@@ -11,13 +11,19 @@ namespace MusicPlayerAvaloniaPort.Services.Visualization;
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(DiagramDataMapper))]
 public class DiagramDataMapper(AudioLibWrapperService audioLibWrapperService, SongPlaybackService songPlaybackService, DbWrapperService dbWrapperService)
 {
+    private const double FFT_WINDOW_START_VALUE = 70;
+    private const double FFT_WINDOW_LENGTH_DIVISOR = 3;
+    private const float FFT_WINDOW_VALUE_DIVISOR = 500;
+    private const double FFT_SAMPLES_HAMMING_WINDOW_DOWNWARD_EXPONENT = 2;
+
     private float[]? smoothedData;
     private float[]? mappedData;
+
     private const float THETA = 3.0f;
     private GaussianCache gaussianCache = new GaussianCache(THETA);
     private float[] hammingWindowFactorArray = Enumerable
         .Range(0, AudioLibWrapperService.FFT_BUFFER_SIZE)
-        .Select(i => (float)HammingWindowCache.ComputeHammingWindow(i, AudioLibWrapperService.FFT_BUFFER_SIZE))
+        .Select(i => (float)Math.Pow(HammingWindowCache.ComputeHammingWindow(i, AudioLibWrapperService.FFT_BUFFER_SIZE), FFT_SAMPLES_HAMMING_WINDOW_DOWNWARD_EXPONENT))
         .ToArray();
 
     public float[] GetScaledAndSlicedFftData(int targetArraySize)
@@ -34,25 +40,19 @@ public class DiagramDataMapper(AudioLibWrapperService audioLibWrapperService, So
         var fftData = audioLibWrapperService.GetCurrentFftSpectrumData(hammingWindowFactorArray);
         for (int i = 0; i < fftData.Length; i++)
         {
-            fftData[i] = fftData[i] * (float)Math.Sqrt(i + 1) / 100;
+            fftData[i] = fftData[i] * (float)Math.Sqrt(i + 1) / FFT_WINDOW_VALUE_DIVISOR;
         }
 
         // Logarithmically scale the x-axis of the FFT data and chop of a slice
-        float ReadLength = fftData.Length / 1.9f;
-        int startValue = 30;
+        double ReadLength = fftData.Length / FFT_WINDOW_LENGTH_DIVISOR;
         for (int i = 0; i < targetArraySize; i++)
         {
-            double lastindex = Math.Pow(ReadLength, (startValue + i - 1) / (double)targetArraySize);
-            double index = Math.Pow(ReadLength, (startValue + i) / (double)targetArraySize);
+            double lastindex = Math.Pow(ReadLength, (FFT_WINDOW_START_VALUE + i - 1) / (double)targetArraySize);
+            double index = Math.Pow(ReadLength, (FFT_WINDOW_START_VALUE + i) / (double)targetArraySize);
             mappedData[i] = GetMaxHeight(fftData, (int)lastindex, (int)index) * (currentUpvotedSong.Volume > 0 ? currentUpvotedSong.Volume : 1);
         }
 
         return mappedData;
-    }
-
-    private static float Sigmoid(float value)
-    {
-        return 1.0f / (1.0f + (float)Math.Exp(-value));
     }
 
     private static float GetMaxHeight(float[] array, int from, int to)

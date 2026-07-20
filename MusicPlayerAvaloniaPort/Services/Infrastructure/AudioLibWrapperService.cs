@@ -38,7 +38,7 @@ public class AudioLibWrapperService
     bool CancelReading = false;
 
     // FFT Vars
-    public const int FFT_BUFFER_SIZE = 16384 / 4;
+    public const int FFT_BUFFER_SIZE = 16384 / 2;
     private static readonly AudioFormat AnalyzeFormat = AudioFormat.Studio;
     SpectrumAnalyzer spectrumAnalyzer = new SpectrumAnalyzer(AnalyzeFormat, FFT_BUFFER_SIZE);
     float[] fftZeroResult;
