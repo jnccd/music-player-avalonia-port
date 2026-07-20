@@ -159,7 +159,7 @@ mc:Ignorable="d">
                 </StackPanel>
             </Grid>
             <vsmain:CustomRenderControl_Diagram
-            Name="DiagramCanvas"
+            Name="CustomRenderControl_Diagram"
             Grid.Row="1"
             Margin="12,0"
             HorizontalAlignment="Stretch"
