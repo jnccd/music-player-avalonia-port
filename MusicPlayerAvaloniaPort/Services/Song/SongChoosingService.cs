@@ -13,56 +13,65 @@ public class SongChoosingService(DbWrapperService DbWrapper)
 
     public AvailableSong ChooseSongWithWeightedChances(AvailableSong? currentSongThatShouldntBeRepeated)
     {
-        int SongChoosingListIndex;
-        do
-            SongChoosingListIndex = Random.Shared.Next(SongChoosingList.Count);
-        while (SongChoosingList[SongChoosingListIndex] == currentSongThatShouldntBeRepeated);
+        lock (SongChoosingList)
+        {
+            int SongChoosingListIndex;
+            do
+                SongChoosingListIndex = Random.Shared.Next(SongChoosingList.Count);
+            while (SongChoosingList[SongChoosingListIndex] == currentSongThatShouldntBeRepeated);
 
-        return SongChoosingList[SongChoosingListIndex];
+            return SongChoosingList[SongChoosingListIndex];
+        }
     }
 
     public void CreateSongChoosingDataStructure(List<AvailableSong> AvailableSongs)
     {
-        using var dbContext = DbWrapper.GetContext();
-
-        SongChoosingList.Clear();
-        foreach (var availableSong in AvailableSongs)
+        lock (SongChoosingList)
         {
-            var upvotedSong = dbContext.GetUpvotedSongById(availableSong.UpvotedSongId);
+            using var dbContext = DbWrapper.GetContext();
 
-            float amount = GetSongChoosingAmount(upvotedSong, AvailableSongs);
-            for (int k = 0; k < amount; k++)
-                SongChoosingList.Add(availableSong);
-        }
+            SongChoosingList.Clear();
+            foreach (var availableSong in AvailableSongs)
+            {
+                var upvotedSong = dbContext.GetUpvotedSongById(availableSong.UpvotedSongId);
+
+                float amount = GetSongChoosingAmount(upvotedSong, AvailableSongs);
+                for (int k = 0; k < amount; k++)
+                    SongChoosingList.Add(availableSong);
+            }
 
 #if DEBUG
-        TestChoosingListIntegrity(AvailableSongs);
+            TestChoosingListIntegrity(AvailableSongs);
 #endif
+        }
     }
 
     public void UpdateSongChoosingDataStructure(AvailableSong songToUpdateListFor, List<AvailableSong> AvailableSongs)
     {
-        using var dbContext = DbWrapper.GetContext();
+        lock (SongChoosingList)
+        {
+            using var dbContext = DbWrapper.GetContext();
 
-        // Getting Choosing List Count
-        int index = SongChoosingList.FindIndex(x => x == songToUpdateListFor); // index may be -1 if not found
-        int i = index;
-        while (i < SongChoosingList.Count && SongChoosingList[i] == songToUpdateListFor)
-            i++;
-        int count = i - index;
+            // Getting Choosing List Count
+            int index = SongChoosingList.FindIndex(x => x == songToUpdateListFor); // index may be -1 if not found
+            int i = index;
+            while (i < SongChoosingList.Count && SongChoosingList[i] == songToUpdateListFor)
+                i++;
+            int count = i - index;
 
-        // Getting target Count
-        var upvotedSong = dbContext.GetUpvotedSongById(songToUpdateListFor.UpvotedSongId);
-        float amount = GetSongChoosingAmount(upvotedSong, AvailableSongs);
+            // Getting target Count
+            var upvotedSong = dbContext.GetUpvotedSongById(songToUpdateListFor.UpvotedSongId);
+            float amount = GetSongChoosingAmount(upvotedSong, AvailableSongs);
 
-        for (int j = 0; j < amount - count; j++)
-            SongChoosingList.Insert(index, songToUpdateListFor);
-        for (int j = 0; j < count - amount; j++)
-            SongChoosingList.RemoveAt(index);
+            for (int j = 0; j < amount - count; j++)
+                SongChoosingList.Insert(index, songToUpdateListFor);
+            for (int j = 0; j < count - amount; j++)
+                SongChoosingList.RemoveAt(index);
 
 #if DEBUG
-        TestChoosingListIntegrity(AvailableSongs);
+            TestChoosingListIntegrity(AvailableSongs);
 #endif
+        }
     }
 
     float GetSongChoosingAmount(UpvotedSong curSong, List<AvailableSong> AvailableSongs)
