@@ -4,7 +4,9 @@ using MusicPlayerAvaloniaPort.Services.Song;
 using MusicPlayerSyncInterface.DTOs;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 
 namespace MusicPlayerAvaloniaPort.Services.Visualization;
 
@@ -40,7 +42,7 @@ public class DiagramDataMapperService(AudioLibWrapperService audioLibWrapperServ
         var fftData = audioLibWrapperService.GetCurrentFftSpectrumData(hammingWindowFactorArray);
         for (int i = 0; i < fftData.Length; i++)
         {
-            fftData[i] = fftData[i] * (float)Math.Sqrt(i + 1) / FFT_WINDOW_VALUE_DIVISOR;
+            fftData[i] = fftData[i] * (float)Math.Sqrt(i + 1) / FFT_WINDOW_VALUE_DIVISOR / 6;
         }
 
         // Logarithmically scale the x-axis of the FFT data and chop of a slice
@@ -49,7 +51,8 @@ public class DiagramDataMapperService(AudioLibWrapperService audioLibWrapperServ
         {
             double lastindex = Math.Pow(ReadLength, (FFT_WINDOW_START_VALUE + i - 1) / (double)targetArraySize);
             double index = Math.Pow(ReadLength, (FFT_WINDOW_START_VALUE + i) / (double)targetArraySize);
-            mappedData[i] = GetMaxHeight(fftData, (int)lastindex, (int)index) * (currentUpvotedSong.Volume > 0 ? currentUpvotedSong.Volume : 1);
+            if (i == 0 || i == targetArraySize / 2 || i == targetArraySize - 1) Debug.WriteLine($"{i}: {lastindex} {index}");
+            mappedData[i] = GetMaxHeight(fftData, (int)lastindex, (int)index) / (currentUpvotedSong.Volume > 0 ? currentUpvotedSong.Volume : 1);
         }
 
         return mappedData;
