@@ -12,8 +12,8 @@ namespace MusicPlayerAvaloniaPort.Services.Visualization;
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(DiagramDataMapperService))]
 public class DiagramDataMapperService(AudioLibWrapperService audioLibWrapperService, SongPlaybackService songPlaybackService, DbWrapperService dbWrapperService)
 {
-    private const double FFT_WINDOW_START_VALUE = 100;
-    private const double FFT_WINDOW_LENGTH_DIVISOR = 4.3;
+    private const double FFT_WINDOW_PERCENT_CHOPPED_BEGINNING = 0.08;
+    private const double FFT_WINDOW_PERCENT_CHOPPED_END = 0.4;
     private const float FFT_WINDOW_VALUE_DIVISOR = 3500;
     private const double FFT_SAMPLES_HAMMING_WINDOW_DOWNWARD_EXPONENT = 2;
 
@@ -27,7 +27,6 @@ public class DiagramDataMapperService(AudioLibWrapperService audioLibWrapperServ
         .Select(i => (float)Math.Pow(HammingWindowCache.ComputeHammingWindow(i, AudioLibWrapperService.FFT_BUFFER_SIZE), FFT_SAMPLES_HAMMING_WINDOW_DOWNWARD_EXPONENT))
         .ToArray();
 
-    bool debugOutDone = false;
     public float[] GetScaledAndSlicedFftData(int targetArraySize)
     {
         // This should be rare
@@ -39,25 +38,22 @@ public class DiagramDataMapperService(AudioLibWrapperService audioLibWrapperServ
         var currentSong = songPlaybackService.CurrentlyPlaying;
         var currentUpvotedSong = dbWrapperService.GetContext().GetUpvotedSongById(currentSong?.UpvotedSongId);
 
-        var fftData = audioLibWrapperService.GetCurrentFftSpectrumData();
+        var fftData = audioLibWrapperService.GetCurrentFftSpectrumData(hammingWindowFactorArray);
         for (int i = 0; i < fftData.Length; i++)
         {
-            fftData[i] = fftData[i] * (float)Math.Sqrt(i + 1) / FFT_WINDOW_VALUE_DIVISOR * 3;
+            fftData[i] = fftData[i] * (float)Math.Sqrt(i + 1) / FFT_WINDOW_VALUE_DIVISOR * 1;
         }
 
-        debugOutDone = false;
         // Logarithmically scale the x-axis of the FFT data and chop of a slice
-        double ReadEnd = fftData.Length - (fftData.Length * 0.5);
-        double ReadStart = (fftData.Length * 0.3) - 1;
-        if (!debugOutDone) Debug.WriteLine($"Lengths: {ReadStart} {ReadEnd} {fftData.Length}");
+        double ReadEnd = fftData.Length - (fftData.Length * FFT_WINDOW_PERCENT_CHOPPED_END);
+        double ReadStart = (fftData.Length * FFT_WINDOW_PERCENT_CHOPPED_BEGINNING) - 1;
         for (int i = 0; i < targetArraySize; i++)
         {
             double lastindex = ReadStart + Math.Pow(ReadEnd - ReadStart, (i - 1) / (double)targetArraySize);
             double index = ReadStart + Math.Pow(ReadEnd - ReadStart, i / (double)targetArraySize);
-            if (!debugOutDone && (i == 0 || i == targetArraySize - 1)) Debug.WriteLine($"{i} | {i / (float)targetArraySize}: {lastindex} {index}");
+            //if (i == 0 || i == targetArraySize / 2 || i == targetArraySize - 1) Debug.WriteLine($"{i}: {lastindex} {index}");
             mappedData[i] = GetMaxHeight(fftData, (int)lastindex, (int)index) / (currentUpvotedSong.Volume > 0 ? currentUpvotedSong.Volume : 1);
         }
-        debugOutDone = true;
 
         return mappedData;
     }
