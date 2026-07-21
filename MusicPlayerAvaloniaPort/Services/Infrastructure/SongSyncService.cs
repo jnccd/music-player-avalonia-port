@@ -85,7 +85,8 @@ public class SongSyncService
         if (RetryUnsyncedEntries)
         {
             using var dbContext = DbWrapper.GetContext();
-            foreach (var unsyncedData in dbContext.GetNotYetSyncedDataEntries())
+            var first20UnsyncedReqs = dbContext.GetNotYetSyncedDataEntries().Take(20);
+            foreach (var unsyncedData in first20UnsyncedReqs)
             {
                 try
                 {
