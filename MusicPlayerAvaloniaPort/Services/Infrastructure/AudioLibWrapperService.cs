@@ -161,6 +161,7 @@ public class AudioLibWrapperService
         playerDataProvider = new StreamDataProvider(Engine, new FileStream(songPath, FileMode.Open, FileAccess.Read), new ReadOptions { ReadTags = false });
         sampleReaderDataProvider?.Dispose();
         sampleReaderDataProvider = new StreamDataProvider(Engine, new FileStream(songPath, FileMode.Open, FileAccess.Read), new ReadOptions { ReadTags = false });
+        spectrumAnalyzer = new SpectrumAnalyzer(GetCurrentAudioFormat(), FFT_BUFFER_SIZE);
 
         if (soundPlayer != null)
         {
@@ -227,7 +228,7 @@ public class AudioLibWrapperService
         });
     }
 
-    public float[] GetCurrentFftSpectrumData(float[]? factorArray = null)
+    public ReadOnlySpan<float> GetCurrentSampleData()
     {
         if (globalSampleArrayWriteHead <= (playerDataProvider!.Position / 4) + (FFT_BUFFER_SIZE / 2) + 1
             || playerDataProvider!.Position / 4 <= FFT_BUFFER_SIZE / 2 + 1)
@@ -235,6 +236,16 @@ public class AudioLibWrapperService
 
         Memory<float> memorySlice = globalSampleArray.AsMemory((playerDataProvider!.Position / 4) - (FFT_BUFFER_SIZE / 2), FFT_BUFFER_SIZE);
         Span<float> sampleBufferSpan = memorySlice.Span;
+
+        return sampleBufferSpan;
+    }
+    public float[] GetCurrentFftSpectrumData(float[]? factorArray = null)
+    {
+        if (globalSampleArrayWriteHead <= (playerDataProvider!.Position / 4) + (FFT_BUFFER_SIZE / 2) + 1
+            || playerDataProvider!.Position / 4 <= FFT_BUFFER_SIZE / 2 + 1)
+            return fftZeroResult;
+
+        ReadOnlySpan<float> sampleBufferSpan = GetCurrentSampleData();
 
         if (factorArray == null)
         {
@@ -250,7 +261,7 @@ public class AudioLibWrapperService
                 workingSpan[i] *= factorArray[i];
             }
 
-            spectrumAnalyzer.Process(workingSpan, AnalyzeFormat.Channels);
+            spectrumAnalyzer.Process(workingSpan, playerDataProvider?.FormatInfo?.ChannelCount ?? 2);
         }
 
         var re = spectrumAnalyzer.SpectrumData.ToArray();
