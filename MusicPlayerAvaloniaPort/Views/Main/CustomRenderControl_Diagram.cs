@@ -8,8 +8,11 @@ using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using Path = Avalonia.Controls.Shapes.Path;
 using Avalonia.Threading;
 using MusicPlayerAvaloniaPort.Services.Visualization;
+using System;
 
 namespace MusicPlayerAvaloniaPort.Views.Main;
+
+enum VisMode { SmoothFFT, RawFFT, Samples }
 
 public class CustomRenderControl_Diagram : Control
 {
@@ -18,35 +21,75 @@ public class CustomRenderControl_Diagram : Control
     Window? window => TopLevel.GetTopLevel(this) as Window;
     UserControl? view => window?.Content as UserControl;
 
-    PathGeometry? diagramGeometry;
-    PathFigure? diagramFigure;
-    const int diagramThickness = 10;
-    int diagramNumBorderSegments = 3;
-    int diagramFftDataSpace = 0;
+    VisMode currentVisMode = VisMode.SmoothFFT;
     SolidColorBrush? PrimaryColorBrush;
+    Pen? PrimaryColorPen;
+
+    PathGeometry? smoothFftDiagramGeometry;
+    PathFigure? smoothFftDiagramFigure;
+    PathGeometry? rawFftDiagramGeometry;
+    PathFigure? rawFftDiagramFigure;
+    const int fftDiagramThickness = 10;
+    int fftDiagramNumBorderSegments = 3;
+    int fftDiagramFftDataSpace = 0;
+    PathGeometry? samplesDiagramGeometry;
+    PathFigure? samplesDiagramFigure;
+
+    PathGeometry? currentGeometry = null;
+    SolidColorBrush? currentBrush = null;
+    IPen? currentPen = null;
+
+    object lockject = new();
 
     public CustomRenderControl_Diagram() : base()
     {
         this.Loaded += (s, e) =>
         {
             PrimaryColorBrush = view!.FindResource("PrimaryColor") as SolidColorBrush;
+            PrimaryColorPen = new Pen(PrimaryColorBrush, 3);
 
             var controlWidth = this.Bounds.Width;
             var controlHeight = this.Bounds.Height;
-            diagramFftDataSpace = (int)controlWidth;
+            fftDiagramFftDataSpace = (int)controlWidth;
 
-            diagramFigure = new PathFigure() { IsClosed = true, IsFilled = true };
-            diagramGeometry = new PathGeometry();
-            diagramGeometry.Figures?.Add(diagramFigure);
+            // Smooth
+            smoothFftDiagramFigure = new PathFigure() { IsClosed = true, IsFilled = true };
+            smoothFftDiagramGeometry = new PathGeometry();
+            smoothFftDiagramGeometry.Figures?.Add(smoothFftDiagramFigure);
 
-            diagramFigure.StartPoint = new Point(controlWidth, controlHeight - diagramThickness);
-            diagramFigure.Segments!.Add(new LineSegment() { Point = new Point(controlWidth, controlHeight) });
-            diagramFigure.Segments!.Add(new LineSegment() { Point = new Point(0, controlHeight) });
-            diagramFigure.Segments!.Add(new LineSegment() { Point = new Point(0, controlHeight - diagramThickness) });
-            for (int i = 0; i < controlWidth; i++)
+            smoothFftDiagramFigure.StartPoint = new Point(controlWidth, controlHeight - fftDiagramThickness);
+            smoothFftDiagramFigure.Segments!.Add(new LineSegment() { Point = new Point(controlWidth, controlHeight) });
+            smoothFftDiagramFigure.Segments!.Add(new LineSegment() { Point = new Point(0, controlHeight) });
+            smoothFftDiagramFigure.Segments!.Add(new LineSegment() { Point = new Point(0, controlHeight - fftDiagramThickness) });
+            for (int i = 0; i < fftDiagramFftDataSpace; i++)
             {
-                diagramFigure.Segments!.Add(new LineSegment() { Point = new Point(i, controlHeight - diagramThickness) });
+                smoothFftDiagramFigure.Segments!.Add(new LineSegment() { Point = new Point(i, controlHeight - fftDiagramThickness) });
             }
+
+            // Raw
+            rawFftDiagramFigure = new PathFigure() { IsClosed = true, IsFilled = true };
+            rawFftDiagramGeometry = new PathGeometry();
+            rawFftDiagramGeometry.Figures?.Add(rawFftDiagramFigure);
+
+            rawFftDiagramFigure.StartPoint = new Point(controlWidth, controlHeight - fftDiagramThickness);
+            rawFftDiagramFigure.Segments!.Add(new LineSegment() { Point = new Point(controlWidth, controlHeight) });
+            rawFftDiagramFigure.Segments!.Add(new LineSegment() { Point = new Point(0, controlHeight) });
+            rawFftDiagramFigure.Segments!.Add(new LineSegment() { Point = new Point(0, controlHeight - fftDiagramThickness) });
+            for (int i = 0; i < fftDiagramFftDataSpace; i++)
+            {
+                rawFftDiagramFigure.Segments!.Add(new LineSegment() { Point = new Point(i, controlHeight - fftDiagramThickness) });
+            }
+
+            // Samples
+            samplesDiagramFigure = new PathFigure() { IsClosed = false };
+            samplesDiagramGeometry = new PathGeometry();
+            samplesDiagramGeometry.Figures?.Add(samplesDiagramFigure);
+            for (int i = 0; i < fftDiagramFftDataSpace; i++)
+            {
+                samplesDiagramFigure.Segments!.Add(new LineSegment() { Point = new Point(i, controlHeight - fftDiagramThickness) });
+            }
+
+            currentGeometry = smoothFftDiagramGeometry;
         };
     }
 
@@ -70,55 +113,106 @@ public class CustomRenderControl_Diagram : Control
         var controlWidth = (int)this.Bounds.Width;
         var controlHeight = (int)this.Bounds.Height;
 
-        float[] fftData = diagramDataMapper.GetScaledAndSlicedFftData(diagramFftDataSpace);
-        float[] smoothedData = diagramDataMapper.SmoothenFftData(fftData, diagramFftDataSpace, 1);
-
-        lock (diagramGeometry!)
+        if (currentVisMode == VisMode.SmoothFFT)
         {
-            for (int i = 0; i < diagramFftDataSpace; i++)
+            float[] fftData = diagramDataMapper.GetScaledAndSlicedFftData(fftDiagramFftDataSpace);
+            float[] smoothedData = diagramDataMapper.SmoothenFftData(fftData, fftDiagramFftDataSpace, 1);
+
+            lock (lockject)
             {
-                var sampleFrom = (int)(i / (float)diagramFftDataSpace * smoothedData.Length);
-                var sampledListVal = smoothedData[sampleFrom] * (controlHeight - diagramThickness);
-                (diagramFigure?.Segments?[i + diagramNumBorderSegments] as LineSegment)!.Point = new Point(i, controlHeight - diagramThickness - sampledListVal);
+                for (int i = 0; i < fftDiagramFftDataSpace; i++)
+                {
+                    var sampleFrom = (int)(i / (float)fftDiagramFftDataSpace * smoothedData.Length);
+                    var sampledListVal = smoothedData[sampleFrom] * (controlHeight - fftDiagramThickness);
+                    (smoothFftDiagramFigure?.Segments?[i + fftDiagramNumBorderSegments] as LineSegment)!.Point = new Point(i, controlHeight - fftDiagramThickness - sampledListVal);
+                }
+
+                currentGeometry = smoothFftDiagramGeometry;
+                currentBrush = PrimaryColorBrush;
+                currentPen = null;
+            }
+        }
+        else if (currentVisMode == VisMode.RawFFT)
+        {
+            float[] fftData = diagramDataMapper.GetScaledAndSlicedFftData(fftDiagramFftDataSpace);
+
+            lock (lockject)
+            {
+                for (int i = 0; i < fftDiagramFftDataSpace; i++)
+                {
+                    var sampleFrom = (int)(i / (float)fftDiagramFftDataSpace * fftData.Length);
+                    var sampledListVal = fftData[sampleFrom] * (controlHeight - fftDiagramThickness);
+                    (rawFftDiagramFigure?.Segments?[i + fftDiagramNumBorderSegments] as LineSegment)!.Point = new Point(i, controlHeight - fftDiagramThickness - sampledListVal);
+                }
+
+                currentGeometry = rawFftDiagramGeometry;
+                currentBrush = PrimaryColorBrush;
+                currentPen = null;
+            }
+        }
+        else if (currentVisMode == VisMode.Samples)
+        {
+            ReadOnlySpan<float> sampleData = audioLibWrapper.GetCurrentSampleData();
+
+            lock (lockject)
+            {
+                for (int i = 0; i < fftDiagramFftDataSpace; i++)
+                {
+                    var sampleFrom = (int)(i / (float)fftDiagramFftDataSpace * (sampleData.Length - 1));
+                    var sampledListVal = sampleData[sampleFrom] * (controlHeight / 2);
+                    (samplesDiagramFigure?.Segments?[i] as LineSegment)!.Point = new Point(i, controlHeight / 2 + sampledListVal);
+                }
+
+                currentGeometry = samplesDiagramGeometry;
+                currentBrush = null;
+                currentPen = PrimaryColorPen;
             }
         }
     }
 
     private void Draw(DrawingContext context)
     {
-        if (diagramFigure == null || diagramGeometry == null)
+        if (currentGeometry == null)
             return;
 
-        lock (diagramGeometry!)
+        lock (lockject)
         {
-            context.DrawGeometry(PrimaryColorBrush, null, diagramGeometry!);
+            context.DrawGeometry(currentBrush, currentPen, currentGeometry!);
         }
+    }
+
+    public void CycleVisMode()
+    {
+        if ((int)currentVisMode == Enum.GetValues(typeof(VisMode)).Length - 1)
+            currentVisMode = 0;
+        else
+            currentVisMode++;
     }
 
     public void UpdateDiagramScaling()
     {
-        if (diagramFigure == null || diagramGeometry == null)
+        if (smoothFftDiagramFigure == null || smoothFftDiagramGeometry == null)
             return;
 
         Dispatcher.UIThread.Post(() =>
         {
-            lock (diagramGeometry!)
+            lock (lockject)
             {
                 var controlWidth = (int)this.Bounds.Width;
                 var controlHeight = (int)this.Bounds.Height;
-                diagramFigure?.StartPoint = new Point(controlWidth, controlHeight - diagramThickness);
-                diagramFigure?.Segments![0] = new LineSegment() { Point = new Point(controlWidth, controlHeight) };
-                diagramFigure?.Segments![1] = new LineSegment() { Point = new Point(0, controlHeight) };
-                diagramFigure?.Segments![2] = new LineSegment() { Point = new Point(0, controlHeight - diagramThickness) };
+                smoothFftDiagramFigure?.StartPoint = new Point(controlWidth, controlHeight - fftDiagramThickness);
+                smoothFftDiagramFigure?.Segments![0] = new LineSegment() { Point = new Point(controlWidth, controlHeight) };
+                smoothFftDiagramFigure?.Segments![1] = new LineSegment() { Point = new Point(0, controlHeight) };
+                smoothFftDiagramFigure?.Segments![2] = new LineSegment() { Point = new Point(0, controlHeight - fftDiagramThickness) };
 
-                diagramFftDataSpace = (int)controlWidth;
-                while (diagramFigure!.Segments?.Count < diagramFftDataSpace + diagramNumBorderSegments)
+                fftDiagramFftDataSpace = (int)controlWidth;
+                while (smoothFftDiagramFigure!.Segments?.Count < fftDiagramFftDataSpace + fftDiagramNumBorderSegments)
                 {
-                    diagramFigure.Segments!.Add(new LineSegment() { Point = new Point(diagramFigure.Segments.Count, controlHeight - diagramThickness) });
+                    smoothFftDiagramFigure.Segments!.Add(new LineSegment() { Point = new Point(smoothFftDiagramFigure.Segments.Count, controlHeight - fftDiagramThickness) });
                 }
-                while (diagramFigure.Segments?.Count - 1 > diagramFftDataSpace + diagramNumBorderSegments)
+                while (smoothFftDiagramFigure.Segments?.Count - 1 > fftDiagramFftDataSpace + fftDiagramNumBorderSegments)
                 {
-                    diagramFigure.Segments!.RemoveAt(diagramFigure.Segments.Count - 1);
+                    smoothFftDiagramFigure.Segments!.RemoveAt(smoothFftDiagramFigure.Segments.Count - 1);
                 }
             }
         });
