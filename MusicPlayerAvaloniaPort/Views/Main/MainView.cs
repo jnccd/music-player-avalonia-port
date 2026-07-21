@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml;
@@ -65,6 +66,12 @@ public partial class MainView : UserControl
         window?.ScalingChanged += MainView_ScalingChanged;
         songPlaybackService.NewSongStarted += (s, song) => UpdateUiForNewSong(song);
         songPlaybackService.UpvoteLockedInChanged += (s, lockedIn) => UpdateUiForNewUpvoteLockedInState(lockedIn);
+        this.AddHandler(
+            InputElement.KeyDownEvent,
+            UserControl_KeyDown,
+            RoutingStrategies.Bubble | RoutingStrategies.Tunnel,
+            handledEventsToo: true
+        );
 
         // Inits
         MainView_ScalingChanged(null, EventArgs.Empty);
@@ -117,5 +124,14 @@ public partial class MainView : UserControl
     {
         window?.Close();
         Environment.Exit(0);
+    }
+
+    private void UserControl_KeyDown(object? sender, Avalonia.Input.KeyEventArgs e)
+    {
+        if (e.Key == Key.V)
+        {
+            var diagramControl = this.GetLogicalDescendants().OfType<CustomRenderControl_Diagram>().FirstOrDefault(x => x.Name == "CustomRenderControl_Diagram");
+            diagramControl!.CycleVisMode();
+        }
     }
 }
