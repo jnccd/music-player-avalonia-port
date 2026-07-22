@@ -32,8 +32,11 @@ public class SongDownloadRequestProcessorService(SongPlaybackService songPlaybac
     Task? SongDownloadRequestQueueProcessorLoopThread = null;
     bool SongDownloadRequestQueueProcessorLoopThreadAborted = false;
 
-    readonly List<string> StateLog = new();
-    public string State { get; private set; } = "";
+    public List<string> StateLog { get; } = new();
+    public string State { get => state; private set { OnStateChanged?.Invoke(value); state = value; } }
+    private string state = "";
+    public Action<string>? OnStateChanged = null;
+    public Action? OnStateLogAdded = null;
 
     public void Init()
     {
@@ -71,7 +74,7 @@ public class SongDownloadRequestProcessorService(SongPlaybackService songPlaybac
         {
             if ((request = DownloadQueue.FirstOrDefault()) != null)
             {
-                State = $"Downloading {request.DownloadUrl} as {request.Type}";
+                State = $"Downloading {request.DownloadUrl} as {request.Type}...";
                 bool success = false;
 
                 if (request.Type == DownloadType.Song)
@@ -80,8 +83,13 @@ public class SongDownloadRequestProcessorService(SongPlaybackService songPlaybac
                     success = DownloadAsVideo(request);
 
                 DownloadQueue.Remove(request);
-                if (!success)
+                if (success)
+                    State = $"Downloading {request.DownloadUrl} as {request.Type} succeeded!";
+                else
+                {
+                    State = $"Downloading {request.DownloadUrl} as {request.Type} failed :(";
                     DownloadQueue.Add(request); // Add to the back again to rotate
+                }
             }
 
             Task.Delay(1000).Wait();
@@ -128,6 +136,7 @@ public class SongDownloadRequestProcessorService(SongPlaybackService songPlaybac
             catch (Exception e)
             {
                 StateLog.Add(e.ToString());
+                OnStateLogAdded?.Invoke();
             }
         }
     }
@@ -184,6 +193,7 @@ public class SongDownloadRequestProcessorService(SongPlaybackService songPlaybac
             if (downloadedSongs.FirstOrDefault() == null)
             {
                 StateLog.Add("Downloaded file gon :(");
+                OnStateLogAdded?.Invoke();
                 return false;
             }
 
@@ -193,6 +203,7 @@ public class SongDownloadRequestProcessorService(SongPlaybackService songPlaybac
         catch (Exception e)
         {
             StateLog.Add(e.ToString());
+            OnStateLogAdded?.Invoke();
             return false;
         }
 
@@ -213,6 +224,7 @@ public class SongDownloadRequestProcessorService(SongPlaybackService songPlaybac
         catch (Exception e)
         {
             StateLog.Add(e.ToString());
+            OnStateLogAdded?.Invoke();
             return false;
         }
 

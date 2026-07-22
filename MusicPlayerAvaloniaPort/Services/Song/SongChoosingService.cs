@@ -53,7 +53,9 @@ public class SongChoosingService(DbWrapperService DbWrapper)
             using var dbContext = DbWrapper.GetContext();
 
             // Getting Choosing List Count
-            int index = SongChoosingList.FindIndex(x => x == songToUpdateListFor); // index may be -1 if not found
+            int index = SongChoosingList.FindIndex(x => x == songToUpdateListFor);
+            if (index == -1)
+                return;
             int i = index;
             while (i < SongChoosingList.Count && SongChoosingList[i] == songToUpdateListFor)
                 i++;

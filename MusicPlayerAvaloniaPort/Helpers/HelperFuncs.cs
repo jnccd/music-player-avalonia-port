@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -52,6 +53,14 @@ public static class HelperFuncs
     public static float Sigmoid(double value)
     {
         return (float)(1.0 / (1.0 + Math.Pow(Math.E, -value)));
+    }
+
+    public static string Combine(this IEnumerable<string> strings, string combinator = "\n")
+    {
+        if (strings.Count() == 0)
+            return "";
+        else
+            return strings.Aggregate((x, y) => $"{x}{combinator}{y}");
     }
 
     public static Stream ModifyRGBChannelsAndKeepAlpha(SKBitmap bitmap, Color col)

@@ -27,6 +27,13 @@ public partial class OptionsViewModel : ViewModelBase
         set { SetProperty(ref _downloadFolderPath, value); }
     }
 
+    private string? _musicLibraryFolderPath;
+    public string? MusicLibraryFolderPath
+    {
+        get { return Config.Data.SongLibraryPath; }
+        set { SetProperty(ref _musicLibraryFolderPath, value); }
+    }
+
     // --- Commands ---
 
     // ...

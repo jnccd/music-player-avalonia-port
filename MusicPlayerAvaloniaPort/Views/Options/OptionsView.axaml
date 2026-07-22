@@ -33,7 +33,7 @@
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <Label Content="State: " />
-                    <TextBlock Name="stateLabel" Width="200" Text="" TextWrapping="Wrap" VerticalAlignment="Center" />
+                    <TextBlock Name="syncStateLabel" Width="200" Text="" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </StackPanel>
             </StackPanel>
         </GroupBox>
@@ -43,6 +43,24 @@
                     <Label Content="Download Folder Path" Target="downloadFolderTextBox" />
                     <TextBox x:Name="downloadFolderTextBox" MinWidth="200" Text="{Binding DownloadFolderPath}" />
                     <Button Margin="4,0,0,0" Click="DownloadFolderSaveButton_Click">Save</Button>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Label Content="State: " />
+                    <TextBlock Name="downloadStateLabel" Width="350" Text="" TextWrapping="Wrap" VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Label Content="State: " />
+                    <TextBox Name="downloadStateLogLabel" IsReadOnly="True"
+                             MaxHeight="100" Width="350" Text="" TextWrapping="Wrap" VerticalAlignment="Center" />
+                </StackPanel>
+            </StackPanel>
+        </GroupBox>
+        <GroupBox Header="Music Library" Margin="3">
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal">
+                    <Label Content="Music Library Path" Target="musicLibraryTextBox" />
+                    <TextBox x:Name="musicLibraryTextBox" MinWidth="200" Text="{Binding MusicLibraryFolderPath}" />
+                    <Button Margin="4,0,0,0" Click="SetMusicLibraryButton_Click">Save</Button>
                 </StackPanel>
             </StackPanel>
         </GroupBox>

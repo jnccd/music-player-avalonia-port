@@ -1,12 +1,14 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
+using MusicPlayerAvaloniaPort.Services.Song;
 
 namespace MusicPlayerAvaloniaPort.Views.Options;
 
@@ -16,6 +18,7 @@ public partial class OptionsView : UserControl
 
     readonly SongSyncService syncService = ServiceContainer.GetService<SongSyncService>();
     readonly SongDownloadRequestProcessorService songDownloadRequestProcessorService = ServiceContainer.GetService<SongDownloadRequestProcessorService>();
+    readonly SongPlaybackService songPlaybackService = ServiceContainer.GetService<SongPlaybackService>();
 
     public OptionsView()
     {
@@ -39,9 +42,18 @@ public partial class OptionsView : UserControl
             window.MinHeight = double.IsNormal(window.Height) ? window.Height : 0;
         });
 
-        var stateLabel = this.GetNestedControl<TextBlock>("stateLabel");
-        stateLabel?.Text = syncService.State;
-        syncService.OnStateChanged = state => Dispatcher.Invoke(() => stateLabel?.Text = state);
+        var syncStateLabel = this.GetNestedControl<TextBlock>("syncStateLabel");
+        syncStateLabel?.Text = syncService.State;
+        syncService.OnStateChanged = state => Dispatcher.Invoke(() => syncStateLabel?.Text = state);
+
+        var downloadStateLabel = this.GetNestedControl<TextBlock>("downloadStateLabel");
+        downloadStateLabel?.Text = songDownloadRequestProcessorService.State;
+        songDownloadRequestProcessorService.OnStateChanged = state => Dispatcher.Invoke(() => downloadStateLabel?.Text = state);
+
+        var downloadStateLogLabel = this.GetNestedControl<TextBox>("downloadStateLogLabel");
+        downloadStateLogLabel?.Text = songDownloadRequestProcessorService.StateLog.Combine();
+        songDownloadRequestProcessorService.OnStateLogAdded = () => Dispatcher.Invoke(() =>
+            downloadStateLogLabel?.Text = songDownloadRequestProcessorService.StateLog.Combine());
     }
 
     private void DownloadFolderSaveButton_Click(object? sender, RoutedEventArgs e)
@@ -56,6 +68,13 @@ public partial class OptionsView : UserControl
 
         songDownloadRequestProcessorService.Init();
         Config.Save();
+    }
+
+    private void SetMusicLibraryButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var musicLibraryTextBox = this.GetNestedControl<TextBox>("musicLibraryTextBox");
+        if (musicLibraryTextBox?.Text != null)
+            songPlaybackService.UpdateAvailableSongPaths(musicLibraryTextBox.Text);
     }
 
     private void LoginButton_Click(object? sender, RoutedEventArgs e)
