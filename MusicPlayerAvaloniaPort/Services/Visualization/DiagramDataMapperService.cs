@@ -36,7 +36,12 @@ public class DiagramDataMapperService(AudioLibWrapperService audioLibWrapperServ
         }
 
         var currentSong = songPlaybackService.CurrentlyPlaying;
-        var currentUpvotedSong = dbWrapperService.GetContext().GetUpvotedSongById(currentSong?.UpvotedSongId);
+        UpvotedSong? currentUpvotedSong = null;
+        try
+        {
+            currentUpvotedSong = dbWrapperService.GetContext().GetUpvotedSongById(currentSong?.UpvotedSongId);
+        }
+        catch { }
 
         var fftData = audioLibWrapperService.GetCurrentFftSpectrumData();
         for (int i = 0; i < fftData.Length; i++)
@@ -52,7 +57,7 @@ public class DiagramDataMapperService(AudioLibWrapperService audioLibWrapperServ
             double lastindex = ReadStart + Math.Pow(ReadEnd - ReadStart, (i - 1) / (double)targetArraySize);
             double index = ReadStart + Math.Pow(ReadEnd - ReadStart, i / (double)targetArraySize);
             //if (i == 0 || i == targetArraySize / 2 || i == targetArraySize - 1) Debug.WriteLine($"{i}: {lastindex} {index}");
-            mappedData[i] = GetMaxHeight(fftData, (int)lastindex, (int)index) / (currentUpvotedSong.Volume > 0 ? currentUpvotedSong.Volume : 1);
+            mappedData[i] = GetMaxHeight(fftData, (int)lastindex, (int)index) / (currentUpvotedSong?.Volume > 0 ? currentUpvotedSong.Volume : 1);
         }
 
         return mappedData;
