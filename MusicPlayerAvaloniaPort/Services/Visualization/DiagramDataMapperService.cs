@@ -12,9 +12,9 @@ namespace MusicPlayerAvaloniaPort.Services.Visualization;
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(DiagramDataMapperService))]
 public class DiagramDataMapperService(AudioLibWrapperService audioLibWrapperService, SongPlaybackService songPlaybackService, DbWrapperService dbWrapperService)
 {
-    private const double FFT_WINDOW_PERCENT_CHOPPED_BEGINNING = 0.08;
-    private const double FFT_WINDOW_PERCENT_CHOPPED_END = 0.4;
-    private const float FFT_WINDOW_VALUE_DIVISOR = 3500;
+    private const double FFT_WINDOW_PERCENT_CHOPPED_BEGINNING = 0.002;
+    private const double FFT_WINDOW_PERCENT_CHOPPED_END = 0.55;
+    private const float FFT_WINDOW_VALUE_DIVISOR = 6500;
     private const double FFT_SAMPLES_HAMMING_WINDOW_DOWNWARD_EXPONENT = 2;
 
     private float[]? smoothedData;
@@ -38,7 +38,7 @@ public class DiagramDataMapperService(AudioLibWrapperService audioLibWrapperServ
         var currentSong = songPlaybackService.CurrentlyPlaying;
         var currentUpvotedSong = dbWrapperService.GetContext().GetUpvotedSongById(currentSong?.UpvotedSongId);
 
-        var fftData = audioLibWrapperService.GetCurrentFftSpectrumData(hammingWindowFactorArray);
+        var fftData = audioLibWrapperService.GetCurrentFftSpectrumData();
         for (int i = 0; i < fftData.Length; i++)
         {
             fftData[i] = fftData[i] * (float)Math.Sqrt(i + 1) / FFT_WINDOW_VALUE_DIVISOR * 1;
