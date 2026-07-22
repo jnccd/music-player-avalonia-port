@@ -46,7 +46,7 @@ public class CustomRenderControl_Diagram : Control
         this.Loaded += (s, e) =>
         {
             PrimaryColorBrush = view!.FindResource("PrimaryColor") as SolidColorBrush;
-            PrimaryColorPen = new Pen(PrimaryColorBrush, 3);
+            PrimaryColorPen = new Pen(PrimaryColorBrush, 1);
 
             var controlWidth = this.Bounds.Width;
             var controlHeight = this.Bounds.Height;
@@ -84,9 +84,10 @@ public class CustomRenderControl_Diagram : Control
             samplesDiagramFigure = new PathFigure() { IsClosed = false };
             samplesDiagramGeometry = new PathGeometry();
             samplesDiagramGeometry.Figures?.Add(samplesDiagramFigure);
+            samplesDiagramFigure.StartPoint = new Point(0, controlHeight / 2);
             for (int i = 0; i < fftDiagramFftDataSpace; i++)
             {
-                samplesDiagramFigure.Segments!.Add(new LineSegment() { Point = new Point(i, controlHeight - fftDiagramThickness) });
+                samplesDiagramFigure.Segments!.Add(new LineSegment() { Point = new Point(i, controlHeight / 2) });
             }
 
             currentGeometry = smoothFftDiagramGeometry;
@@ -159,9 +160,10 @@ public class CustomRenderControl_Diagram : Control
                 for (int i = 0; i < fftDiagramFftDataSpace; i++)
                 {
                     var sampleFrom = (int)(i / (float)fftDiagramFftDataSpace * (sampleData.Length - 1));
-                    var sampledListVal = sampleData[sampleFrom] * (controlHeight / 2);
+                    var sampledListVal = sampleData[sampleFrom] * (controlHeight / 4);
                     (samplesDiagramFigure?.Segments?[i] as LineSegment)!.Point = new Point(i, controlHeight / 2 + sampledListVal);
                 }
+                samplesDiagramFigure!.StartPoint = (samplesDiagramFigure?.Segments?.First() as LineSegment)!.Point;
 
                 currentGeometry = samplesDiagramGeometry;
                 currentBrush = null;
