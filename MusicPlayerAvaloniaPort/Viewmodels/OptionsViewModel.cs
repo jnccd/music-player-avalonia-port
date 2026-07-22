@@ -1,9 +1,12 @@
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
+using MusicPlayerAvaloniaPort.Services.Song;
 
 namespace MusicPlayerAvaloniaPort.ViewModels;
 
 public partial class OptionsViewModel : ViewModelBase
 {
+    SongPlaybackService songPlaybackService = ServiceContainer.GetService<SongPlaybackService>();
+
     // --- Properties ---
 
     // Sync
@@ -32,6 +35,11 @@ public partial class OptionsViewModel : ViewModelBase
     {
         get { return Config.Data.SongLibraryPath; }
         set { SetProperty(ref _musicLibraryFolderPath, value); }
+    }
+
+    public string? MusicLibrarySongCount
+    {
+        get { return songPlaybackService.AvailableSongsCount.ToString(); }
     }
 
     // --- Commands ---

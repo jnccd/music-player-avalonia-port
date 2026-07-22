@@ -75,6 +75,7 @@ public class SongPlaybackService
 
         return newAvailableSong;
     }
+    public int AvailableSongsCount => AvailableSongs.Count;
 
     public void PlaySpecificSong(AvailableSong availableSong, float? secondToStartAt = null)
     {

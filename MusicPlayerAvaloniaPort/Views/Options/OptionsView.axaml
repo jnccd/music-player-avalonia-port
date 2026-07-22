@@ -49,13 +49,13 @@
                     <TextBlock Name="downloadStateLabel" Width="350" Text="" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
-                    <Label Content="C# Out: " />
-                    <TextBox Name="downloadCsharpLogLabel" IsReadOnly="True"
+                    <Label Foreground="#80FFFFFF" Content="C# Out: " />
+                    <TextBox Name="downloadCsharpLogLabel" Foreground="#80FFFFFF" IsReadOnly="True"
                              MaxHeight="100" Width="350" Text="" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
-                    <Label Content="Shell Out: " />
-                    <TextBox Name="downloadShellLogLabel" IsReadOnly="True"
+                    <Label Foreground="#80FFFFFF" Content="Shell Out: " />
+                    <TextBox Name="downloadShellLogLabel" Foreground="#80FFFFFF" IsReadOnly="True"
                              MaxHeight="100" Width="350" Text="" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </StackPanel>
             </StackPanel>
@@ -66,6 +66,10 @@
                     <Label Content="Music Library Path" Target="musicLibraryTextBox" />
                     <TextBox x:Name="musicLibraryTextBox" MinWidth="200" Text="{Binding MusicLibraryFolderPath}" />
                     <Button Margin="4,0,0,0" Click="SetMusicLibraryButton_Click">Save</Button>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Label Content="Music Library Song Count: " />
+                    <TextBlock Name="musicLibraryCountLabel" Width="350" Text="{Binding MusicLibrarySongCount}" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </StackPanel>
             </StackPanel>
         </GroupBox>
