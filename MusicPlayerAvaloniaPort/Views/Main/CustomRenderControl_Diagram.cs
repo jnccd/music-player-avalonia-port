@@ -202,6 +202,8 @@ public class CustomRenderControl_Diagram : Control
             {
                 var controlWidth = (int)this.Bounds.Width;
                 var controlHeight = (int)this.Bounds.Height;
+
+                // smoothFftDiagramFigure
                 smoothFftDiagramFigure?.StartPoint = new Point(controlWidth, controlHeight - fftDiagramThickness);
                 smoothFftDiagramFigure?.Segments![0] = new LineSegment() { Point = new Point(controlWidth, controlHeight) };
                 smoothFftDiagramFigure?.Segments![1] = new LineSegment() { Point = new Point(0, controlHeight) };
@@ -215,6 +217,31 @@ public class CustomRenderControl_Diagram : Control
                 while (smoothFftDiagramFigure.Segments?.Count - 1 > fftDiagramFftDataSpace + fftDiagramNumBorderSegments)
                 {
                     smoothFftDiagramFigure.Segments!.RemoveAt(smoothFftDiagramFigure.Segments.Count - 1);
+                }
+
+                // rawFftDiagramFigure
+                rawFftDiagramFigure?.StartPoint = new Point(controlWidth, controlHeight - fftDiagramThickness);
+                rawFftDiagramFigure?.Segments![0] = new LineSegment() { Point = new Point(controlWidth, controlHeight) };
+                rawFftDiagramFigure?.Segments![1] = new LineSegment() { Point = new Point(0, controlHeight) };
+                rawFftDiagramFigure?.Segments![2] = new LineSegment() { Point = new Point(0, controlHeight - fftDiagramThickness) };
+
+                while (rawFftDiagramFigure!.Segments?.Count < fftDiagramFftDataSpace + fftDiagramNumBorderSegments)
+                {
+                    rawFftDiagramFigure.Segments!.Add(new LineSegment() { Point = new Point(rawFftDiagramFigure.Segments.Count, controlHeight - fftDiagramThickness) });
+                }
+                while (rawFftDiagramFigure.Segments?.Count - 1 > fftDiagramFftDataSpace + fftDiagramNumBorderSegments)
+                {
+                    rawFftDiagramFigure.Segments!.RemoveAt(rawFftDiagramFigure.Segments.Count - 1);
+                }
+
+                // samplesDiagramFigure
+                while (samplesDiagramFigure!.Segments?.Count < fftDiagramFftDataSpace)
+                {
+                    samplesDiagramFigure.Segments!.Add(new LineSegment() { Point = new Point(samplesDiagramFigure.Segments.Count, controlHeight / 2) });
+                }
+                while (samplesDiagramFigure.Segments?.Count - 1 > fftDiagramFftDataSpace)
+                {
+                    samplesDiagramFigure.Segments!.RemoveAt(samplesDiagramFigure.Segments.Count - 1);
                 }
             }
         });
