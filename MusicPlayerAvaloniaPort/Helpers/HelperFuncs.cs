@@ -161,4 +161,80 @@ public static class HelperFuncs
             TimeoutEvent();
         }
     }
+
+    // String Distances
+    public static int LevenshteinDistance(string s, string t)
+    {
+        if (string.IsNullOrEmpty(s))
+        {
+            if (string.IsNullOrEmpty(t))
+                return 0;
+            return t.Length;
+        }
+
+        if (string.IsNullOrEmpty(t))
+        {
+            return s.Length;
+        }
+
+        int n = s.Length;
+        int m = t.Length;
+        int[,] d = new int[n + 1, m + 1];
+
+        // initialize the top and right of the table to 0, 1, 2, ...
+        for (int i = 0; i <= n; d[i, 0] = i++) ;
+        for (int j = 1; j <= m; d[0, j] = j++) ;
+
+        for (int i = 1; i <= n; i++)
+        {
+            for (int j = 1; j <= m; j++)
+            {
+                int cost = (t[j - 1] == s[i - 1]) ? 0 : 1;
+                int min1 = d[i - 1, j] + 1;
+                int min2 = d[i, j - 1] + 1;
+                int min3 = d[i - 1, j - 1] + cost;
+                d[i, j] = Math.Min(Math.Min(min1, min2), min3);
+            }
+        }
+        return d[n, m];
+    }
+    public static float LevenshteinDistanceWrapper(string Input, string SongName)
+    {
+        if (Input == null || Input == "" || SongName == "" || SongName == null)
+            return float.MaxValue;
+
+        Input = Input.ToLower();
+        SongName = SongName.ToLower();
+
+        if (SongName.Length <= Input.Length)
+            return LevenshteinDistance(Input, SongName);
+
+        List<float> Distances = new List<float>();
+
+        string[] InSplit = Input.Split(' ');
+
+        if (InSplit.Length == 1)
+        {
+            string[] split = SongName.Split(' ');
+            for (int i = 0; i < split.Length; i++)
+                if (split[i] != "-")
+                    Distances.Add(LevenshteinDistance(split[i], Input));
+        }
+        else
+        {
+            float count = 0;
+            for (int i = 0; i < InSplit.Length; i++)
+            {
+                List<float> Distances2 = new List<float>();
+                string[] split = SongName.Split(' ');
+                for (int j = 0; j < split.Length; j++)
+                    if (split[j] != "-")
+                        Distances2.Add(LevenshteinDistance(split[j], InSplit[i]));
+                count += Distances2.Min();
+            }
+            Distances.Add(count);
+        }
+
+        return Distances.Min();
+    }
 }
