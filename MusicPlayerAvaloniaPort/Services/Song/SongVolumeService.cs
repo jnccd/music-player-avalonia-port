@@ -52,6 +52,8 @@ public class SongVolumeService
     private bool UpdateAudioLibVolume()
     {
         var currentSong = songPlaybackService.CurrentlyPlaying;
+        if (currentSong == null)
+            return false;
         var currentUpvotedSong = dbWrapperService.GetContext().GetUpvotedSongById(currentSong?.UpvotedSongId);
 
         if (currentUpvotedSong.Volume > 0)
