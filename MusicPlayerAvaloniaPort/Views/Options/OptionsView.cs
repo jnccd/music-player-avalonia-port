@@ -9,6 +9,8 @@ using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using MusicPlayerAvaloniaPort.Services.Song;
+using Avalonia.Threading;
+using Avalonia.Platform.Storage;
 
 namespace MusicPlayerAvaloniaPort.Views.Options;
 
@@ -73,6 +75,28 @@ public partial class OptionsView : UserControl
 
         songDownloadRequestProcessorService.Init();
         Config.Save();
+    }
+
+    private void SelectMusicLibraryButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var musicLibraryTextBox = this.GetNestedControl<TextBox>("musicLibraryTextBox");
+
+        string? folder = null;
+        Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var storageProvider = TopLevel.GetTopLevel(window)!.StorageProvider;
+            var folders = await storageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+            {
+                Title = "Select your Music Library Root Folder",
+                AllowMultiple = false,
+                SuggestedStartLocation = await storageProvider.TryGetFolderFromPathAsync(musicLibraryTextBox?.Text ?? "")
+            });
+            var storageFolder = folders![0];
+            folder = storageFolder!.Path.AbsolutePath;
+        }).Wait();
+
+        if (folder != null)
+            musicLibraryTextBox.Text = folder;
     }
 
     private void SetMusicLibraryButton_Click(object? sender, RoutedEventArgs e)

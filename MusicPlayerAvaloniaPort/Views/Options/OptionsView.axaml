@@ -16,15 +16,15 @@
         <GroupBox Header="Sync Server Connection" Margin="3">
             <StackPanel Spacing="8">
                 <StackPanel Orientation="Horizontal">
-                    <Label Content="Host" Target="hostTextBox" />
+                    <Label Content="Host:" Target="hostTextBox" />
                     <TextBox x:Name="hostTextBox" MinWidth="200" Text="{Binding SyncServerHost}" />
                 </StackPanel>
-                <StackPanel Orientation="Horizontal">
-                    <Label Content="Username" Target="usernameTextBox" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Label Content="Username:" Target="usernameTextBox" />
                     <TextBox x:Name="usernameTextBox" MinWidth="150" Text="{Binding SyncServerUsername}" />
                 </StackPanel>
-                <StackPanel Orientation="Horizontal">
-                    <Label Content="Password" Target="passwordTextBox" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Label Content="Password:" Target="passwordTextBox" />
                     <TextBox x:Name="passwordTextBox" MinWidth="150" PasswordChar="*" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="8">
@@ -48,7 +48,7 @@
                     <Label Content="State: " />
                     <TextBlock Name="downloadStateLabel" Width="350" Text="" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </StackPanel>
-                <StackPanel Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Label Foreground="#80FFFFFF" Content="C# Out: " />
                     <TextBox Name="downloadCsharpLogLabel" Foreground="#80FFFFFF" IsReadOnly="True"
                              MaxHeight="100" Width="350" Text="" TextWrapping="Wrap" VerticalAlignment="Center" />
@@ -65,11 +65,12 @@
                 <StackPanel Orientation="Horizontal">
                     <Label Content="Music Library Path" Target="musicLibraryTextBox" />
                     <TextBox x:Name="musicLibraryTextBox" MinWidth="200" Text="{Binding MusicLibraryFolderPath}" />
+                    <Button Margin="4,0,0,0" Click="SelectMusicLibraryButton_Click">Select</Button>
                     <Button Margin="4,0,0,0" Click="SetMusicLibraryButton_Click">Save</Button>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <Label Content="Music Library Song Count: " />
-                    <TextBlock Name="musicLibraryCountLabel" Width="350" Text="{Binding MusicLibrarySongCount}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                    <TextBlock Name="musicLibraryCountLabel" Text="{Binding MusicLibrarySongCount}" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </StackPanel>
             </StackPanel>
         </GroupBox>
