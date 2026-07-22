@@ -100,6 +100,76 @@ public class MessageBox(Action<Exception>? OnError, Window? OriginWindow, Contro
         return tcs.Task.Result; // Blocking
     }
 
+    public async Task<string> GetTextAsync(string title, bool AlwaysAsFlyout = false, bool TakeFocus = true)
+    {
+        try
+        {
+            if (Globals.IsDesktop && !AlwaysAsFlyout)
+            {
+                return await ShowTextInputWindowAsync(title, TakeFocus);
+            }
+            else
+            {
+                throw new NotImplementedException();
+            }
+        }
+        catch (Exception ex)
+        {
+            OnError?.Invoke(ex);
+            return "";
+        }
+    }
+
+    private async Task<string> ShowTextInputWindowAsync(string title, bool TakeFocus = true)
+    {
+        var tcs = new TaskCompletionSource<string>();
+
+        var button = new Button
+        {
+            Content = "OK",
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            Margin = new Thickness(0, 10, 0, 0),
+            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center, // Centers text horizontally
+            VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center,     // Centers text vertically
+            Width = 120,
+            Height = 30
+        };
+        var textBox = new TextBox
+        {
+            Text = "",
+        };
+        var grid = new Grid
+        {
+            Margin = new Thickness(10),
+            RowDefinitions =
+            {
+                new RowDefinition { Height = GridLength.Star },
+                new RowDefinition { Height = new GridLength(40) },
+            }
+        };
+        grid.Children.Add(textBox);
+        grid.Children.Add(button);
+        Grid.SetRow(grid.Children[0], 0);
+        Grid.SetRow(grid.Children[1], 1);
+
+        currentWindow?.Close();
+        currentWindow = new Window
+        {
+            Title = title,
+            Content = grid,
+            Width = 400,
+            Height = 115,
+            Padding = new Thickness(10),
+        };
+        button.Click += (s, e) => { currentWindow.Close(); tcs.SetResult(textBox.Text); };
+
+        currentWindow.ShowActivated = TakeFocus;
+        await currentWindow.ShowDialog(OriginWindow!);
+        textBox.Focus();
+
+        return await tcs.Task;
+    }
+
     private void ShowPopupWindow(string title, string message, bool TakeFocus = true)
     {
         var button = new Button
