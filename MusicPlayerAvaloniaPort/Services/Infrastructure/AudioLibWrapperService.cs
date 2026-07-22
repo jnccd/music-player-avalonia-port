@@ -251,7 +251,8 @@ public class AudioLibWrapperService
         }
         else
         {
-            Span<float> workingSpan = arrayPool.Rent(FFT_BUFFER_32BIT_FLOAT_SIZE);
+            float[] workingArray = arrayPool.Rent(FFT_BUFFER_32BIT_FLOAT_SIZE);
+            Span<float> workingSpan = workingArray;
             sampleBufferSpan.CopyTo(workingSpan);
 
             for (int i = 0; i < FFT_BUFFER_32BIT_FLOAT_SIZE; i++)
@@ -260,6 +261,7 @@ public class AudioLibWrapperService
             }
 
             spectrumAnalyzer.Process(workingSpan, playerDataProvider?.FormatInfo?.ChannelCount ?? 2);
+            arrayPool.Return(workingArray);
         }
 
         var re = spectrumAnalyzer.SpectrumData.ToArray();
