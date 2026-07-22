@@ -30,7 +30,7 @@ public class AudioLibWrapperService
     readonly ArrayPool<float> arrayPool = ArrayPool<float>.Shared;
 
     // Sample Reader Thread
-    const int SAMPLE_BUFFER_SIZE = 1024;
+    const int SAMPLE_BUFFER_32BIT_FLOAT_SIZE = 1024;
     StreamDataProvider? sampleReaderDataProvider = null;
     float[]? globalSampleArray = null;
     int globalSampleArrayWriteHead = 0;
@@ -38,9 +38,9 @@ public class AudioLibWrapperService
     bool CancelReading = false;
 
     // FFT Vars
-    public const int FFT_BUFFER_SIZE = 16384 / 2;
+    public const int FFT_BUFFER_32BIT_FLOAT_SIZE = 16384 / 2;
     private static readonly AudioFormat AnalyzeFormat = AudioFormat.Studio;
-    SpectrumAnalyzer spectrumAnalyzer = new SpectrumAnalyzer(AnalyzeFormat, FFT_BUFFER_SIZE);
+    SpectrumAnalyzer spectrumAnalyzer = new SpectrumAnalyzer(AnalyzeFormat, FFT_BUFFER_32BIT_FLOAT_SIZE);
     float[] fftZeroResult;
 
     // Setters
@@ -88,7 +88,7 @@ public class AudioLibWrapperService
 
     public AudioLibWrapperService()
     {
-        fftZeroResult = arrayPool.Rent(FFT_BUFFER_SIZE);
+        fftZeroResult = arrayPool.Rent(FFT_BUFFER_32BIT_FLOAT_SIZE);
 
         if (Engine.PlaybackDevices.Length == 0)
         {
@@ -161,7 +161,7 @@ public class AudioLibWrapperService
         playerDataProvider = new StreamDataProvider(Engine, new FileStream(songPath, FileMode.Open, FileAccess.Read), new ReadOptions { ReadTags = false });
         sampleReaderDataProvider?.Dispose();
         sampleReaderDataProvider = new StreamDataProvider(Engine, new FileStream(songPath, FileMode.Open, FileAccess.Read), new ReadOptions { ReadTags = false });
-        spectrumAnalyzer = new SpectrumAnalyzer(GetCurrentAudioFormat(), FFT_BUFFER_SIZE);
+        spectrumAnalyzer = new SpectrumAnalyzer(GetCurrentAudioFormat(), FFT_BUFFER_32BIT_FLOAT_SIZE);
 
         if (soundPlayer != null)
         {
@@ -199,12 +199,12 @@ public class AudioLibWrapperService
             globalSampleArray = arrayPool.Rent(playerDataProvider.Length > 0 ? playerDataProvider.Length / 4 : 48000 * 60 * 5);
             globalSampleArrayWriteHead = 0;
 
-            var sampleBuffer = arrayPool.Rent(SAMPLE_BUFFER_SIZE);
+            var sampleBuffer = arrayPool.Rent(SAMPLE_BUFFER_32BIT_FLOAT_SIZE);
             var sampleBufferSpan = sampleBuffer.AsSpan();
             int bytesRead;
 
             while (!CancelReading &&
-                globalSampleArrayWriteHead + SAMPLE_BUFFER_SIZE < globalSampleArray.Length &&
+                globalSampleArrayWriteHead + SAMPLE_BUFFER_32BIT_FLOAT_SIZE < globalSampleArray.Length &&
                 // Read buffer from audio file
                 (bytesRead = sampleReaderDataProvider!.ReadBytes(sampleBufferSpan)) > 0)
             {
@@ -230,19 +230,19 @@ public class AudioLibWrapperService
 
     public ReadOnlySpan<float> GetCurrentSampleData()
     {
-        if (globalSampleArrayWriteHead <= (playerDataProvider!.Position / 4) + (FFT_BUFFER_SIZE / 2) + 1
-            || playerDataProvider!.Position / 4 <= FFT_BUFFER_SIZE / 2 + 1)
+        if (globalSampleArrayWriteHead <= (playerDataProvider!.Position / 4) + (FFT_BUFFER_32BIT_FLOAT_SIZE / 2) + 1
+            || playerDataProvider!.Position / 4 <= FFT_BUFFER_32BIT_FLOAT_SIZE / 2 + 1)
             return fftZeroResult;
 
-        Memory<float> memorySlice = globalSampleArray.AsMemory((playerDataProvider!.Position / 4) - (FFT_BUFFER_SIZE / 2), FFT_BUFFER_SIZE);
+        Memory<float> memorySlice = globalSampleArray.AsMemory((playerDataProvider!.Position / 4) - (FFT_BUFFER_32BIT_FLOAT_SIZE / 2), FFT_BUFFER_32BIT_FLOAT_SIZE);
         Span<float> sampleBufferSpan = memorySlice.Span;
 
         return sampleBufferSpan;
     }
     public float[] GetCurrentFftSpectrumData(float[]? factorArray = null)
     {
-        if (globalSampleArrayWriteHead <= (playerDataProvider!.Position / 4) + (FFT_BUFFER_SIZE / 2) + 1
-            || playerDataProvider!.Position / 4 <= FFT_BUFFER_SIZE / 2 + 1)
+        if (globalSampleArrayWriteHead <= (playerDataProvider!.Position / 4) + (FFT_BUFFER_32BIT_FLOAT_SIZE / 2) + 1
+            || playerDataProvider!.Position / 4 <= FFT_BUFFER_32BIT_FLOAT_SIZE / 2 + 1)
             return fftZeroResult;
 
         ReadOnlySpan<float> sampleBufferSpan = GetCurrentSampleData();
@@ -253,10 +253,10 @@ public class AudioLibWrapperService
         }
         else
         {
-            Span<float> workingSpan = arrayPool.Rent(FFT_BUFFER_SIZE);
+            Span<float> workingSpan = arrayPool.Rent(FFT_BUFFER_32BIT_FLOAT_SIZE);
             sampleBufferSpan.CopyTo(workingSpan);
 
-            for (int i = 0; i < FFT_BUFFER_SIZE; i++)
+            for (int i = 0; i < FFT_BUFFER_32BIT_FLOAT_SIZE; i++)
             {
                 workingSpan[i] *= factorArray[i];
             }

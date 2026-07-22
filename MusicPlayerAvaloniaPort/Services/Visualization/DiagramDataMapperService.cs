@@ -23,8 +23,8 @@ public class DiagramDataMapperService(AudioLibWrapperService audioLibWrapperServ
     private const float THETA = 3.0f;
     private GaussianCache gaussianCache = new GaussianCache(THETA);
     private float[] hammingWindowFactorArray = Enumerable
-        .Range(0, AudioLibWrapperService.FFT_BUFFER_SIZE)
-        .Select(i => (float)Math.Pow(HammingWindowCache.ComputeHammingWindow(i, AudioLibWrapperService.FFT_BUFFER_SIZE), FFT_SAMPLES_HAMMING_WINDOW_DOWNWARD_EXPONENT))
+        .Range(0, AudioLibWrapperService.FFT_BUFFER_32BIT_FLOAT_SIZE)
+        .Select(i => (float)Math.Pow(HammingWindowCache.ComputeHammingWindow(i, AudioLibWrapperService.FFT_BUFFER_32BIT_FLOAT_SIZE), FFT_SAMPLES_HAMMING_WINDOW_DOWNWARD_EXPONENT))
         .ToArray();
 
     public float[] GetScaledAndSlicedFftData(int targetArraySize)
