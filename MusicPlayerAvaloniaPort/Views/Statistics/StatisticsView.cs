@@ -1,12 +1,17 @@
+using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Threading;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml;
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Services.Song;
 using MusicPlayerAvaloniaPort.ViewModels;
+using Avalonia.Collections;
 
 namespace MusicPlayerAvaloniaPort.Views.Statistics;
 
@@ -28,6 +33,28 @@ public partial class StatisticsView : UserControl
     private void StatisticsView_Loaded(object? sender, RoutedEventArgs e)
     {
         Debug.WriteLine("StatisticsView loaded!");
+
+        this.AddHandler(
+            InputElement.KeyDownEvent,
+            StatisticsView_KeyDown,
+            RoutingStrategies.Bubble | RoutingStrategies.Tunnel,
+            handledEventsToo: true
+        );
+    }
+
+    private void StatisticsView_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.S)
+        {
+            Task.Run(() =>
+            {
+                Dispatcher.UIThread.Post(async () =>
+                {
+                    var searchString = await new MessageBox((e) => { }, window, this).GetTextAsync("Search");
+                    SearchSort(searchString);
+                });
+            });
+        }
     }
 
     private void Play_Click(object? sender, RoutedEventArgs e)
@@ -52,8 +79,17 @@ public partial class StatisticsView : UserControl
         if (searchString == null)
             return;
 
+        SearchSort(searchString);
+    }
+
+    private void searchTextBox_KeyDown(object? sender, Avalonia.Input.KeyEventArgs e)
+    {
+        SearchButton_Click(sender, new RoutedEventArgs());
+    }
+
+    void SearchSort(string searchString)
+    {
         var grid = this.GetLogicalDescendants().OfType<DataGrid>().FirstOrDefault(x => x.Name == "DataGrid");
-        grid?.CanUserSortColumns = string.IsNullOrWhiteSpace(searchString);
 
         viewModel?.StatisticsSongVMs.Clear();
         var songs = StatisticsViewModel.GetSongs();
@@ -62,10 +98,7 @@ public partial class StatisticsView : UserControl
 
         foreach (var song in searchSortedSongs)
             viewModel?.StatisticsSongVMs.Add(song);
-    }
 
-    private void searchTextBox_KeyDown(object? sender, Avalonia.Input.KeyEventArgs e)
-    {
-        SearchButton_Click(sender, new RoutedEventArgs());
+        grid?.CollectionView.Refresh();
     }
 }
