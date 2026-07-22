@@ -55,6 +55,15 @@ public partial class StatisticsView : UserControl
                 });
             });
         }
+
+        if (e.Key == Key.J)
+        {
+            var grid = this.GetLogicalDescendants().OfType<DataGrid>().FirstOrDefault(x => x.Name == "DataGrid");
+            var currentlyPlaying = songPlaybackService.CurrentlyPlaying;
+            var currentyPlayingVM = viewModel?.StatisticsSongVMs.FirstOrDefault(x => x.SongId == currentlyPlaying?.UpvotedSongId);
+            grid?.ScrollIntoView(currentyPlayingVM, null);
+            grid?.SelectedItem = currentyPlayingVM;
+        }
     }
 
     private void Play_Click(object? sender, RoutedEventArgs e)
@@ -90,6 +99,8 @@ public partial class StatisticsView : UserControl
     void SearchSort(string searchString)
     {
         var grid = this.GetLogicalDescendants().OfType<DataGrid>().FirstOrDefault(x => x.Name == "DataGrid");
+
+        grid?.CollectionView.Refresh();
 
         viewModel?.StatisticsSongVMs.Clear();
         var songs = StatisticsViewModel.GetSongs();
