@@ -49,8 +49,13 @@
                     <TextBlock Name="downloadStateLabel" Width="350" Text="" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
-                    <Label Content="State: " />
-                    <TextBox Name="downloadStateLogLabel" IsReadOnly="True"
+                    <Label Content="C# Out: " />
+                    <TextBox Name="downloadCsharpLogLabel" IsReadOnly="True"
+                             MaxHeight="100" Width="350" Text="" TextWrapping="Wrap" VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Label Content="Shell Out: " />
+                    <TextBox Name="downloadShellLogLabel" IsReadOnly="True"
                              MaxHeight="100" Width="350" Text="" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </StackPanel>
             </StackPanel>

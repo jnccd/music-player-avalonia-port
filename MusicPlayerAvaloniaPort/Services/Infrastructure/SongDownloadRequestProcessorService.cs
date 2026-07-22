@@ -32,11 +32,15 @@ public class SongDownloadRequestProcessorService(SongPlaybackService songPlaybac
     Task? SongDownloadRequestQueueProcessorLoopThread = null;
     bool SongDownloadRequestQueueProcessorLoopThreadAborted = false;
 
-    public List<string> StateLog { get; } = new();
     public string State { get => state; private set { OnStateChanged?.Invoke(value); state = value; } }
     private string state = "";
     public Action<string>? OnStateChanged = null;
-    public Action? OnStateLogAdded = null;
+
+    public List<string> CsharpLog { get; } = new();
+    public Action? CsharpLogAdded = null;
+
+    public List<string> ShellLog { get; } = new();
+    public Action? ShellAdded = null;
 
     public void Init()
     {
@@ -135,8 +139,7 @@ public class SongDownloadRequestProcessorService(SongPlaybackService songPlaybac
             }
             catch (Exception e)
             {
-                StateLog.Add(e.ToString());
-                OnStateLogAdded?.Invoke();
+                AddCsharpLog(e.ToString());
             }
         }
     }
@@ -160,11 +163,20 @@ public class SongDownloadRequestProcessorService(SongPlaybackService songPlaybac
                 output = $"-o \"%(uploader)s - %(title)s.%(ext)s\" -o \"chapter:%(section_title)s.%(ext)s\"";
 
             // Download Video File
-            Process P = new Process();
-            P.StartInfo = new ProcessStartInfo("yt-dlp", download + $" -x --audio-format mp3 -P \"{downloadTargetFolder}\" --split-chapters {output} --add-metadata --embed-thumbnail --no-playlist");
-            P.StartInfo.UseShellExecute = false;
+            Process P = new Process
+            {
+                StartInfo = new ProcessStartInfo("yt-dlp", download + $" -x --audio-format mp3 -P \"{downloadTargetFolder}\" --split-chapters {output} --add-metadata --embed-thumbnail --no-playlist")
+                {
+                    UseShellExecute = false,
+                    RedirectStandardInput = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                }
+            };
             P.Start();
             P.WaitForExit();
+
+            AddShellLog("\n\n" + P.StandardOutput.ReadToEnd() + "\n" + P.StandardError.ReadToEnd());
 
             // move files to lib
             var downloadedSongs = new List<AvailableSong>();
@@ -192,8 +204,7 @@ public class SongDownloadRequestProcessorService(SongPlaybackService songPlaybac
 
             if (downloadedSongs.FirstOrDefault() == null)
             {
-                StateLog.Add("Downloaded file gon :(");
-                OnStateLogAdded?.Invoke();
+                AddCsharpLog("Downloaded file gon :(");
                 return false;
             }
 
@@ -202,8 +213,7 @@ public class SongDownloadRequestProcessorService(SongPlaybackService songPlaybac
         }
         catch (Exception e)
         {
-            StateLog.Add(e.ToString());
-            OnStateLogAdded?.Invoke();
+            AddCsharpLog(e.ToString());
             return false;
         }
 
@@ -214,17 +224,28 @@ public class SongDownloadRequestProcessorService(SongPlaybackService songPlaybac
     {
         try
         {
-            Process P = new Process();
-            P.StartInfo = new ProcessStartInfo("yt-dlp", $"-f mp4 -o \"{Config.Data.DownloadFolderPath}\\%(title)s.%(ext)s\" {videoRequest.DownloadUrl}");
-            P.StartInfo.UseShellExecute = false;
+            Process P = new Process
+            {
+                StartInfo = new ProcessStartInfo("yt-dlp", $"-f mp4 -o \"{Config.Data.DownloadFolderPath}\\%(title)s.%(ext)s\" {videoRequest.DownloadUrl}")
+                {
+                    UseShellExecute = false,
+                    RedirectStandardInput = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                }
+            };
 
             P.Start();
             P.WaitForExit();
+
+            AddShellLog("\n\n" + P.StandardOutput.ReadToEnd() + "\n" + P.StandardError.ReadToEnd());
+
+            if (P.ExitCode != 0)
+                return false;
         }
         catch (Exception e)
         {
-            StateLog.Add(e.ToString());
-            OnStateLogAdded?.Invoke();
+            AddCsharpLog(e.ToString());
             return false;
         }
 
@@ -233,13 +254,27 @@ public class SongDownloadRequestProcessorService(SongPlaybackService songPlaybac
 
     // --- Helpers ---
 
-    public static string GetYoutubeVideoTitle(string search)
+    private string GetYoutubeVideoTitle(string search)
     {
         string id = "";
         $"yt-dlp \"ytsearch:{search}\" --get-title --skip-download --no-playlist".RunAsConsoleCommand(10, () => { }, (string o, string err) =>
         {
             id = o.Trim('\n');
+
+            AddShellLog("\n\nGetYoutubeVideoTitle():\n" + err);
         });
         return id;
+    }
+
+    private void AddCsharpLog(string s)
+    {
+        CsharpLog.Add(s);
+        CsharpLogAdded?.Invoke();
+    }
+
+    private void AddShellLog(string s)
+    {
+        ShellLog.Add(s);
+        ShellAdded?.Invoke();
     }
 }

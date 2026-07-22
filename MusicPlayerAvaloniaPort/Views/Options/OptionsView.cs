@@ -50,10 +50,15 @@ public partial class OptionsView : UserControl
         downloadStateLabel?.Text = songDownloadRequestProcessorService.State;
         songDownloadRequestProcessorService.OnStateChanged = state => Dispatcher.Invoke(() => downloadStateLabel?.Text = state);
 
-        var downloadStateLogLabel = this.GetNestedControl<TextBox>("downloadStateLogLabel");
-        downloadStateLogLabel?.Text = songDownloadRequestProcessorService.StateLog.Combine();
-        songDownloadRequestProcessorService.OnStateLogAdded = () => Dispatcher.Invoke(() =>
-            downloadStateLogLabel?.Text = songDownloadRequestProcessorService.StateLog.Combine());
+        var downloadCsharpLogLabel = this.GetNestedControl<TextBox>("downloadCsharpLogLabel");
+        downloadCsharpLogLabel?.Text = songDownloadRequestProcessorService.CsharpLog.Combine();
+        songDownloadRequestProcessorService.CsharpLogAdded = () => Dispatcher.Invoke(() =>
+            downloadCsharpLogLabel?.Text = songDownloadRequestProcessorService.CsharpLog.Combine());
+
+        var downloadShellLogLabel = this.GetNestedControl<TextBox>("downloadShellLogLabel");
+        downloadShellLogLabel?.Text = songDownloadRequestProcessorService.ShellLog.Combine();
+        songDownloadRequestProcessorService.ShellAdded = () => Dispatcher.Invoke(() =>
+            downloadShellLogLabel?.Text = songDownloadRequestProcessorService.ShellLog.Combine());
     }
 
     private void DownloadFolderSaveButton_Click(object? sender, RoutedEventArgs e)
@@ -73,8 +78,12 @@ public partial class OptionsView : UserControl
     private void SetMusicLibraryButton_Click(object? sender, RoutedEventArgs e)
     {
         var musicLibraryTextBox = this.GetNestedControl<TextBox>("musicLibraryTextBox");
+        Config.Data.SongLibraryPath = musicLibraryTextBox.Text;
+
         if (musicLibraryTextBox?.Text != null)
             songPlaybackService.UpdateAvailableSongPaths(musicLibraryTextBox.Text);
+
+        Config.Save();
     }
 
     private void LoginButton_Click(object? sender, RoutedEventArgs e)
