@@ -27,8 +27,7 @@
         </DataGrid.Columns>
         <DataGrid.ContextMenu>
             <ContextMenu>
-                <MenuItem Header="UwU" Click="UwU_Click" />
-                <MenuItem Header="OwO" />
+                <MenuItem Header="Play" Click="Play_Click" />
             </ContextMenu>
         </DataGrid.ContextMenu>
     </DataGrid>

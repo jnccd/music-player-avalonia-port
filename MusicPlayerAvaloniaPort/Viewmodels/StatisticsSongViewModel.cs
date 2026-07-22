@@ -9,6 +9,7 @@ public partial class StatisticsSongViewModel(UpvotedSong Song) : ViewModelBase
 {
     // --- Properties ---
 
+    // For show
     public string Name => Path.GetFileNameWithoutExtension(Song.Name);
     public float Score => Song.Score;
     public int Streak => Song.Streak;
@@ -18,6 +19,9 @@ public partial class StatisticsSongViewModel(UpvotedSong Song) : ViewModelBase
     public float? Volume => Song.Volume > 0 ? Song.Volume : null;
     public DateTime? DateAdded => Song.DateAdded?.LocalDateTime;
     public float PlayChance => 0;
+
+    // For internal
+    public Guid SongId = Song.SongId;
 
     // --- Commands ---
 

@@ -75,6 +75,23 @@ public class SongPlaybackService
 
         return newAvailableSong;
     }
+    public AvailableSong? FindAvailableSong(string fileNameWithoutExtension)
+    {
+        var foundSong = AvailableSongs
+            .FirstOrDefault(s =>
+                s.FilePath.Split('/', Path.DirectorySeparatorChar, '\\', '.')
+                .Contains(fileNameWithoutExtension));
+
+        return foundSong;
+    }
+    public AvailableSong? FindAvailableSong(Guid upvotedSongId)
+    {
+        var foundSong = AvailableSongs
+            .FirstOrDefault(s =>
+                s.UpvotedSongId == upvotedSongId);
+
+        return foundSong;
+    }
     public int AvailableSongsCount => AvailableSongs.Count;
 
     public void PlaySpecificSong(AvailableSong availableSong, float? secondToStartAt = null)
