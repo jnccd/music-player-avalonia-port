@@ -1,19 +1,19 @@
 <UserControl
-x:Class="MusicPlayerAvaloniaPort.Views.Statistics.StatisticsView"
-xmlns="https://github.com/avaloniaui"
-xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-xmlns:conv="clr-namespace:MusicPlayerAvaloniaPort.Converters;assembly=MusicPlayerAvaloniaPort"
-xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-xmlns:sys="clr-namespace:System;assembly=mscorlib"
-xmlns:vm="using:MusicPlayerAvaloniaPort.ViewModels"
-x:DataType="vm:StatisticsViewModel">
+    x:Class="MusicPlayerAvaloniaPort.Views.Statistics.StatisticsView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:conv="clr-namespace:MusicPlayerAvaloniaPort.Converters;assembly=MusicPlayerAvaloniaPort"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:sys="clr-namespace:System;assembly=mscorlib"
+    xmlns:vm="using:MusicPlayerAvaloniaPort.ViewModels"
+    x:DataType="vm:StatisticsViewModel">
     <UserControl.Resources>
         <conv:AddMultiplyConverter x:Key="AddMultiplyConverter" />
         <conv:EitherOrConverter x:Key="EitherOrConverter" />
     </UserControl.Resources>
 
-    <DataGrid ItemsSource="{Binding StatisticsSongVMs}">
+    <DataGrid Name="DataGrid" ItemsSource="{Binding StatisticsSongVMs}">
         <DataGrid.Columns>
             <DataGridTextColumn Header="Name" Width="*"  Binding="{Binding Name}"/>
             <DataGridTextColumn Header="Score" Width="100"  Binding="{Binding Score}" />
@@ -25,6 +25,12 @@ x:DataType="vm:StatisticsViewModel">
             <DataGridTextColumn Header="Date Added" Width="170" Binding="{Binding DateAdded}" />
             <DataGridTextColumn Header="Play Chance" Width="110" Binding="{Binding PlayChance}" />
         </DataGrid.Columns>
+        <DataGrid.ContextMenu>
+            <ContextMenu>
+                <MenuItem Header="UwU" Click="UwU_Click" />
+                <MenuItem Header="OwO" />
+            </ContextMenu>
+        </DataGrid.ContextMenu>
     </DataGrid>
 
 </UserControl>

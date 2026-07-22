@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml;
 
 namespace MusicPlayerAvaloniaPort.Views.Statistics;
@@ -23,5 +25,12 @@ public partial class StatisticsView : UserControl
         Debug.WriteLine("StatisticsView loaded!");
 
 
+    }
+
+    private void UwU_Click(object? sender, RoutedEventArgs e)
+    {
+        var grid = this.GetLogicalDescendants().OfType<DataGrid>().FirstOrDefault(x => x.Name == "DataGrid");
+
+        var uwu = grid.SelectedItems;
     }
 }
