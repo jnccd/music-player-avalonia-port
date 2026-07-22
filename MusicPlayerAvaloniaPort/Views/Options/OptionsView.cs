@@ -93,10 +93,10 @@ public partial class OptionsView : UserControl
             });
             var storageFolder = folders![0];
             folder = storageFolder!.Path.AbsolutePath;
-        }).Wait();
 
-        if (folder != null)
-            musicLibraryTextBox.Text = folder;
+            if (folder != null)
+                musicLibraryTextBox?.Text = folder;
+        });
     }
 
     private void SetMusicLibraryButton_Click(object? sender, RoutedEventArgs e)
