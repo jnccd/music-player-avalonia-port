@@ -33,7 +33,7 @@ public static class AvaloniaWindowManager
         {
             DataContext = new MainViewModel()
         },
-        Position = Config.Data.Pos ?? new PixelPoint(100, 100),
+        Position = Config.Data.WindowPositionX != null && Config.Data.WindowPositionY != null ? new PixelPoint(Config.Data.WindowPositionX.Value, Config.Data.WindowPositionY.Value) : new PixelPoint(100, 100),
         Width = Config.Data.Width ?? Globals.InitialWindowSize.X,
         Height = Config.Data.Height ?? Globals.InitialWindowSize.Y,
         ShowInTaskbar = true,

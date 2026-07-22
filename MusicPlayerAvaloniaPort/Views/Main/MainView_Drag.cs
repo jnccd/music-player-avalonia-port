@@ -41,7 +41,8 @@ public partial class MainView : UserControl
     {
         isMovingWindow = false;
 
-        Config.Data.Pos = window!.Position;
+        Config.Data.WindowPositionX = window!.Position.X;
+        Config.Data.WindowPositionY = window!.Position.Y;
         if (window != null && window.FrameSize != null)
         {
             Config.Data.Width = window.Width;

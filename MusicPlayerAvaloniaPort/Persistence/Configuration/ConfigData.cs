@@ -6,7 +6,8 @@ namespace MusicPlayerAvaloniaPort.Persistence.Configuration;
 public class ConfigData
 {
     // Local Gui Settings
-    public PixelPoint? Pos { get; set; }
+    public int? WindowPositionX { get; set; }
+    public int? WindowPositionY { get; set; }
     public double? Width { get; set; }
     public double? Height { get; set; }
     public Color PrimaryColor { get; set; }
