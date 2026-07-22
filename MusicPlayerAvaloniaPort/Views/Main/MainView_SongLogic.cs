@@ -31,17 +31,6 @@ public partial class MainView : UserControl
                 Console.WriteLine("For music folder, using env var");
                 folder = envVar;
             }
-            else if (FolderPickerFallbackEnabled)
-            {
-#pragma warning disable CS0162 // Unreachable code detected
-                Console.WriteLine("For music folder, showing MessageBox");
-                Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    var mb = new MessageBox(e => Console.WriteLine(e), window, null);
-                    folder = mb.GetText("Input the song library path, FolderPicker doesnt work on Linux");
-                }).Wait();
-#pragma warning restore CS0162 // Unreachable code detected
-            }
             else
             {
                 Console.WriteLine("For music folder, showing OpenFolderPicker");
@@ -51,7 +40,7 @@ public partial class MainView : UserControl
                     var folders = await storageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions // If this isnt awaited it straight up doesnt work at all on linux
                     {
                         Title = "Select your Music Root Folder",
-                        AllowMultiple = false
+                        AllowMultiple = false,
                     });
                     var storageFolder = folders![0];
                     folder = storageFolder!.Path.AbsolutePath;
