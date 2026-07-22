@@ -12,8 +12,8 @@ namespace MusicPlayerAvaloniaPort.Services.Visualization;
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(DiagramDataMapperService))]
 public class DiagramDataMapperService(AudioLibWrapperService audioLibWrapperService, SongPlaybackService songPlaybackService, DbWrapperService dbWrapperService)
 {
-    private const double FFT_WINDOW_PERCENT_CHOPPED_BEGINNING = 0.002;
-    private const double FFT_WINDOW_PERCENT_CHOPPED_END = 0.55;
+    private const double FFT_WINDOW_PERCENT_CHOPPED_BEGINNING = 0.005;
+    private const double FFT_WINDOW_PERCENT_CHOPPED_END = 0.6;
     private const float FFT_WINDOW_VALUE_DIVISOR = 6500;
     private const double FFT_SAMPLES_HAMMING_WINDOW_DOWNWARD_EXPONENT = 2;
 
