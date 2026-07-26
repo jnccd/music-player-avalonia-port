@@ -162,7 +162,7 @@
                             HorizontalAlignment="Left"
                             Fill="{StaticResource PrimaryColor}">
                             <Rectangle.RenderTransform>
-                                <TranslateTransform X="0" Y="{Binding Source={StaticResource VolumeBarHeight}, Converter={StaticResource AddMultiplyConverter}, ConverterParameter='0.75,-1'}" />
+                                <TranslateTransform X="0" Y="{Binding Source={StaticResource VolumeBarHeight}, Converter={StaticResource AddMultiplyConverter}, ConverterParameter='0,-1'}" />
                             </Rectangle.RenderTransform>
                         </Rectangle>
                     </StackPanel>

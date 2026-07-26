@@ -76,6 +76,7 @@ public partial class MainView : UserControl
         // Inits
         MainView_ScalingChanged(null, EventArgs.Empty);
         LoadVolume();
+        Fix_VolumeBarRealRectangle();
 
         // Visuals
         // On Windows disable the extra border resizing feature since the OS border is active (see AvaloniaWindowManager.cs)
@@ -86,6 +87,18 @@ public partial class MainView : UserControl
 
             var resizeWindowBorder = this.GetLogicalDescendants().OfType<Border>().FirstOrDefault(x => x.Name == "ResizeWindowBorder");
             resizeWindowBorder?.Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Arrow);
+        }
+    }
+
+    void Fix_VolumeBarRealRectangle()
+    {
+        var volumeBarRealRectangle = this.GetLogicalDescendants().OfType<Rectangle>().FirstOrDefault(x => x.Name == "VolumeBarRealRectangle");
+        var pixelScale = 1 / window!.RenderScaling;
+
+        if (window!.RenderScaling == 1.25)
+        {
+            volumeBarRealRectangle!.Height += 1;
+            (volumeBarRealRectangle!.RenderTransform as TranslateTransform)!.Y += 1 - pixelScale * 3;
         }
     }
 
@@ -112,6 +125,8 @@ public partial class MainView : UserControl
         // var effect = rootGrid.Effect as DropShadowEffect;
         // effect?.OffsetX = 5 * (window?.RenderScaling ?? 1);
         // effect?.OffsetY = 5 * (window?.RenderScaling ?? 1);
+
+        Fix_VolumeBarRealRectangle();
     }
 
     private void MainView_SizeChanged(object? sender, SizeChangedEventArgs e)
