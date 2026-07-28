@@ -29,7 +29,10 @@
         <conv:AddMultiplyConverter x:Key="AddMultiplyConverter" />
         <conv:EitherOrConverter x:Key="EitherOrConverter" />
     </UserControl.Resources>
-    <Border Name="CosmeticBorder" BorderBrush="#0AE3E3E3" BorderThickness="1">
+    <Border
+        Name="CosmeticBorder"
+        BorderBrush="#0AE3E3E3"
+        BorderThickness="1">
         <Border
             Name="ResizeWindowBorder"
             BorderBrush="#00000000"
@@ -41,11 +44,11 @@
             <Grid
                 Name="RootGrid"
                 Margin="20,0"
-                Cursor="Arrow"
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch"
                 ColumnDefinitions="*"
                 ColumnSpacing="8"
+                Cursor="Arrow"
                 RowDefinitions="40, *, 40"
                 RowSpacing="8">
                 <Grid.Effect>
@@ -88,7 +91,7 @@
                         FontFamily="{StaticResource BigNoodleTitling}"
                         FontSize="35">
                         PANAM - 大貫妙子 (Taeko Onuki) – Summer Connection (Official Audio)
-                        </TextBlock> -->
+                        </TextBlock>-->
                     </vsmain:CustomRenderControl_Title>
                     <Rectangle Grid.Column="1" Fill="Transparent" />
                     <Grid
@@ -135,26 +138,23 @@
                             Height="{StaticResource VolumeBarHeight}"
                             Margin="4,0"
                             HorizontalAlignment="Stretch"
-                            Fill="White">
-                        </Rectangle>
+                            Fill="White" />
                         <Rectangle
                             Name="VolumeBarUserRectangle"
                             Width="50"
                             Height="{StaticResource VolumeBarHeight}"
-                            MinWidth="0" 
+                            MinWidth="0"
                             Margin="3,0"
                             HorizontalAlignment="Left"
-                            Fill="{StaticResource PrimaryColorBrighter}">
-                        </Rectangle>
+                            Fill="{StaticResource PrimaryColorBrighter}" />
                         <Rectangle
                             Name="VolumeBarRealRectangle"
-                            Width="40" 
+                            Width="40"
                             Height="{StaticResource VolumeBarHeight}"
                             MinWidth="0"
                             Margin="3,0"
                             HorizontalAlignment="Left"
-                            Fill="{StaticResource PrimaryColor}">
-                        </Rectangle>
+                            Fill="{StaticResource PrimaryColor}" />
                     </Grid>
                 </Grid>
                 <vsmain:CustomRenderControl_Diagram
@@ -167,7 +167,7 @@
                     Name="MyPath"
                     HorizontalAlignment="Stretch"
                     VerticalAlignment="Stretch"
-                    Fill="{StaticResource PrimaryColor}" /> -->
+                    Fill="{StaticResource PrimaryColor}" />-->
                 </vsmain:CustomRenderControl_Diagram>
                 <Grid
                     Grid.Row="2"
@@ -225,7 +225,7 @@
                         <Rectangle.RenderTransform>
                         <TranslateTransform X="0" Y="4" />
                         </Rectangle.RenderTransform>
-                        </Rectangle> -->
+                        </Rectangle>-->
                     </vsmain:CustomRenderControl_PlayProgress>
                     <Button
                         Name="ButtonUpvote"
