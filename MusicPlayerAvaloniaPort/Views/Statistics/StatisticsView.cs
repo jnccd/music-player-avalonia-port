@@ -48,7 +48,7 @@ public partial class StatisticsView : UserControl
         {
             Task.Run(() =>
             {
-                Dispatcher.UIThread.Post(async () =>
+                Dispatcher.UIThread.InvokeAsync(async () =>
                 {
                     var searchString = await new MessageBox((e) => { }, window, this).GetTextAsync("Search");
                     SearchSort(searchString);
