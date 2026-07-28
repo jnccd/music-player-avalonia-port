@@ -33,6 +33,12 @@
             inherit system nixpkgs;
             dotnetVersion = "10.0";
             includeAndroidSdk = false;
+
+            additionalPackages = [ pkgs.pulseaudio ];
+            preExecBash = ''
+              export LD_LIBRARY_PATH="${pkgs.pulseaudio}/lib/:$LD_LIBRARY_PATH"
+              export PULSE_SERVER=unix:/run/user/$(id -u)/pulse/native
+            '';
           };
 
           default = dev;
