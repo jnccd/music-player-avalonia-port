@@ -122,14 +122,13 @@
                             Fill="White" />
                     </Grid>
                     <Rectangle Grid.Column="3" Fill="Transparent" />
-                    <StackPanel
-                        Name="VolumeBarStackPanel"
+                    <Grid
+                        Name="VolumeBarGrid"
                         Grid.Column="4"
                         Margin="0,0,-6,0"
                         VerticalAlignment="Center"
-                        PointerMoved="VolumeBarStackPanel_PointerMoved"
-                        PointerPressed="VolumeBarStackPanel_PointerPressed"
-                        Spacing="0">
+                        PointerMoved="VolumeBarGrid_PointerMoved"
+                        PointerPressed="VolumeBarGrid_PointerPressed">
                         <Rectangle
                             Name="VolumeBarBackRectangle"
                             Width="{StaticResource VolumeBarWidth}"
@@ -137,35 +136,26 @@
                             Margin="4,0"
                             HorizontalAlignment="Stretch"
                             Fill="White">
-                            <Rectangle.RenderTransform>
-                                <TranslateTransform X="0" Y="{StaticResource VolumeBarHeight}" />
-                            </Rectangle.RenderTransform>
                         </Rectangle>
                         <Rectangle
                             Name="VolumeBarUserRectangle"
                             Width="50"
                             Height="{StaticResource VolumeBarHeight}"
-                            MinWidth="0"
+                            MinWidth="0" 
                             Margin="3,0"
                             HorizontalAlignment="Left"
                             Fill="{StaticResource PrimaryColorBrighter}">
-                            <Rectangle.RenderTransform>
-                                <TranslateTransform X="0" Y="0" />
-                            </Rectangle.RenderTransform>
                         </Rectangle>
                         <Rectangle
                             Name="VolumeBarRealRectangle"
-                            Width="40"
+                            Width="40" 
                             Height="{StaticResource VolumeBarHeight}"
                             MinWidth="0"
                             Margin="3,0"
                             HorizontalAlignment="Left"
                             Fill="{StaticResource PrimaryColor}">
-                            <Rectangle.RenderTransform>
-                                <TranslateTransform X="0" Y="{Binding Source={StaticResource VolumeBarHeight}, Converter={StaticResource AddMultiplyConverter}, ConverterParameter='0,-1'}" />
-                            </Rectangle.RenderTransform>
                         </Rectangle>
-                    </StackPanel>
+                    </Grid>
                 </Grid>
                 <vsmain:CustomRenderControl_Diagram
                     Name="CustomRenderControl_Diagram"
