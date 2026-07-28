@@ -35,7 +35,7 @@ public class SongChoosingService(DbWrapperService DbWrapper)
             {
                 var upvotedSong = dbContext.GetUpvotedSongById(availableSong.UpvotedSongId);
 
-                float amount = GetSongChoosingAmount(upvotedSong, AvailableSongs);
+                float amount = GetTargetSongChoosingAmount(upvotedSong, AvailableSongs);
                 for (int k = 0; k < amount; k++)
                     SongChoosingList.Add(availableSong);
             }
@@ -63,7 +63,7 @@ public class SongChoosingService(DbWrapperService DbWrapper)
 
             // Getting target Count
             var upvotedSong = dbContext.GetUpvotedSongById(songToUpdateListFor.UpvotedSongId);
-            float amount = GetSongChoosingAmount(upvotedSong, AvailableSongs);
+            float amount = GetTargetSongChoosingAmount(upvotedSong, AvailableSongs);
 
             for (int j = 0; j < amount - count; j++)
                 SongChoosingList.Insert(index, songToUpdateListFor);
@@ -76,7 +76,29 @@ public class SongChoosingService(DbWrapperService DbWrapper)
         }
     }
 
-    float GetSongChoosingAmount(UpvotedSong curSong, List<AvailableSong> AvailableSongs)
+    public float GetSongChoosingChance(AvailableSong? songToCheckChanceFor)
+    {
+        if (songToCheckChanceFor == null)
+            return float.NaN;
+
+        lock (SongChoosingList)
+        {
+            using var dbContext = DbWrapper.GetContext();
+
+            // Getting Choosing List Count
+            int index = SongChoosingList.FindIndex(x => x == songToCheckChanceFor);
+            if (index == -1)
+                return 0;
+            int i = index;
+            while (i < SongChoosingList.Count && SongChoosingList[i] == songToCheckChanceFor)
+                i++;
+            int count = i - index;
+
+            return count / (float)SongChoosingList.Count;
+        }
+    }
+
+    float GetTargetSongChoosingAmount(UpvotedSong curSong, List<AvailableSong> AvailableSongs)
     {
         float amount = 1;
         float ChanceIncreasePerUpvote = 1000f / AvailableSongs.Count;
@@ -117,7 +139,7 @@ public class SongChoosingService(DbWrapperService DbWrapper)
         {
             float count = SongChoosingList.FindAll(x => x == availableSong).Count;
             var upvotedSong = dbContext.GetUpvotedSongById(availableSong.UpvotedSongId);
-            float target = GetSongChoosingAmount(upvotedSong, AvailableSongs) + 1;
+            float target = GetTargetSongChoosingAmount(upvotedSong, AvailableSongs) + 1;
 
             if (Math.Abs(count - target) > 2)
                 availableSong.GetHashCode(); // Breakpoint here

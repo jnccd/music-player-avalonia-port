@@ -12,21 +12,51 @@
         <conv:AddMultiplyConverter x:Key="AddMultiplyConverter" />
         <conv:EitherOrConverter x:Key="EitherOrConverter" />
     </UserControl.Resources>
-    <DataGrid Name="DataGrid" ItemsSource="{Binding StatisticsSongVMs}" VerticalScrollBarVisibility="Visible">
+    <DataGrid
+        Name="DataGrid"
+        ItemsSource="{Binding StatisticsSongVMs}"
+        VerticalScrollBarVisibility="Visible">
         <DataGrid.Columns>
-            <DataGridTextColumn Header="Name" Width="*"  Binding="{Binding Name}"/>
-            <DataGridTextColumn Header="Score" Width="100"  Binding="{Binding Score}" />
-            <DataGridTextColumn Header="Streak" Width="80" Binding="{Binding Streak}" />
-            <DataGridTextColumn Header="Upvotes" Width="90" Binding="{Binding Upvotes}" />
-            <DataGridTextColumn Header="Downvotes" Width="115" Binding="{Binding Downvotes}" />
-            <DataGridTextColumn Header="Vote Ratio" Width="100" Binding="{Binding VoteRatio}" />
-            <DataGridTextColumn Header="Volume" Width="85" Binding="{Binding Volume}" />
-            <DataGridTextColumn Header="Date Added" Width="170" Binding="{Binding DateAdded}" />
-            <DataGridTextColumn Header="Play Chance" Width="110" Binding="{Binding PlayChance}" />
+            <DataGridTextColumn
+                Width="*"
+                Binding="{Binding Name}"
+                Header="Name" />
+            <DataGridTextColumn
+                Width="100"
+                Binding="{Binding Score}"
+                Header="Score" />
+            <DataGridTextColumn
+                Width="80"
+                Binding="{Binding Streak}"
+                Header="Streak" />
+            <DataGridTextColumn
+                Width="90"
+                Binding="{Binding Upvotes}"
+                Header="Upvotes" />
+            <DataGridTextColumn
+                Width="115"
+                Binding="{Binding Downvotes}"
+                Header="Downvotes" />
+            <DataGridTextColumn
+                Width="100"
+                Binding="{Binding VoteRatio}"
+                Header="Vote Ratio" />
+            <DataGridTextColumn
+                Width="85"
+                Binding="{Binding Volume}"
+                Header="Volume" />
+            <DataGridTextColumn
+                Width="170"
+                Binding="{Binding DateAdded}"
+                Header="Date Added" />
+            <DataGridTextColumn
+                Width="120"
+                Binding="{Binding PlayChance}"
+                Header="Play Chance" />
         </DataGrid.Columns>
         <DataGrid.ContextMenu>
             <ContextMenu>
-                <MenuItem Header="Play" Click="Play_Click" />
+                <MenuItem Click="Play_Click" Header="Play" />
             </ContextMenu>
         </DataGrid.ContextMenu>
     </DataGrid>
