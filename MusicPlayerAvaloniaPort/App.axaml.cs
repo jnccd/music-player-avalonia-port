@@ -19,7 +19,7 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = AvaloniaWindowManager.GetWindow(typeof(MainView));
+            desktop.MainWindow = AvaloniaWindowManager.GetWindow(typeof(MainView)).Window;
         }
         else if (ApplicationLifetime == null || ApplicationLifetime.GetType().Name == "DesignTimeApplicationLifetime")
         {

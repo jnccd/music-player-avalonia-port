@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
+using Avalonia.Threading;
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.ViewModels;
@@ -18,6 +21,13 @@ public static class AvaloniaWindowManager
 {
     static bool isInit = false;
     static App? app = null;
+
+    public class ViewWindowRuntime(Window? window = null, Application? app = null, Dispatcher? dispatcher = null)
+    {
+        public Window? Window { get; set; } = window;
+        public Application? app { get; set; } = app;
+        public Dispatcher? dispatcher { get; set; } = dispatcher;
+    }
 
     public static void Initialize(App initApp)
     {
@@ -65,44 +75,65 @@ public static class AvaloniaWindowManager
         Icon = new WindowIcon("./Assets/icon.ico")
     };
 
-    static readonly Dictionary<Type, (Window? window, Func<Window> createWindow)> Windows = new()
+    static readonly Dictionary<Type, (ViewWindowRuntime ViewWindowRuntime, Func<Window> CreateWindow)> Windows = new()
     {
         {
             typeof(MainView),
-            (null, MainWindowCreator)
+            (new(), MainWindowCreator)
         },
         {
             typeof(OptionsView),
-            (null, OptionsWindowCreator)
+            (new(), OptionsWindowCreator)
         },
         {
             typeof(StatisticsView),
-            (null, StatisticsWindowCreator)
+            (new(), StatisticsWindowCreator)
         }
     };
 
-    public static Window GetWindow(Type viewType)
+    public static ViewWindowRuntime GetWindow(Type viewType)
     {
-        var windowTuple = Windows[viewType];
+        var viewWindowTuple = Windows[viewType];
 
+        // Get lifetime to detect whether the window is already disposed and recreate if necessary
         var lifetime = (app ?? throw new ArgumentNullException(nameof(app))).ApplicationLifetime;
         var desktopLifetime = lifetime as IClassicDesktopStyleApplicationLifetime;
 
-        if (windowTuple.window == null || desktopLifetime?.Windows.Any(window => window.Content?.GetType() == viewType) == false)
+        if (viewWindowTuple.ViewWindowRuntime.Window == null || desktopLifetime?.Windows.Any(window => window.Content?.GetType() == viewType) == false)
         {
-            windowTuple.window = windowTuple.createWindow();
+            var thread = new Thread(() =>
+            {
+                var app = new Application();
+
+                viewWindowTuple.ViewWindowRuntime.app = app;
+                viewWindowTuple.ViewWindowRuntime.dispatcher = Dispatcher.CurrentDispatcher;
+                viewWindowTuple.ViewWindowRuntime.Window = viewWindowTuple.CreateWindow();
+
+                app.Run(viewWindowTuple.ViewWindowRuntime.Window);
+            });
+
+#if WINDOWS
+            thread.SetApartmentState(ApartmentState.STA);
+#endif
+            thread.Start();
+            thread.Join();
         }
 
-        Windows[viewType] = windowTuple;
-        return windowTuple.window;
+        Windows[viewType] = viewWindowTuple;
+        return viewWindowTuple.ViewWindowRuntime;
     }
 
     public static void ShowWindow(Type viewType)
     {
-        var window = GetWindow(viewType);
-        window.Show();
-        window.Focus(Avalonia.Input.NavigationMethod.Pointer);
-        window.BringIntoView();
-        window.Activate();
+        Task.Run(() =>
+        {
+            var viewWindowRuntime = GetWindow(viewType);
+            var window = viewWindowRuntime.Window!;
+
+            window.Show();
+            window.Focus(Avalonia.Input.NavigationMethod.Pointer);
+            window.BringIntoView();
+            window.Activate();
+        });
     }
 }
