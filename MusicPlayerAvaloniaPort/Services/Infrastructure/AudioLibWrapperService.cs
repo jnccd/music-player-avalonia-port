@@ -246,7 +246,7 @@ public class AudioLibWrapperService
         });
     }
 
-    public ReadOnlySpan<float> GetCurrentlyPlayingSampleData()
+    public async Task<ReadOnlyMemory<float>> GetCurrentlyPlayingSampleData()
     {
         if (playerDataProvider == null)
             return sampleZeroResult;
@@ -267,11 +267,12 @@ public class AudioLibWrapperService
                 return sampleZeroResult;
 
             Memory<float> memorySlice = globalSampleArray.AsMemory(currentlyPlayingFrameStart, FFT_BUFFER_32BIT_FLOAT_SIZE);
-            Span<float> sampleBufferSpan = memorySlice.Span;
-            return sampleBufferSpan;
+            return memorySlice;
         }
         else if (currentSampleReadingStrategy == SampleReadingStrategy.DirectRead)
         {
+            float[] returnArray = new float[FFT_BUFFER_32BIT_FLOAT_SIZE];
+
             if (currentlyPlayingFrameBufferZoneEnd < sampleReaderDataProvider!.Position || currentlyPlayingFrameBufferZoneStart > sampleReaderDataProvider.Position)
             {
                 sampleReaderDataProvider.Seek(currentlyPlayingFrameBufferZoneStart);
@@ -290,8 +291,6 @@ public class AudioLibWrapperService
                 if (position >= currentlyPlayingFrameBufferZoneStart)
                     directReadStrategyReadBuffers.Add((position, sampleBufferSpan.ToArray()));
             }
-
-            float[] returnArray = new float[FFT_BUFFER_32BIT_FLOAT_SIZE];
 
             foreach (var (framePosition, frameData) in directReadStrategyReadBuffers)
             {
@@ -318,21 +317,19 @@ public class AudioLibWrapperService
             throw new InvalidOperationException($"Unknown {nameof(SampleReadingStrategy)}: {currentSampleReadingStrategy}");
         }
     }
-    public float[] GetCurrentFftSpectrumData(float[]? factorArray = null)
+    public async Task<float[]> GetCurrentFftSpectrumData(float[]? factorArray = null)
     {
-        ReadOnlySpan<float> sampleBufferSpan = GetCurrentlyPlayingSampleData();
-        if (sampleBufferSpan == sampleZeroResult)
-            return fftZeroResult;
+        ReadOnlyMemory<float> sampleBufferMemory = await GetCurrentlyPlayingSampleData();
 
         if (factorArray == null)
         {
-            spectrumAnalyzer.Process(sampleBufferSpan, AnalyzeFormat.Channels);
+            spectrumAnalyzer.Process(sampleBufferMemory.Span, playerDataProvider?.FormatInfo?.ChannelCount ?? 2);
         }
         else
         {
             float[] workingArray = arrayPool.Rent(FFT_BUFFER_32BIT_FLOAT_SIZE);
             Span<float> workingSpan = workingArray;
-            sampleBufferSpan.CopyTo(workingSpan);
+            sampleBufferMemory.Span.CopyTo(workingSpan);
 
             for (int i = 0; i < FFT_BUFFER_32BIT_FLOAT_SIZE; i++)
             {

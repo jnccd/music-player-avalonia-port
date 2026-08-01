@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace MusicPlayerAvaloniaPort.Services.Visualization;
 
@@ -27,7 +28,7 @@ public class DiagramDataMapperService(AudioLibWrapperService audioLibWrapperServ
         .Select(i => (float)Math.Pow(HammingWindowCache.ComputeHammingWindow(i, AudioLibWrapperService.FFT_BUFFER_32BIT_FLOAT_SIZE), FFT_SAMPLES_HAMMING_WINDOW_DOWNWARD_EXPONENT))
         .ToArray();
 
-    public float[] GetScaledAndSlicedFftData(int targetArraySize)
+    public async Task<float[]> GetScaledAndSlicedFftData(int targetArraySize)
     {
         // This should be rare
         if (mappedData == null || mappedData.Length != targetArraySize)
@@ -43,7 +44,7 @@ public class DiagramDataMapperService(AudioLibWrapperService audioLibWrapperServ
         }
         catch { }
 
-        var fftData = audioLibWrapperService.GetCurrentFftSpectrumData();
+        var fftData = await audioLibWrapperService.GetCurrentFftSpectrumData();
         for (int i = 0; i < fftData.Length; i++)
         {
             fftData[i] = fftData[i] * (float)Math.Sqrt(i + 1) / FFT_WINDOW_VALUE_DIVISOR * 1;
@@ -82,7 +83,7 @@ public class DiagramDataMapperService(AudioLibWrapperService audioLibWrapperServ
         return max;
     }
 
-    public float[] SmoothenFftData(float[] rawData, int targetArraySize, float maxHeight)
+    public async Task<float[]> SmoothenFftData(float[] rawData, int targetArraySize, float maxHeight)
     {
         // This should be rare
         if (smoothedData == null || smoothedData.Length != targetArraySize)

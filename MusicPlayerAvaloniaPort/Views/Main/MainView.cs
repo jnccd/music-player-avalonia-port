@@ -32,9 +32,9 @@ public partial class MainView : UserControl
 
     const double MAX_VOLUME = 1;
 
-    Control customRenderControl_Diagram => this.GetLogicalDescendants().OfType<CustomRenderControl_Diagram>().FirstOrDefault()!;
-    Control customRenderControl_PlayProgress => this.GetLogicalDescendants().OfType<CustomRenderControl_PlayProgress>().FirstOrDefault()!;
-    Control customRenderControl_Title => this.GetLogicalDescendants().OfType<CustomRenderControl_Title>().FirstOrDefault()!;
+    CustomRenderControl_Diagram customRenderControl_Diagram => this.GetLogicalDescendants().OfType<CustomRenderControl_Diagram>().FirstOrDefault()!;
+    CustomRenderControl_PlayProgress customRenderControl_PlayProgress => this.GetLogicalDescendants().OfType<CustomRenderControl_PlayProgress>().FirstOrDefault()!;
+    CustomRenderControl_Title customRenderControl_Title => this.GetLogicalDescendants().OfType<CustomRenderControl_Title>().FirstOrDefault()!;
 
     public MainView()
     {
@@ -79,6 +79,7 @@ public partial class MainView : UserControl
         audioLibWrapper.PlaybackStateChanged += (e, s) =>
         {
             RefreshCustomControls();
+            customRenderControl_Diagram.UpdateDiagramScaling();
         };
 
         // Inits
@@ -127,8 +128,7 @@ public partial class MainView : UserControl
 
     private void MainView_SizeChanged(object? sender, SizeChangedEventArgs e)
     {
-        var diagramControl = this.GetLogicalDescendants().OfType<CustomRenderControl_Diagram>().FirstOrDefault(x => x.Name == "CustomRenderControl_Diagram");
-        diagramControl!.UpdateDiagramScaling();
+        customRenderControl_Diagram.UpdateDiagramScaling();
 
         RefreshCustomControls();
     }
@@ -143,8 +143,7 @@ public partial class MainView : UserControl
     {
         if (e.Key == Key.V)
         {
-            var diagramControl = this.GetLogicalDescendants().OfType<CustomRenderControl_Diagram>().FirstOrDefault(x => x.Name == "CustomRenderControl_Diagram");
-            diagramControl!.CycleVisMode();
+            customRenderControl_Diagram.CycleVisMode();
         }
     }
 }

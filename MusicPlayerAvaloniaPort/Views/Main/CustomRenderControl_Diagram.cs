@@ -31,7 +31,7 @@ public class CustomRenderControl_Diagram : Control
     PathGeometry? rawFftDiagramGeometry;
     PathFigure? rawFftDiagramFigure;
     const int fftDiagramThickness = 10;
-    int fftDiagramNumBorderSegments = 3;
+    const int fftDiagramNumBorderSegments = 3;
     int fftDiagramFftDataSpace = 0;
     PathGeometry? samplesDiagramGeometry;
     PathFigure? samplesDiagramFigure;
@@ -103,7 +103,7 @@ public class CustomRenderControl_Diagram : Control
             if (audioLibWrapper.PlayState == SoundFlow.Enums.PlaybackState.Playing)
                 Dispatcher.UIThread.Post(InvalidateVisual, DispatcherPriority.Background);
 
-            await Update();
+            Update().Wait();
             Draw(context);
         });
     }
@@ -115,8 +115,8 @@ public class CustomRenderControl_Diagram : Control
 
         if (currentVisMode == VisMode.SmoothFFT)
         {
-            float[] fftData = diagramDataMapper.GetScaledAndSlicedFftData(fftDiagramFftDataSpace);
-            float[] smoothedData = diagramDataMapper.SmoothenFftData(fftData, fftDiagramFftDataSpace, 1);
+            float[] fftData = await diagramDataMapper.GetScaledAndSlicedFftData(fftDiagramFftDataSpace);
+            float[] smoothedData = await diagramDataMapper.SmoothenFftData(fftData, fftDiagramFftDataSpace, 1);
 
             lock (lockject)
             {
@@ -134,7 +134,7 @@ public class CustomRenderControl_Diagram : Control
         }
         else if (currentVisMode == VisMode.RawFFT)
         {
-            float[] fftData = diagramDataMapper.GetScaledAndSlicedFftData(fftDiagramFftDataSpace);
+            float[] fftData = await diagramDataMapper.GetScaledAndSlicedFftData(fftDiagramFftDataSpace);
 
             lock (lockject)
             {
@@ -152,14 +152,15 @@ public class CustomRenderControl_Diagram : Control
         }
         else if (currentVisMode == VisMode.Samples)
         {
-            ReadOnlySpan<float> sampleData = audioLibWrapper.GetCurrentlyPlayingSampleData();
+            ReadOnlyMemory<float> sampleData = await audioLibWrapper.GetCurrentlyPlayingSampleData();
+            var sampleDataSpan = sampleData.Span;
 
             lock (lockject)
             {
                 for (int i = 0; i < fftDiagramFftDataSpace; i++)
                 {
                     var sampleFrom = (int)(i / (float)fftDiagramFftDataSpace * (sampleData.Length - 1));
-                    var sampledListVal = sampleData[sampleFrom] * (controlHeight / 4);
+                    var sampledListVal = sampleDataSpan[sampleFrom] * (controlHeight / 4);
                     (samplesDiagramFigure?.Segments?[i] as LineSegment)!.Point = new Point(i, controlHeight / 2 + sampledListVal);
                 }
                 samplesDiagramFigure!.StartPoint = (samplesDiagramFigure?.Segments?.First() as LineSegment)!.Point;
@@ -195,9 +196,9 @@ public class CustomRenderControl_Diagram : Control
         if (smoothFftDiagramFigure == null || smoothFftDiagramGeometry == null)
             return;
 
-        Dispatcher.UIThread.Post(() =>
+        lock (lockject)
         {
-            lock (lockject)
+            Dispatcher.UIThread.Post(() =>
             {
                 var controlWidth = (int)this.Bounds.Width;
                 var controlHeight = (int)this.Bounds.Height;
@@ -242,7 +243,7 @@ public class CustomRenderControl_Diagram : Control
                 {
                     samplesDiagramFigure.Segments!.RemoveAt(samplesDiagramFigure.Segments.Count - 1);
                 }
-            }
-        });
+            });
+        }
     }
 }
