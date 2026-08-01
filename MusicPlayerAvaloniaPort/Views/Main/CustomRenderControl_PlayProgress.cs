@@ -37,7 +37,8 @@ public class CustomRenderControl_PlayProgress : Control
         Program.WrapInTry(() =>
         {
             base.Render(context);
-            Dispatcher.UIThread.InvokeAsync(InvalidateVisual, DispatcherPriority.Background);
+            if (audioLibWrapper.PlayState == SoundFlow.Enums.PlaybackState.Playing)
+                Dispatcher.UIThread.InvokeAsync(InvalidateVisual, DispatcherPriority.Background);
 
             Update();
             Draw(context);

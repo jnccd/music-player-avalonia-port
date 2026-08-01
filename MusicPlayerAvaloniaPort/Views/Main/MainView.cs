@@ -32,6 +32,10 @@ public partial class MainView : UserControl
 
     const double MAX_VOLUME = 1;
 
+    Control customRenderControl_Diagram => this.GetLogicalDescendants().OfType<CustomRenderControl_Diagram>().FirstOrDefault()!;
+    Control customRenderControl_PlayProgress => this.GetLogicalDescendants().OfType<CustomRenderControl_PlayProgress>().FirstOrDefault()!;
+    Control customRenderControl_Title => this.GetLogicalDescendants().OfType<CustomRenderControl_Title>().FirstOrDefault()!;
+
     public MainView()
     {
         // Avalonia Init
@@ -72,6 +76,10 @@ public partial class MainView : UserControl
             RoutingStrategies.Bubble | RoutingStrategies.Tunnel,
             handledEventsToo: true
         );
+        audioLibWrapper.PlaybackStateChanged += (e, s) =>
+        {
+            RefreshCustomControls();
+        };
 
         // Inits
         MainView_ScalingChanged(null, EventArgs.Empty);
@@ -87,6 +95,13 @@ public partial class MainView : UserControl
             var resizeWindowBorder = this.GetLogicalDescendants().OfType<Border>().FirstOrDefault(x => x.Name == "ResizeWindowBorder");
             resizeWindowBorder?.Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Arrow);
         }
+    }
+
+    void RefreshCustomControls()
+    {
+        Dispatcher.UIThread.InvokeAsync(customRenderControl_Diagram.InvalidateVisual, DispatcherPriority.Background);
+        Dispatcher.UIThread.InvokeAsync(customRenderControl_PlayProgress.InvalidateVisual, DispatcherPriority.Background);
+        Dispatcher.UIThread.InvokeAsync(customRenderControl_Title.InvalidateVisual, DispatcherPriority.Background);
     }
 
     void ButtonOptions_Click(object? sender, RoutedEventArgs e)
@@ -114,6 +129,8 @@ public partial class MainView : UserControl
     {
         var diagramControl = this.GetLogicalDescendants().OfType<CustomRenderControl_Diagram>().FirstOrDefault(x => x.Name == "CustomRenderControl_Diagram");
         diagramControl!.UpdateDiagramScaling();
+
+        RefreshCustomControls();
     }
 
     void ButtonClose_Click(object? sender, RoutedEventArgs e)
