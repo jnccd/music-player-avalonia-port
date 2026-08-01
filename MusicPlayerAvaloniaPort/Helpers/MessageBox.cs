@@ -91,7 +91,23 @@ public class MessageBox(Action<Exception>? OnError, Window? OriginWindow, Contro
             Height = 115,
             Padding = new Thickness(10),
         };
-        button.Click += (s, e) => { currentWindow.Close(); tcs.SetResult(textBox.Text); };
+
+        void returnAction()
+        {
+            currentWindow?.Close();
+            tcs.SetResult(textBox.Text);
+        }
+        textBox.KeyDown += (s, e) =>
+        {
+            if (e.Key == Avalonia.Input.Key.Enter)
+            {
+                returnAction();
+            }
+        };
+        button.Click += (s, e) =>
+        {
+            returnAction();
+        };
 
         currentWindow.ShowActivated = TakeFocus;
         await currentWindow.ShowDialog(OriginWindow!);
