@@ -18,6 +18,12 @@ using System.Threading.Tasks;
 
 namespace MusicPlayerAvaloniaPort.Services.Infrastructure;
 
+public enum SampleReadingStrategy
+{
+    GlobalArray,
+    DirectRead
+}
+
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(AudioLibWrapperService))]
 public class AudioLibWrapperService
 {
@@ -29,7 +35,7 @@ public class AudioLibWrapperService
     private AudioFormat playBackFormat;
     readonly ArrayPool<float> arrayPool = ArrayPool<float>.Shared;
 
-    // Sample Reader Thread
+    // Sample Reading
     const int SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE = 4096;
     StreamDataProvider? sampleReaderDataProvider = null;
     private float[]? globalSampleArray = null;
@@ -37,6 +43,8 @@ public class AudioLibWrapperService
     Task? SampleReaderThread = null;
     bool CancelReading = false;
     const int SAMPLE_OUTPUT_BUFFER_32BIT_FLOAT_SIZE = 16384;
+    SampleReadingStrategy currentSampleReadingStrategy = SampleReadingStrategy.GlobalArray;
+    List<(int framePosition, float[] frameData)> directReadStrategyReadBuffers = [];
 
     // FFT Vars
     public const int FFT_BUFFER_32BIT_FLOAT_SIZE = 16384;
@@ -157,7 +165,7 @@ public class AudioLibWrapperService
         });
     }
 
-    public void PlaySong(string songPath)
+    public void PlaySong(string songPath, SampleReadingStrategy sampleReadingStrategy = SampleReadingStrategy.GlobalArray)
     {
         playerDataProvider?.Dispose();
         playerDataProvider = new StreamDataProvider(Engine, new FileStream(songPath, FileMode.Open, FileAccess.Read), new ReadOptions { ReadTags = false });
@@ -171,6 +179,8 @@ public class AudioLibWrapperService
             soundPlayer.Dispose();
             playbackDevice.Dispose();
         }
+
+        currentSampleReadingStrategy = sampleReadingStrategy;
 
         playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, GetCurrentAudioFormat(), new MiniAudioDeviceConfig
         {
@@ -192,36 +202,43 @@ public class AudioLibWrapperService
         }
         CancelReading = false;
         Debug.WriteLine($"{DateTime.Now:HH:mm:ss.ffff} Starting Reading!");
-        SampleReaderThread = Task.Run(() =>
+        if (currentSampleReadingStrategy == SampleReadingStrategy.DirectRead)
         {
-            globalSampleArrayWriteHead = 0;
-            int requiredGlobalSampleArrayLength = playerDataProvider.Length > 0 ? playerDataProvider.Length : 48000 * 60 * 5;
-            globalSampleArray = new float[requiredGlobalSampleArrayLength];
-            GC.Collect();
-
-            var sampleBuffer = arrayPool.Rent(SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE);
-            var sampleBufferSpan = sampleBuffer.AsSpan();
-            int framesRead;
-
-            while (!CancelReading &&
-                globalSampleArrayWriteHead + SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE < globalSampleArray.Length &&
-                // Read buffer from audio file
-                (framesRead = sampleReaderDataProvider!.ReadBytes(sampleBufferSpan)) > 0)
+            globalSampleArray = null;
+            directReadStrategyReadBuffers.Clear();
+        }
+        if (currentSampleReadingStrategy == SampleReadingStrategy.GlobalArray)
+            SampleReaderThread = Task.Run(() =>
             {
-                // Write into global array
-                Buffer.BlockCopy(sampleBuffer, 0, globalSampleArray, globalSampleArrayWriteHead * sizeof(float), framesRead * sizeof(float));
-                //Array.Copy(sampleBuffer, 0, globalSampleArray, globalSampleArrayWriteHead, framesRead);
-                globalSampleArrayWriteHead += framesRead;
-            }
+                globalSampleArrayWriteHead = 0;
+                int requiredGlobalSampleArrayLength = playerDataProvider.Length > 0 ? playerDataProvider.Length : 48000 * 60 * 5;
+                globalSampleArray = new float[requiredGlobalSampleArrayLength];
+                directReadStrategyReadBuffers.Clear();
+                GC.Collect();
 
-            Debug.WriteLine($"{DateTime.Now:HH:mm:ss.ffff} Done Reading!");
-            Task.Run(() =>
-            {
-                FinishedReading?.Invoke(this, EventArgs.Empty);
+                var sampleBuffer = arrayPool.Rent(SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE);
+                var sampleBufferSpan = sampleBuffer.AsSpan();
+                int framesRead;
+
+                while (!CancelReading &&
+                    globalSampleArrayWriteHead + SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE < globalSampleArray.Length &&
+                    // Read buffer from audio file
+                    (framesRead = sampleReaderDataProvider!.ReadBytes(sampleBufferSpan)) > 0)
+                {
+                    // Write into global array
+                    Buffer.BlockCopy(sampleBuffer, 0, globalSampleArray, globalSampleArrayWriteHead * sizeof(float), framesRead * sizeof(float));
+                    //Array.Copy(sampleBuffer, 0, globalSampleArray, globalSampleArrayWriteHead, framesRead);
+                    globalSampleArrayWriteHead += framesRead;
+                }
+
+                Debug.WriteLine($"{DateTime.Now:HH:mm:ss.ffff} Done Reading!");
+                Task.Run(() =>
+                {
+                    FinishedReading?.Invoke(this, EventArgs.Empty);
+                });
+
+                arrayPool.Return(sampleBuffer);
             });
-
-            arrayPool.Return(sampleBuffer);
-        });
 
         Task.Run(() =>
         {
@@ -231,18 +248,71 @@ public class AudioLibWrapperService
 
     public ReadOnlySpan<float> GetCurrentlyPlayingSampleData()
     {
-        if (globalSampleArrayWriteHead <= playerDataProvider!.Position + (FFT_BUFFER_32BIT_FLOAT_SIZE / 2) + 1
-            || playerDataProvider!.Position <= FFT_BUFFER_32BIT_FLOAT_SIZE / 2 + 1)
+        int currentlyPlayingFrameStart = playerDataProvider!.Position - (FFT_BUFFER_32BIT_FLOAT_SIZE / 2);
+        int currentlyPlayingFrameEnd = playerDataProvider!.Position + (FFT_BUFFER_32BIT_FLOAT_SIZE / 2);
+
+        // Too early
+        if (currentlyPlayingFrameStart <= 0)
             return sampleZeroResult;
 
-        Memory<float> memorySlice = globalSampleArray.AsMemory(playerDataProvider!.Position - (FFT_BUFFER_32BIT_FLOAT_SIZE / 2), FFT_BUFFER_32BIT_FLOAT_SIZE);
-        Span<float> sampleBufferSpan = memorySlice.Span;
+        if (currentSampleReadingStrategy == SampleReadingStrategy.GlobalArray)
+        {
+            // Not enough data read yet
+            if (globalSampleArrayWriteHead <= currentlyPlayingFrameEnd + 1)
+                return sampleZeroResult;
 
-        return sampleBufferSpan;
+            Memory<float> memorySlice = globalSampleArray.AsMemory(currentlyPlayingFrameStart, FFT_BUFFER_32BIT_FLOAT_SIZE);
+            Span<float> sampleBufferSpan = memorySlice.Span;
+            return sampleBufferSpan;
+        }
+        else if (currentSampleReadingStrategy == SampleReadingStrategy.DirectRead)
+        {
+            directReadStrategyReadBuffers.RemoveAll(x => x.framePosition < currentlyPlayingFrameStart - SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE);
+
+            var sampleBuffer = arrayPool.Rent(SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE);
+            var sampleBufferSpan = sampleBuffer.AsSpan();
+            int framesRead;
+
+            while (sampleReaderDataProvider!.Position < currentlyPlayingFrameEnd &&
+                    (framesRead = sampleReaderDataProvider!.ReadBytes(sampleBufferSpan)) > 0)
+            {
+                var position = sampleReaderDataProvider.Position - framesRead;
+                if (position >= currentlyPlayingFrameStart - SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE)
+                    directReadStrategyReadBuffers.Add((position, sampleBufferSpan.ToArray()));
+            }
+
+            float[] returnArray = new float[FFT_BUFFER_32BIT_FLOAT_SIZE];
+
+            foreach (var (framePosition, frameData) in directReadStrategyReadBuffers)
+            {
+                int bufferStart = framePosition;
+                int bufferEnd = framePosition + frameData.Length;
+
+                if (bufferEnd < currentlyPlayingFrameStart || bufferStart > currentlyPlayingFrameEnd)
+                    continue;
+
+                int copyStart = Math.Max(bufferStart, currentlyPlayingFrameStart);
+                int copyEnd = Math.Min(bufferEnd, currentlyPlayingFrameEnd);
+
+                int sourceIndex = copyStart - bufferStart;
+                int destinationIndex = copyStart - currentlyPlayingFrameStart;
+                int lengthToCopy = copyEnd - copyStart;
+
+                Array.Copy(frameData, sourceIndex, returnArray, destinationIndex, lengthToCopy);
+            }
+
+            return returnArray;
+        }
+        else
+        {
+            throw new InvalidOperationException($"Unknown {nameof(SampleReadingStrategy)}: {currentSampleReadingStrategy}");
+        }
     }
     public float[] GetCurrentFftSpectrumData(float[]? factorArray = null)
     {
         ReadOnlySpan<float> sampleBufferSpan = GetCurrentlyPlayingSampleData();
+        if (sampleBufferSpan == sampleZeroResult)
+            return fftZeroResult;
 
         if (factorArray == null)
         {

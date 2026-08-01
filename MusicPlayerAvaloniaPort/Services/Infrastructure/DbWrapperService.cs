@@ -82,6 +82,8 @@ public class DbWrapperService
 
             throw new Exception("Master Skywalker there are too many of them what are we going to do!?");
         }
+        public bool DoesSongHaveVolume(Guid? SongId) =>
+            SongDbContext.UpvotedSongs.FirstOrDefault(x => x.SongId == SongId)?.Volume > 0;
         public UpvotedSong[] DumpUpvotedSongs() =>
             [.. SongDbContext.UpvotedSongs];
 

@@ -103,7 +103,7 @@ public class SongPlaybackService
             RuntimePlayHistoryIndex = RuntimePlayHistory.Count - 1;
 
             // Invoke Events
-            AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"));
+            AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"), GetSampleReadingStrategyForSong(CurrentlyPlaying));
             NewSongStarted?.Invoke(this, CurrentlyPlaying);
 
             if (secondToStartAt != null)
@@ -138,7 +138,7 @@ public class SongPlaybackService
             }
 
             // Invoke Events
-            AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"));
+            AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"), GetSampleReadingStrategyForSong(CurrentlyPlaying));
             NewSongStarted?.Invoke(this, CurrentlyPlaying);
         }
     }
@@ -165,7 +165,7 @@ public class SongPlaybackService
             }
 
             // Invoke Events
-            AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"));
+            AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"), GetSampleReadingStrategyForSong(CurrentlyPlaying));
             NewSongStarted?.Invoke(this, CurrentlyPlaying);
         }
     }
@@ -174,5 +174,10 @@ public class SongPlaybackService
     {
         var newSong = SongChoosingService.ChooseSongWithWeightedChances(CurrentlyPlaying);
         return newSong;
+    }
+    SampleReadingStrategy GetSampleReadingStrategyForSong(AvailableSong song)
+    {
+        using var dbContext = DbWrapper.GetContext();
+        return dbContext.DoesSongHaveVolume(song.UpvotedSongId) ? SampleReadingStrategy.DirectRead : SampleReadingStrategy.GlobalArray;
     }
 }
