@@ -12,12 +12,16 @@ using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Services.Song;
 using MusicPlayerAvaloniaPort.ViewModels;
 using Avalonia.Collections;
+using System.Collections.Generic;
+using MusicPlayerAvaloniaPort.Services.Infrastructure;
 
 namespace MusicPlayerAvaloniaPort.Views.Statistics;
 
 public partial class StatisticsView : UserControl
 {
     readonly SongPlaybackService songPlaybackService = ServiceContainer.GetService<SongPlaybackService>();
+    readonly DbWrapperService dbWrapper = ServiceContainer.GetService<DbWrapperService>();
+
     Window? window => TopLevel.GetTopLevel(this) as Window;
     StatisticsViewModel? viewModel => DataContext as StatisticsViewModel;
     DateTime lastStatisticsView_KeyDownTime = DateTime.MinValue;
@@ -31,7 +35,7 @@ public partial class StatisticsView : UserControl
         this.Loaded += StatisticsView_Loaded;
     }
 
-    private void StatisticsView_Loaded(object? sender, RoutedEventArgs e)
+    private async void StatisticsView_Loaded(object? sender, RoutedEventArgs e)
     {
         Debug.WriteLine("StatisticsView loaded!");
 
@@ -41,6 +45,18 @@ public partial class StatisticsView : UserControl
             RoutingStrategies.Bubble | RoutingStrategies.Tunnel,
             handledEventsToo: true
         );
+
+        await SetupUi();
+    }
+
+    private async Task SetupUi()
+    {
+        viewModel!.StatisticsSongVMs.Clear();
+        var songs = await GetSongs();
+        foreach (var song in songs.OrderByDescending(song => song.Score))
+        {
+            viewModel.StatisticsSongVMs.Add(song);
+        }
     }
 
     private void StatisticsView_KeyDown(object? sender, KeyEventArgs e)
@@ -55,7 +71,7 @@ public partial class StatisticsView : UserControl
                 Dispatcher.UIThread.InvokeAsync(async () =>
                 {
                     var searchString = await new MessageBox((e) => { }, window, this).GetTextAsync("Search");
-                    SearchSort(searchString);
+                    await SearchSort(searchString);
                 });
             });
         }
@@ -87,14 +103,14 @@ public partial class StatisticsView : UserControl
         songPlaybackService.PlaySpecificSong(availableSong);
     }
 
-    private void SearchButton_Click(object? sender, RoutedEventArgs e)
+    private async void SearchButton_Click(object? sender, RoutedEventArgs e)
     {
         var searchTextBox = this.GetLogicalDescendants().OfType<TextBox>().FirstOrDefault(x => x.Name == "searchTextBox");
         var searchString = searchTextBox?.Text;
         if (searchString == null)
             return;
 
-        SearchSort(searchString);
+        await SearchSort(searchString);
     }
 
     private void searchTextBox_KeyDown(object? sender, Avalonia.Input.KeyEventArgs e)
@@ -102,14 +118,22 @@ public partial class StatisticsView : UserControl
         SearchButton_Click(sender, new RoutedEventArgs());
     }
 
-    void SearchSort(string searchString)
+    public async Task<IEnumerable<StatisticsSongViewModel>> GetSongs() =>
+        await Task.Run(() =>
+            dbWrapper?
+                .GetContext()
+                .DumpUpvotedSongs()
+                .Select(song => new StatisticsSongViewModel(song))
+            ?? []);
+
+    async Task SearchSort(string searchString)
     {
         var grid = this.GetLogicalDescendants().OfType<DataGrid>().FirstOrDefault(x => x.Name == "DataGrid");
 
         grid?.CollectionView.Refresh();
 
         viewModel?.StatisticsSongVMs.Clear();
-        var songs = StatisticsViewModel.GetSongs();
+        var songs = await GetSongs();
 
         var searchSortedSongs = songs.OrderBy(s => HelperFuncs.LevenshteinDistanceWrapper(searchString, s.Name));
 

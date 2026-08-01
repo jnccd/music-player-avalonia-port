@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using MusicPlayerSyncInterface.DTOs;
@@ -14,16 +15,7 @@ public partial class StatisticsViewModel : ViewModelBase
     // --- Properties ---
 
     public ObservableCollection<StatisticsSongViewModel> StatisticsSongVMs { get; }
-        = new([.. GetSongs().OrderByDescending(song => song.Score)]);
-
-    // --- Helpers ---
-
-    public static IEnumerable<StatisticsSongViewModel> GetSongs() =>
-        dbWrapper?
-            .GetContext()
-            .DumpUpvotedSongs()
-            .Select(song => new StatisticsSongViewModel(song))
-        ?? [];
+        = new([]);
 
     // --- Commands ---
 
