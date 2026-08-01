@@ -248,8 +248,13 @@ public class AudioLibWrapperService
 
     public ReadOnlySpan<float> GetCurrentlyPlayingSampleData()
     {
+        if (playerDataProvider == null)
+            return sampleZeroResult;
+
         int currentlyPlayingFrameStart = playerDataProvider!.Position - (FFT_BUFFER_32BIT_FLOAT_SIZE / 2);
         int currentlyPlayingFrameEnd = playerDataProvider!.Position + (FFT_BUFFER_32BIT_FLOAT_SIZE / 2);
+        int currentlyPlayingFrameBufferZoneStart = currentlyPlayingFrameStart - SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE;
+        int currentlyPlayingFrameBufferZoneEnd = currentlyPlayingFrameEnd + SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE;
 
         // Too early
         if (currentlyPlayingFrameStart <= 0)
@@ -267,7 +272,12 @@ public class AudioLibWrapperService
         }
         else if (currentSampleReadingStrategy == SampleReadingStrategy.DirectRead)
         {
-            directReadStrategyReadBuffers.RemoveAll(x => x.framePosition < currentlyPlayingFrameStart - SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE);
+            if (currentlyPlayingFrameBufferZoneEnd < sampleReaderDataProvider!.Position || currentlyPlayingFrameBufferZoneStart > sampleReaderDataProvider.Position)
+            {
+                sampleReaderDataProvider.Seek(currentlyPlayingFrameBufferZoneStart);
+            }
+
+            directReadStrategyReadBuffers.RemoveAll(x => x.framePosition < currentlyPlayingFrameBufferZoneStart);
 
             var sampleBuffer = arrayPool.Rent(SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE);
             var sampleBufferSpan = sampleBuffer.AsSpan();
@@ -277,7 +287,7 @@ public class AudioLibWrapperService
                     (framesRead = sampleReaderDataProvider!.ReadBytes(sampleBufferSpan)) > 0)
             {
                 var position = sampleReaderDataProvider.Position - framesRead;
-                if (position >= currentlyPlayingFrameStart - SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE)
+                if (position >= currentlyPlayingFrameBufferZoneStart)
                     directReadStrategyReadBuffers.Add((position, sampleBufferSpan.ToArray()));
             }
 
