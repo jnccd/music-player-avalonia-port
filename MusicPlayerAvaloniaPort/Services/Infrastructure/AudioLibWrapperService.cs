@@ -163,7 +163,6 @@ public class AudioLibWrapperService
         playerDataProvider = new StreamDataProvider(Engine, new FileStream(songPath, FileMode.Open, FileAccess.Read), new ReadOptions { ReadTags = false });
         sampleReaderDataProvider?.Dispose();
         sampleReaderDataProvider = new StreamDataProvider(Engine, new FileStream(songPath, FileMode.Open, FileAccess.Read), new ReadOptions { ReadTags = false });
-        spectrumAnalyzer = new SpectrumAnalyzer(GetCurrentAudioFormat(), FFT_BUFFER_32BIT_FLOAT_SIZE);
 
         if (soundPlayer != null)
         {
