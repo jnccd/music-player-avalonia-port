@@ -109,9 +109,6 @@ public class CustomRenderControl_Diagram : Control
 
     public void Update()
     {
-        if (audioLibWrapper.PlayState != SoundFlow.Enums.PlaybackState.Playing)
-            return;
-
         var controlWidth = (int)this.Bounds.Width;
         var controlHeight = (int)this.Bounds.Height;
 
