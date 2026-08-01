@@ -2,6 +2,7 @@
 using System;
 using System.IO;
 using System.Net;
+using System.Threading.Tasks;
 
 namespace MusicPlayerAvaloniaPort;
 
@@ -25,6 +26,20 @@ class Program
         try
         {
             action();
+        }
+        catch (Exception ex)
+        {
+            File.AppendAllText("./error.log", $"\n\n---{DateTime.Now}---\n{ex}");
+
+            if (EndProgramOnError)
+                Environment.Exit(1);
+        }
+    }
+    public static async Task WrapInTryAsync(Func<Task> action, bool EndProgramOnError = true)
+    {
+        try
+        {
+            await action();
         }
         catch (Exception ex)
         {

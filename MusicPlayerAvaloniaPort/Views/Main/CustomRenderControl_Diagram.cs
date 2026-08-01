@@ -9,6 +9,7 @@ using Path = Avalonia.Controls.Shapes.Path;
 using Avalonia.Threading;
 using MusicPlayerAvaloniaPort.Services.Visualization;
 using System;
+using System.Threading.Tasks;
 
 namespace MusicPlayerAvaloniaPort.Views.Main;
 
@@ -94,20 +95,20 @@ public class CustomRenderControl_Diagram : Control
         };
     }
 
-    public override void Render(DrawingContext context)
+    public override async void Render(DrawingContext context)
     {
-        Program.WrapInTry(() =>
+        await Program.WrapInTryAsync(async () =>
         {
             base.Render(context);
             if (audioLibWrapper.PlayState == SoundFlow.Enums.PlaybackState.Playing)
-                Dispatcher.UIThread.InvokeAsync(InvalidateVisual, DispatcherPriority.Background);
+                Dispatcher.UIThread.Post(InvalidateVisual, DispatcherPriority.Background);
 
-            Update();
+            await Update();
             Draw(context);
         });
     }
 
-    public void Update()
+    public async Task Update()
     {
         var controlWidth = (int)this.Bounds.Width;
         var controlHeight = (int)this.Bounds.Height;
