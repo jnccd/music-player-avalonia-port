@@ -194,9 +194,10 @@ public class AudioLibWrapperService
         Debug.WriteLine($"{DateTime.Now:HH:mm:ss.ffff} Starting Reading!");
         SampleReaderThread = Task.Run(() =>
         {
-            if (globalSampleArray != null) arrayPool.Return(globalSampleArray);
-            globalSampleArray = arrayPool.Rent(playerDataProvider.Length > 0 ? playerDataProvider.Length : 48000 * 60 * 5);
             globalSampleArrayWriteHead = 0;
+            int requiredGlobalSampleArrayLength = playerDataProvider.Length > 0 ? playerDataProvider.Length : 48000 * 60 * 5;
+            globalSampleArray = new float[requiredGlobalSampleArrayLength];
+            GC.Collect();
 
             var sampleBuffer = arrayPool.Rent(SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE);
             var sampleBufferSpan = sampleBuffer.AsSpan();
@@ -209,6 +210,7 @@ public class AudioLibWrapperService
             {
                 // Write into global array
                 Buffer.BlockCopy(sampleBuffer, 0, globalSampleArray, globalSampleArrayWriteHead * sizeof(float), framesRead * sizeof(float));
+                //Array.Copy(sampleBuffer, 0, globalSampleArray, globalSampleArrayWriteHead, framesRead);
                 globalSampleArrayWriteHead += framesRead;
             }
 
@@ -266,5 +268,5 @@ public class AudioLibWrapperService
         return re;
     }
 
-    public IReadOnlyList<float>? GetCurrentSongEntireSampleData() => globalSampleArray == null || globalSampleArrayWriteHead < globalSampleArray.Length ? null : Array.AsReadOnly(globalSampleArray);
+    public IReadOnlyList<float>? GetCurrentSongEntireSampleData() => globalSampleArray == null || globalSampleArrayWriteHead < globalSampleArray.Length - SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE ? null : Array.AsReadOnly(globalSampleArray);
 }
