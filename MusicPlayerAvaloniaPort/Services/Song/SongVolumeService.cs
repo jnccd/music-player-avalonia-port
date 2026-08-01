@@ -79,9 +79,12 @@ public class SongVolumeService
         if (currentUpvotedSong.Volume > 0) // Not necessary
             return;
 
-        var samples = audioLibWrapperService.GetCurrentSongSampleData();
+        var samples = audioLibWrapperService.GetCurrentSongEntireSampleData();
 
-        var rms = ComputeRootMeanSquare(samples!);
+        if (samples == null) // Not possible
+            return;
+
+        var rms = ComputeRootMeanSquare(samples);
 
         currentUpvotedSong.Volume = rms;
         dbContext.SaveChanges();

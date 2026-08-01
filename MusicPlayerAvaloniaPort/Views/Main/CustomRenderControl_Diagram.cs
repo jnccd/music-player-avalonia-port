@@ -153,7 +153,7 @@ public class CustomRenderControl_Diagram : Control
         }
         else if (currentVisMode == VisMode.Samples)
         {
-            ReadOnlySpan<float> sampleData = audioLibWrapper.GetCurrentSampleData();
+            ReadOnlySpan<float> sampleData = audioLibWrapper.GetCurrentlyPlayingSampleData();
 
             lock (lockject)
             {

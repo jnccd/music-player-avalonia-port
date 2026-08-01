@@ -230,7 +230,7 @@ public class AudioLibWrapperService
         });
     }
 
-    public ReadOnlySpan<float> GetCurrentSampleData()
+    public ReadOnlySpan<float> GetCurrentlyPlayingSampleData()
     {
         if (globalSampleArrayWriteHead <= playerDataProvider!.Position + (FFT_BUFFER_32BIT_FLOAT_SIZE / 2) + 1
             || playerDataProvider!.Position <= FFT_BUFFER_32BIT_FLOAT_SIZE / 2 + 1)
@@ -243,7 +243,7 @@ public class AudioLibWrapperService
     }
     public float[] GetCurrentFftSpectrumData(float[]? factorArray = null)
     {
-        ReadOnlySpan<float> sampleBufferSpan = GetCurrentSampleData();
+        ReadOnlySpan<float> sampleBufferSpan = GetCurrentlyPlayingSampleData();
 
         if (factorArray == null)
         {
@@ -269,5 +269,5 @@ public class AudioLibWrapperService
         return re;
     }
 
-    public IReadOnlyList<float>? GetCurrentSongSampleData() => globalSampleArray == null ? null : Array.AsReadOnly(globalSampleArray);
+    public IReadOnlyList<float>? GetCurrentSongEntireSampleData() => globalSampleArray == null || globalSampleArrayWriteHead < globalSampleArray.Length ? null : Array.AsReadOnly(globalSampleArray);
 }
