@@ -20,6 +20,7 @@ public partial class StatisticsView : UserControl
     readonly SongPlaybackService songPlaybackService = ServiceContainer.GetService<SongPlaybackService>();
     Window? window => TopLevel.GetTopLevel(this) as Window;
     StatisticsViewModel? viewModel => DataContext as StatisticsViewModel;
+    DateTime lastStatisticsView_KeyDownTime = DateTime.MinValue;
 
     public StatisticsView()
     {
@@ -44,6 +45,9 @@ public partial class StatisticsView : UserControl
 
     private void StatisticsView_KeyDown(object? sender, KeyEventArgs e)
     {
+        if (lastStatisticsView_KeyDownTime.AddMilliseconds(500) > DateTime.Now)
+            return;
+
         if (e.Key == Key.S)
         {
             Task.Run(() =>
@@ -64,6 +68,8 @@ public partial class StatisticsView : UserControl
             grid?.ScrollIntoView(currentyPlayingVM, null);
             grid?.SelectedItem = currentyPlayingVM;
         }
+
+        lastStatisticsView_KeyDownTime = DateTime.Now;
     }
 
     private void Play_Click(object? sender, RoutedEventArgs e)
