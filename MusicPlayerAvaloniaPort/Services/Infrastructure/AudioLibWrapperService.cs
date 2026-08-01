@@ -32,7 +32,7 @@ public class AudioLibWrapperService
     // Sample Reader Thread
     const int SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE = 4096;
     StreamDataProvider? sampleReaderDataProvider = null;
-    float[]? globalSampleArray = null;
+    private float[]? globalSampleArray = null;
     int globalSampleArrayWriteHead = 0;
     Task? SampleReaderThread = null;
     bool CancelReading = false;
@@ -41,7 +41,7 @@ public class AudioLibWrapperService
     // FFT Vars
     public const int FFT_BUFFER_32BIT_FLOAT_SIZE = 16384;
     private static readonly AudioFormat AnalyzeFormat = AudioFormat.Studio;
-    SpectrumAnalyzer spectrumAnalyzer = new SpectrumAnalyzer(AnalyzeFormat, FFT_BUFFER_32BIT_FLOAT_SIZE);
+    SpectrumAnalyzer spectrumAnalyzer = new(AnalyzeFormat, FFT_BUFFER_32BIT_FLOAT_SIZE);
     float[] fftZeroResult, sampleZeroResult;
 
     // Setters
@@ -130,7 +130,7 @@ public class AudioLibWrapperService
     public void TogglePlayPause(bool UpdateAudioDevicesInfo = false)
     {
         if (soundPlayer == null)
-            throw new Exception("Sound Player gon");
+            return;
 
         if (UpdateAudioDevicesInfo)
         {
@@ -163,15 +163,13 @@ public class AudioLibWrapperService
         playerDataProvider = new StreamDataProvider(Engine, new FileStream(songPath, FileMode.Open, FileAccess.Read), new ReadOptions { ReadTags = false });
         sampleReaderDataProvider?.Dispose();
         sampleReaderDataProvider = new StreamDataProvider(Engine, new FileStream(songPath, FileMode.Open, FileAccess.Read), new ReadOptions { ReadTags = false });
+        spectrumAnalyzer = new SpectrumAnalyzer(GetCurrentAudioFormat(), FFT_BUFFER_32BIT_FLOAT_SIZE);
 
         if (soundPlayer != null)
         {
-            Task.Run(() =>
-            {
-                playbackDevice.MasterMixer.RemoveComponent(soundPlayer);
-                soundPlayer.Dispose();
-                playbackDevice.Dispose();
-            });
+            playbackDevice.MasterMixer.RemoveComponent(soundPlayer);
+            soundPlayer.Dispose();
+            playbackDevice.Dispose();
         }
 
         playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, GetCurrentAudioFormat(), new MiniAudioDeviceConfig
