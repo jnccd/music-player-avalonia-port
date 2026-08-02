@@ -4,6 +4,7 @@ using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 
@@ -33,6 +34,7 @@ public class SongPlaybackService
             UpvoteLockedInChanged?.Invoke(this, value);
         }
     } = false;
+    public float UpdateAvailableSongPathsProgress { get; private set; } = 0;
 
     public event EventHandler<AvailableSong>? NewSongStarted;
     public event EventHandler<bool>? UpvoteLockedInChanged;
@@ -52,11 +54,24 @@ public class SongPlaybackService
 
     public void UpdateAvailableSongPaths(string libraryRootPath)
     {
+        UpdateAvailableSongPathsProgress = 0;
         AvailableSongs.Clear();
-        AvailableSongs.AddRange([.. HelperFuncs.FindAllMp3FilesInDir(libraryRootPath)
-            .Select(CreateAvailableSong)]);
+        var mp3Files = HelperFuncs.FindAllMp3FilesInDir(libraryRootPath);
+        UpdateAvailableSongPathsProgress = 0.33f;
 
+        for (int i = 0; i < mp3Files.Count; i++)
+        {
+            var file = mp3Files[i];
+
+            var availableSong = CreateAvailableSong(file);
+            AvailableSongs.Add(availableSong);
+
+            UpdateAvailableSongPathsProgress = 0.33f + (0.33f * (i / (float)mp3Files.Count));
+        }
+
+        UpdateAvailableSongPathsProgress = 0.66f;
         SongChoosingService.CreateSongChoosingDataStructure(AvailableSongs);
+        UpdateAvailableSongPathsProgress = 1.0f;
     }
     AvailableSong CreateAvailableSong(string fullPath)
     {

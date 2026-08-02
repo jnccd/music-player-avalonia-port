@@ -36,6 +36,8 @@ public partial class MainView : UserControl
     CustomRenderControl_PlayProgress customRenderControl_PlayProgress => this.GetLogicalDescendants().OfType<CustomRenderControl_PlayProgress>().FirstOrDefault()!;
     CustomRenderControl_Title customRenderControl_Title => this.GetLogicalDescendants().OfType<CustomRenderControl_Title>().FirstOrDefault()!;
 
+    ProgressBar progressBarInit => this.GetLogicalDescendants().OfType<ProgressBar>().FirstOrDefault(x => x.Name == "ProgressBarInit")!;
+
     public MainView()
     {
         // Avalonia Init
@@ -55,6 +57,15 @@ public partial class MainView : UserControl
     void SetupUi()
     {
         // Song Setup Thread (so it doesnt block the UI)
+        var timer = new DispatcherTimer(
+            TimeSpan.FromMilliseconds(1000 / 45),
+            DispatcherPriority.Background,
+            Dispatcher.UIThread);
+        timer.Tick += (s, e) =>
+        {
+            progressBarInit.Value = songPlaybackService.UpdateAvailableSongPathsProgress * 100;
+        };
+        timer.Start();
         Task.Run(() =>
         {
             Thread.CurrentThread.Name = "SongSetupThread";
@@ -63,6 +74,12 @@ public partial class MainView : UserControl
             songPlaybackService.GetNextSong();
 
             mprisService?.Init();
+
+            Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                progressBarInit.Value = 100;
+                progressBarInit.IsVisible = false;
+            });
         });
 
         // Events
@@ -79,7 +96,6 @@ public partial class MainView : UserControl
         audioLibWrapper.PlaybackStateChanged += (e, s) =>
         {
             RefreshCustomControls();
-            customRenderControl_Diagram.UpdateDiagramScaling();
         };
 
         // Inits

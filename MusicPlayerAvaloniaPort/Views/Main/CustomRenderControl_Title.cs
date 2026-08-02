@@ -47,12 +47,14 @@ public class CustomRenderControl_Title : Control
             titleLastUpdateTime = stopwatch.Elapsed;
 
             titleInitialOpacityMask = this.OpacityMask as LinearGradientBrush;
+
+            this.OpacityMask = null;
+            UpdateTitleText("Loading...", initial1X: 0, initial2X: -9999);
         };
     }
 
     public override void Render(DrawingContext context)
     {
-
         Program.WrapInTry(() =>
         {
             base.Render(context);
@@ -115,14 +117,14 @@ public class CustomRenderControl_Title : Control
         context.DrawText(formattedTitleText!, new Point(titleText2X ?? 0, 0));
     }
 
-    public void UpdateTitleText(string newTitle)
+    public void UpdateTitleText(string newTitle, int? initial1X = null, int? initial2X = null)
     {
         rawTitleText = newTitle;
         formattedTitleText = new FormattedText(rawTitleText, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, new Typeface((view!.FindResource("BigNoodleTitling") as FontFamily)!, FontStyle.Normal, FontWeight.Normal), 35, new SolidColorBrush(Colors.White));
 
         titleTextWidth = formattedTitleText.Width;
 
-        titleText1X = titleTextWidth * opacityMaskStartX;
-        titleText2X = titleText1X + titleTextWidth + titleGap;
+        titleText1X = initial1X ?? titleTextWidth * opacityMaskStartX;
+        titleText2X = initial2X ?? titleText1X + titleTextWidth + titleGap;
     }
 }

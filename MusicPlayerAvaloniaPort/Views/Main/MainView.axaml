@@ -157,18 +157,29 @@
                             Fill="{StaticResource PrimaryColor}" />
                     </Grid>
                 </Grid>
-                <vsmain:CustomRenderControl_Diagram
-                    Name="CustomRenderControl_Diagram"
-                    Grid.Row="1"
-                    Margin="12,0"
-                    HorizontalAlignment="Stretch"
-                    VerticalAlignment="Stretch">
-                    <!-- <Path
-                    Name="MyPath"
+                <Grid
                     HorizontalAlignment="Stretch"
                     VerticalAlignment="Stretch"
-                    Fill="{StaticResource PrimaryColor}" />-->
-                </vsmain:CustomRenderControl_Diagram>
+                    Grid.Row="1">
+                    <vsmain:CustomRenderControl_Diagram
+                        Name="CustomRenderControl_Diagram"
+                        Margin="12,0"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch">
+                        <!-- <Path
+                        Name="MyPath"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        Fill="{StaticResource PrimaryColor}" />-->
+                    </vsmain:CustomRenderControl_Diagram>
+                    <ProgressBar
+                        Name="ProgressBarInit"
+                        MaxWidth="350"
+                        Height="20"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Center"
+                        Foreground="{StaticResource PrimaryColor}" />
+                </Grid>
                 <Grid
                     Grid.Row="2"
                     Margin="-8,0"
