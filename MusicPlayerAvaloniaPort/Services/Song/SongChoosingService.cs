@@ -10,6 +10,7 @@ namespace MusicPlayerAvaloniaPort.Services.Song;
 public class SongChoosingService(DbWrapperService DbWrapper)
 {
     List<AvailableSong> SongChoosingList = [];
+    public float CreateSongChoosingDataStructureProgress { get; private set; } = 0;
 
     public AvailableSong ChooseSongWithWeightedChances(AvailableSong? currentSongThatShouldntBeRepeated)
     {
@@ -31,13 +32,17 @@ public class SongChoosingService(DbWrapperService DbWrapper)
             using var dbContext = DbWrapper.GetContext();
 
             SongChoosingList.Clear();
-            foreach (var availableSong in AvailableSongs)
+            for (int i = 0; i < AvailableSongs.Count; i++)
             {
+                var availableSong = AvailableSongs[i];
+
                 var upvotedSong = dbContext.GetUpvotedSongById(availableSong.UpvotedSongId);
 
                 float amount = GetTargetSongChoosingAmount(upvotedSong, AvailableSongs);
                 for (int k = 0; k < amount; k++)
                     SongChoosingList.Add(availableSong);
+
+                CreateSongChoosingDataStructureProgress = (i + 1) / (float)AvailableSongs.Count;
             }
 
 #if DEBUG

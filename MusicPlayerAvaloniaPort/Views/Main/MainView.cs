@@ -26,6 +26,7 @@ public partial class MainView : UserControl
     MainViewModel? viewModel => DataContext as MainViewModel;
 
     SongPlaybackService songPlaybackService = ServiceContainer.GetService<SongPlaybackService>();
+    SongChoosingService songChoosingService = ServiceContainer.GetService<SongChoosingService>();
     SongVolumeService songVolumeService = ServiceContainer.GetService<SongVolumeService>();
     AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
     MprisService? mprisService = ServiceContainer.TryGetService<MprisService>();
@@ -63,7 +64,7 @@ public partial class MainView : UserControl
             Dispatcher.UIThread);
         timer.Tick += (s, e) =>
         {
-            progressBarInit.Value = songPlaybackService.UpdateAvailableSongPathsProgress * 100;
+            progressBarInit.Value = songPlaybackService.UpdateAvailableSongPathsProgress * 100 + songChoosingService.CreateSongChoosingDataStructureProgress * 33;
         };
         timer.Start();
         Task.Run(() =>
