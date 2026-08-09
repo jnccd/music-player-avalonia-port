@@ -20,6 +20,9 @@ public class ConfigData
     // Sync settings
     public string? AuthBackendRefreshToken { get; set; }
     public string? SyncServerHost { get; set; }
+    /// <summary>
+    /// This is assumed to be equal to the <see cref="MusicPlayerSyncInterface.DTOs.User.UserId"/> / <see cref="MusicPlayerSyncInterface.DTOs.User.UserHandle"/> field in the User DTO class
+    /// </summary>
     public string? SyncServerUsername { get; set; }
 
     public ConfigData()

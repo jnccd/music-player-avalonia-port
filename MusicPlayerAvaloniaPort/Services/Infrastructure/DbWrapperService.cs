@@ -1,4 +1,5 @@
 using MusicPlayerAvaloniaPort.Helpers;
+using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Persistence.Database;
 using MusicPlayerSyncInterface.DTOs;
 using MusicPlayerSyncInterface.DTOs.Composites;
@@ -62,30 +63,30 @@ public class DbWrapperService
 
         // Read
         public UpvotedSong GetUpvotedSongById(Guid? Id) =>
-            SongDbContext.UpvotedSongs.FirstOrDefault(x => x.SongId == Id)
+            SongDbContext.UpvotedSongs.FirstOrDefault(x => x.SongId == Id && (x.UserId == "" || x.UserId == Config.Data.SyncServerUsername))
                 ?? throw new InvalidDataException($"SongId {Id} not found!");
         public UpvotedSong? GetUpvotedSongByFullPath([StringSyntax(StringSyntaxAttribute.Uri)] string fullSongPath)
         {
             // TODO: The matching logic should ideally be part of the interface repo since it concerns all projects using the db schema
             var fileName = Path.GetFileName(fullSongPath);
 
-            var filenameMatchingSongs = SongDbContext.UpvotedSongs.Where(x => x.Name == fileName).ToArray();
+            var filenameMatchingSongs = SongDbContext.UpvotedSongs.Where(x => x.Name == fileName && (x.UserId == "" || x.UserId == Config.Data.SyncServerUsername)).ToArray();
             if (filenameMatchingSongs.Length == 1)
                 return filenameMatchingSongs.First();
             else if (filenameMatchingSongs.Length == 0)
                 return null; // No songs at all means nothing we can do
 
             (var album, var artists) = HelperFuncs.GetAlbumAndArtistsFromSong(fullSongPath);
-            var fullMatchingSongs = SongDbContext.UpvotedSongs.Where(x => x.Name == fileName && x.Album == album && x.Artist == artists).ToArray();
+            var fullMatchingSongs = SongDbContext.UpvotedSongs.Where(x => x.Name == fileName && x.Album == album && x.Artist == artists && (x.UserId == "" || x.UserId == Config.Data.SyncServerUsername)).ToArray();
             if (fullMatchingSongs.Length == 1)
                 return fullMatchingSongs.First();
 
             throw new Exception("Master Skywalker there are too many of them what are we going to do!?");
         }
         public bool DoesSongHaveVolume(Guid? SongId) =>
-            SongDbContext.UpvotedSongs.FirstOrDefault(x => x.SongId == SongId)?.Volume > 0;
+            SongDbContext.UpvotedSongs.FirstOrDefault(x => x.SongId == SongId && (x.UserId == "" || x.UserId == Config.Data.SyncServerUsername))?.Volume > 0;
         public UpvotedSong[] DumpUpvotedSongs() =>
-            [.. SongDbContext.UpvotedSongs];
+            [.. SongDbContext.UpvotedSongs.Where(x => x.UserId == "" || x.UserId == Config.Data.SyncServerUsername)];
 
         // Sync
         public void RewriteDatabase(SyncPullResponse pulledData)
