@@ -29,6 +29,8 @@
     <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
+    <PackageReference Include="SharpHook" Version="7.1.3" />
+    <PackageReference Include="SharpHook.Reactive" Version="7.1.3" />
     <PackageReference Include="taglib-sharp-netstandard2.0" Version="2.1.0" />
 
     <!-- Version clash with avalonia, I used references instead, see below -->
@@ -36,8 +38,7 @@
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.94.1" />
     <PackageReference Include="Tmds.DBus.Generator" Version="0.94.1" /> -->
   </ItemGroup>
-  <ItemGroup
-    Condition="'$(RuntimeIdentifier)' == 'linux-x64' Or '$(RuntimeIdentifier)' == 'linux-arm64'">
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64' Or '$(RuntimeIdentifier)' == 'linux-arm64'">
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.4" /> 
   </ItemGroup>
 
@@ -55,9 +56,7 @@
 
   <!-- Other -->
   <ItemGroup>
-    <AdditionalFiles Include="DbusXml/org.mpris.MediaPlayer2.xml" DBusGeneratorMode="Handler"
-      Namespace="Dbus.Mpris" />
-    <AdditionalFiles Include="DbusXml/org.mpris.MediaPlayer2.Player.xml"
-      DBusGeneratorMode="Handler" Namespace="Dbus.Mpris" />
+    <AdditionalFiles Include="DbusXml/org.mpris.MediaPlayer2.xml" DBusGeneratorMode="Handler" Namespace="Dbus.Mpris" />
+    <AdditionalFiles Include="DbusXml/org.mpris.MediaPlayer2.Player.xml" DBusGeneratorMode="Handler" Namespace="Dbus.Mpris" />
   </ItemGroup>
 </Project>

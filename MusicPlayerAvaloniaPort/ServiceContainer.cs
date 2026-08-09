@@ -56,8 +56,9 @@ public static class ServiceContainer
         Services = serviceCollection.BuildServiceProvider();
 
         // Init 
-        var songDownloadRequestProcessorService = ServiceContainer.GetService<SongDownloadRequestProcessorService>();
-        songDownloadRequestProcessorService.Init();
+        ServiceContainer.GetService<SongDownloadRequestProcessorService>().Init();
+        if (!OperatingSystem.IsLinux())
+            ServiceContainer.GetService<KeyHookService>().Init();
     }
 
     public static TRequested GetService<TRequested>()
