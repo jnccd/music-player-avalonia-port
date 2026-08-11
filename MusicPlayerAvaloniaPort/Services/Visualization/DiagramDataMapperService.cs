@@ -13,7 +13,7 @@ namespace MusicPlayerAvaloniaPort.Services.Visualization;
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(DiagramDataMapperService))]
 public class DiagramDataMapperService(AudioLibWrapperService audioLibWrapperService, SongPlaybackService songPlaybackService, DbWrapperService dbWrapperService)
 {
-    private const double FFT_WINDOW_PERCENT_CHOPPED_BEGINNING = 0.003;
+    private const double FFT_WINDOW_PERCENT_CHOPPED_BEGINNING = 0.001;
     private const double FFT_WINDOW_PERCENT_CHOPPED_END = 0.6;
     private const float FFT_WINDOW_VALUE_DIVISOR = 9001;
     private const double FFT_SAMPLES_HAMMING_WINDOW_DOWNWARD_EXPONENT = 2;
@@ -58,7 +58,7 @@ public class DiagramDataMapperService(AudioLibWrapperService audioLibWrapperServ
             double lastindex = ReadStart + Math.Pow(ReadEnd - ReadStart, (i - 1) / (double)targetArraySize);
             double index = ReadStart + Math.Pow(ReadEnd - ReadStart, i / (double)targetArraySize);
             //if (i == 0 || i == targetArraySize / 2 || i == targetArraySize - 1) Debug.WriteLine($"{i}: {lastindex} {index}");
-            mappedData[i] = GetMaxHeight(fftData, (int)lastindex, (int)index) / (currentUpvotedSong?.Volume > 0 ? currentUpvotedSong.Volume : 1);
+            mappedData[i] = GetAvgHeight(fftData, (int)lastindex, (int)index) / (currentUpvotedSong?.Volume > 0 ? currentUpvotedSong.Volume : 1);
         }
 
         return mappedData;
@@ -81,6 +81,25 @@ public class DiagramDataMapperService(AudioLibWrapperService audioLibWrapperServ
                 max = array[i];
 
         return max;
+    }
+
+    private static float GetAvgHeight(float[] array, int from, int to)
+    {
+        if (from < 0)
+            from = 0;
+
+        if (from >= to)
+            to = from + 1;
+
+        if (to > array.Length)
+            to = array.Length;
+
+        float sum = 0;
+        for (int i = from; i < to; i++)
+            sum += array[i];
+        var avg = sum / (to - from);
+
+        return avg;
     }
 
     public async Task<float[]> SmoothenFftData(float[] rawData, int targetArraySize, float maxHeight)
