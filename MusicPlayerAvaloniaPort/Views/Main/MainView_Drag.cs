@@ -15,9 +15,9 @@ public partial class MainView : UserControl
     bool isMovingWindow = false;
     private void MainView_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        dragPointerSauce = e.GetPosition(window);
-        dragGlobalPointerSauce = e.GetPosition(window) + window!.Position.ToPoint(1);
-        dragWindowPosSauce = window.Position;
+        dragPointerSauce = e.GetPosition(Window);
+        dragGlobalPointerSauce = e.GetPosition(Window) + Window!.Position.ToPoint(1);
+        dragWindowPosSauce = Window.Position;
 
         isMovingWindow = true;
     }
@@ -29,37 +29,37 @@ public partial class MainView : UserControl
         if (!isMovingWindow)
             return;
 
-        var newPos = e.GetPosition(window) + window!.Position.ToPoint(1);
+        var newPos = e.GetPosition(Window) + Window!.Position.ToPoint(1);
         var deltaX = dragGlobalPointerSauce.X - newPos.X;
         var deltaY = dragGlobalPointerSauce.Y - newPos.Y;
 
         var preliminaryNewPos = new PixelPoint((int)-deltaX, (int)-deltaY) + dragWindowPosSauce;
-        var keepInScreenCoords = KeepWindowInScreen(new PixelRect(preliminaryNewPos, PixelSize.FromSize(new Size(window.Bounds.Width, window.Bounds.Height), CurrentRenderScaling())));
-        window.Position = keepInScreenCoords;
+        var keepInScreenCoords = KeepWindowInScreen(new PixelRect(preliminaryNewPos, PixelSize.FromSize(new Size(Window.Bounds.Width, Window.Bounds.Height), CurrentRenderScaling())));
+        Window.Position = keepInScreenCoords;
     }
     private void MainView_PointerReleased(object? sender, PointerReleasedEventArgs e)
     {
         isMovingWindow = false;
 
-        Config.Data.WindowPositionX = window!.Position.X;
-        Config.Data.WindowPositionY = window!.Position.Y;
-        if (window != null && window.FrameSize != null)
+        Config.Data.WindowPositionX = Window!.Position.X;
+        Config.Data.WindowPositionY = Window!.Position.Y;
+        if (Window != null && Window.FrameSize != null)
         {
-            Config.Data.Width = window.Width;
-            Config.Data.Height = window.Height;
+            Config.Data.Width = Window.Width;
+            Config.Data.Height = Window.Height;
         }
     }
-    double CurrentRenderScaling() => window?.RenderScaling ?? 1;
+    double CurrentRenderScaling() => Window?.RenderScaling ?? 1;
     PixelPoint[] WindowPoints = new PixelPoint[4];
     PixelPoint Diff;
     static int X, Y;
     public PixelPoint KeepWindowInScreen(PixelRect WindowBounds)
     {
-        PixelRect[] ScreenBoxes = new PixelRect[window!.Screens.ScreenCount];
+        PixelRect[] ScreenBoxes = new PixelRect[Window!.Screens.ScreenCount];
 
         for (int i = 0; i < ScreenBoxes.Length; i++)
-            ScreenBoxes[i] = new PixelRect(window!.Screens.All[i].WorkingArea.X, window!.Screens.All[i].WorkingArea.Y,
-                window!.Screens.All[i].WorkingArea.Width, window!.Screens.All[i].WorkingArea.Height - 56);
+            ScreenBoxes[i] = new PixelRect(Window!.Screens.All[i].WorkingArea.X, Window!.Screens.All[i].WorkingArea.Y,
+                Window!.Screens.All[i].WorkingArea.Width, Window!.Screens.All[i].WorkingArea.Height - 56);
 
         WindowPoints[0] = new PixelPoint(WindowBounds.X, WindowBounds.Y);
         WindowPoints[1] = new PixelPoint(WindowBounds.X + WindowBounds.Width, WindowBounds.Y);
@@ -67,7 +67,7 @@ public partial class MainView : UserControl
         WindowPoints[3] = new PixelPoint(WindowBounds.X + WindowBounds.Width, WindowBounds.Y + WindowBounds.Height);
 
         var scaling = CurrentRenderScaling();
-        Screen Main = window!.Screens.All.FirstOrDefault(x => x.Bounds.Contains(window.Position + PixelPoint.FromPoint(new Point(window.Width / 2, window.Height / 2), scaling))) ?? window!.Screens.Primary!;
+        Screen Main = Window!.Screens.All.FirstOrDefault(x => x.Bounds.Contains(Window.Position + PixelPoint.FromPoint(new Point(Window.Width / 2, Window.Height / 2), scaling))) ?? Window!.Screens.Primary!;
 
         for (int i = 0; i < WindowPoints.Length; i++)
             if (!ScreenBoxes.Any(x => x.Contains(WindowPoints[i])))

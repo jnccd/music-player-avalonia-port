@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Controls.Notifications;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -22,22 +23,24 @@ namespace MusicPlayerAvaloniaPort.Views.Main;
 
 public partial class MainView : UserControl
 {
-    Window? window => TopLevel.GetTopLevel(this) as Window;
-    MainViewModel? viewModel => DataContext as MainViewModel;
+    Window? Window => TopLevel.GetTopLevel(this) as Window;
+    MainViewModel? ViewModel => DataContext as MainViewModel;
 
-    SongPlaybackService songPlaybackService = ServiceContainer.GetService<SongPlaybackService>();
-    SongChoosingService songChoosingService = ServiceContainer.GetService<SongChoosingService>();
-    SongVolumeService songVolumeService = ServiceContainer.GetService<SongVolumeService>();
-    AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
-    MprisService? mprisService = ServiceContainer.TryGetService<MprisService>();
+    readonly SongPlaybackService songPlaybackService = ServiceContainer.GetService<SongPlaybackService>();
+    readonly SongChoosingService songChoosingService = ServiceContainer.GetService<SongChoosingService>();
+    readonly SongVotingService songVotingService = ServiceContainer.GetService<SongVotingService>();
+    readonly SongVolumeService songVolumeService = ServiceContainer.GetService<SongVolumeService>();
+    readonly AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
+    readonly MprisService? mprisService = ServiceContainer.TryGetService<MprisService>();
 
     const double MAX_VOLUME = 1;
 
-    CustomRenderControl_Diagram customRenderControl_Diagram => this.GetLogicalDescendants().OfType<CustomRenderControl_Diagram>().FirstOrDefault()!;
-    CustomRenderControl_PlayProgress customRenderControl_PlayProgress => this.GetLogicalDescendants().OfType<CustomRenderControl_PlayProgress>().FirstOrDefault()!;
-    CustomRenderControl_Title customRenderControl_Title => this.GetLogicalDescendants().OfType<CustomRenderControl_Title>().FirstOrDefault()!;
+    CustomRenderControl_Diagram CustomRenderControl_Diagram_Getter => this.GetLogicalDescendants().OfType<CustomRenderControl_Diagram>().FirstOrDefault()!;
+    CustomRenderControl_PlayProgress CustomRenderControl_PlayProgress_Getter => this.GetLogicalDescendants().OfType<CustomRenderControl_PlayProgress>().FirstOrDefault()!;
+    CustomRenderControl_Title CustomRenderControl_Title_Getter => this.GetLogicalDescendants().OfType<CustomRenderControl_Title>().FirstOrDefault()!;
+    CustomRenderControl_Notification CustomRenderControl_Notification_Getter => this.GetLogicalDescendants().OfType<CustomRenderControl_Notification>().FirstOrDefault()!;
 
-    ProgressBar progressBarInit => this.GetLogicalDescendants().OfType<ProgressBar>().FirstOrDefault(x => x.Name == "ProgressBarInit")!;
+    ProgressBar ProgressBarInit_Getter => this.GetLogicalDescendants().OfType<ProgressBar>().FirstOrDefault(x => x.Name == "ProgressBarInit")!;
 
     public MainView()
     {
@@ -64,10 +67,10 @@ public partial class MainView : UserControl
             Dispatcher.UIThread);
         timer.Tick += (s, e) =>
         {
-            progressBarInit.Value = songPlaybackService.UpdateAvailableSongPathsProgress * 100 + songChoosingService.CreateSongChoosingDataStructureProgress * 33;
+            ProgressBarInit_Getter.Value = songPlaybackService.UpdateAvailableSongPathsProgress * 100 + songChoosingService.CreateSongChoosingDataStructureProgress * 33;
         };
         timer.Start();
-        Task.Run(() =>
+        Task.Run((Action)(() =>
         {
             Thread.CurrentThread.Name = "SongSetupThread";
 
@@ -76,16 +79,16 @@ public partial class MainView : UserControl
 
             mprisService?.Init();
 
-            Dispatcher.UIThread.InvokeAsync(() =>
+            Dispatcher.UIThread.InvokeAsync((Action)(() =>
             {
-                progressBarInit.Value = 100;
-                progressBarInit.IsVisible = false;
-            });
-        });
+                ProgressBarInit_Getter.Value = 100;
+                ProgressBarInit_Getter.IsVisible = false;
+            }));
+        }));
 
         // Events
-        window?.Closing += MainView_Closing;
-        window?.ScalingChanged += MainView_ScalingChanged;
+        Window?.Closing += MainView_Closing;
+        Window?.ScalingChanged += MainView_ScalingChanged;
         songPlaybackService.NewSongStarted += (s, song) => UpdateUiForNewSong(song);
         songPlaybackService.UpvoteLockedInChanged += (s, lockedIn) => UpdateUiForNewUpvoteLockedInState(lockedIn);
         this.AddHandler(
@@ -97,6 +100,20 @@ public partial class MainView : UserControl
         audioLibWrapper.PlaybackStateChanged += (e, s) =>
         {
             RefreshCustomControls();
+        };
+        songVotingService.SongGotUpvoted += (s, e) =>
+        {
+            Dispatcher.Post(() =>
+            {
+                CustomRenderControl_Notification_Getter.ShowUpvoteNotif();
+            });
+        };
+        songVotingService.SongGotDownvoted += (s, e) =>
+        {
+            Dispatcher.Post(() =>
+            {
+                CustomRenderControl_Notification_Getter.ShowDownvoteNotif();
+            });
         };
 
         // Inits
@@ -117,9 +134,9 @@ public partial class MainView : UserControl
 
     void RefreshCustomControls()
     {
-        Dispatcher.UIThread.InvokeAsync(customRenderControl_Diagram.InvalidateVisual, DispatcherPriority.Background);
-        Dispatcher.UIThread.InvokeAsync(customRenderControl_PlayProgress.InvalidateVisual, DispatcherPriority.Background);
-        Dispatcher.UIThread.InvokeAsync(customRenderControl_Title.InvalidateVisual, DispatcherPriority.Background);
+        Dispatcher.UIThread.InvokeAsync(CustomRenderControl_Diagram_Getter.InvalidateVisual, DispatcherPriority.Background);
+        Dispatcher.UIThread.InvokeAsync(CustomRenderControl_PlayProgress_Getter.InvalidateVisual, DispatcherPriority.Background);
+        Dispatcher.UIThread.InvokeAsync(CustomRenderControl_Title_Getter.InvalidateVisual, DispatcherPriority.Background);
     }
 
     void ButtonOptions_Click(object? sender, RoutedEventArgs e)
@@ -145,14 +162,14 @@ public partial class MainView : UserControl
 
     private void MainView_SizeChanged(object? sender, SizeChangedEventArgs e)
     {
-        customRenderControl_Diagram.UpdateDiagramScaling();
+        CustomRenderControl_Diagram_Getter.UpdateDiagramScaling();
 
         RefreshCustomControls();
     }
 
     void ButtonClose_Click(object? sender, RoutedEventArgs e)
     {
-        window?.Close();
+        Window?.Close();
         Environment.Exit(0);
     }
 
@@ -160,7 +177,7 @@ public partial class MainView : UserControl
     {
         if (e.Key == Key.V)
         {
-            customRenderControl_Diagram.CycleVisMode();
+            CustomRenderControl_Diagram_Getter.CycleVisMode();
         }
     }
 }

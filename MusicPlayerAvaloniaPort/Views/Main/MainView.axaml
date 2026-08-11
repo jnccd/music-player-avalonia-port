@@ -179,6 +179,9 @@
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Center"
                         Foreground="{StaticResource PrimaryColor}" />
+                    <vsmain:CustomRenderControl_Notification
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Center" />
                 </Grid>
                 <Grid
                     Grid.Row="2"

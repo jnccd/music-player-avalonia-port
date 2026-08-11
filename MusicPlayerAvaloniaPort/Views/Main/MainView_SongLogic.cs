@@ -36,7 +36,7 @@ public partial class MainView : UserControl
                 Console.WriteLine("For music folder, showing OpenFolderPicker");
                 Dispatcher.UIThread.InvokeAsync(async () =>
                 {
-                    var storageProvider = TopLevel.GetTopLevel(window)!.StorageProvider;
+                    var storageProvider = TopLevel.GetTopLevel(Window)!.StorageProvider;
                     var folders = await storageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions // If this isnt awaited it straight up doesnt work at all on linux
                     {
                         Title = "Select your Music Root Folder",
@@ -48,7 +48,7 @@ public partial class MainView : UserControl
             }
 
             if (folder == null || !HelperFuncs.DirOrSubDirsContainMp3(folder))
-                window?.Close();
+                Window?.Close();
 
             // Set SongLibraryPath
             Config.Data.SongLibraryPath = folder;
@@ -73,7 +73,7 @@ public partial class MainView : UserControl
     {
         Dispatcher.UIThread.Post(() =>
         {
-            viewModel!.UpvoteLockedIn = lockedIn;
+            ViewModel!.UpvoteLockedIn = lockedIn;
             UpdateButtonUpvoteColor();
         });
     }
@@ -99,8 +99,8 @@ public partial class MainView : UserControl
     void ButtonUpvote_Click(object? sender, RoutedEventArgs e)
     {
         // Logic update
-        viewModel?.UpvoteLockedIn = !viewModel.UpvoteLockedIn;
-        songPlaybackService.UpvoteLockedIn = viewModel!.UpvoteLockedIn;
+        ViewModel?.UpvoteLockedIn = !ViewModel.UpvoteLockedIn;
+        songPlaybackService.UpvoteLockedIn = ViewModel!.UpvoteLockedIn;
 
         UpdateButtonUpvoteColor();
     }
@@ -109,7 +109,7 @@ public partial class MainView : UserControl
     {
         var upvoteButton = this.GetLogicalDescendants().OfType<Button>().FirstOrDefault(x => x.Name == "ButtonUpvote");
         var path = upvoteButton?.GetLogicalChildren().FirstOrDefault() as Avalonia.Controls.Shapes.Path;
-        path?.Fill = viewModel?.UpvoteLockedIn == true ? this.FindResource("PrimaryColor") as SolidColorBrush : Brushes.White;
+        path?.Fill = ViewModel?.UpvoteLockedIn == true ? this.FindResource("PrimaryColor") as SolidColorBrush : Brushes.White;
     }
 
     private void DurationBarStackPanel_PointerPressed(object? sender, PointerPressedEventArgs e)
