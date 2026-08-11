@@ -10,6 +10,9 @@ namespace MusicPlayerAvaloniaPort.Services.Song;
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(SongVotingService))]
 public class SongVotingService(AudioLibWrapperService AudioLibWrapper, SongSyncService SyncService, SongChoosingService SongChoosingService, DbWrapperService DbWrapper)
 {
+    public event EventHandler<bool>? SongGotUpvoted;
+    public event EventHandler<bool>? SongGotDownvoted;
+
     public UpvotedSong RegisterNewUpvotedSong([StringSyntax(StringSyntaxAttribute.Uri)] string songPath)
     {
         using var dbContext = DbWrapper.GetContext();
@@ -46,7 +49,7 @@ public class SongVotingService(AudioLibWrapperService AudioLibWrapper, SongSyncS
 
         SongChoosingService.UpdateSongChoosingDataStructure(songToUpvote, AvailableSongs);
 
-        // TODO: Show ui popup?
+        SongGotUpvoted?.Invoke(this, false);
     }
     public void DownvoteSong(AvailableSong songToDownvote, List<AvailableSong> AvailableSongs)
     {
@@ -74,7 +77,7 @@ public class SongVotingService(AudioLibWrapperService AudioLibWrapper, SongSyncS
 
         SongChoosingService.UpdateSongChoosingDataStructure(songToDownvote, AvailableSongs);
 
-        // TODO: Show ui popup? Program.game.ShowSecondRowMessage("Downvoted  previous  song!", 1.2f);
+        SongGotDownvoted?.Invoke(this, false);
     }
 
     void SaveScoreChange(UpvotedSong upvotedSong, float scoreChange)
