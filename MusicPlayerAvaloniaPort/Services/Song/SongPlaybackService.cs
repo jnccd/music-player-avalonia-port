@@ -137,7 +137,9 @@ public class SongPlaybackService
                     AvailableSongs);
                 UpvoteLockedIn = false;
             }
-            else if (RuntimePlayHistoryIndex > 0 && RuntimePlayHistoryIndex == RuntimePlayHistory.Count - 1) // Last Song in filled RuntimePlayHistory
+            else if (RuntimePlayHistoryIndex > 0
+                && RuntimePlayHistoryIndex == RuntimePlayHistory.Count - 1 // Last Song in filled RuntimePlayHistory
+                && (1 - AudioLibWrapper.PlayProgress) * AudioLibWrapper.SongDurationSeconds > 1)
             {
                 SongVotingService.DownvoteSong(CurrentlyPlaying
                     ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"),
