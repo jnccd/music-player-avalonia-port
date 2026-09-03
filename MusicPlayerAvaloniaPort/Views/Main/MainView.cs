@@ -129,13 +129,17 @@ public partial class MainView : UserControl
 
         // Visuals
         // On Windows disable the extra border resizing feature since the OS border is active (see AvaloniaWindowManager.cs)
+        var cosmeticBorder = this.GetLogicalDescendants().OfType<Border>().FirstOrDefault(x => x.Name == "CosmeticBorder");
         if (OperatingSystem.IsWindows())
         {
-            var cosmeticBorder = this.GetLogicalDescendants().OfType<Border>().FirstOrDefault(x => x.Name == "CosmeticBorder");
-            cosmeticBorder?.BorderBrush = new SolidColorBrush(Color.Parse("#00000000"));
+            cosmeticBorder!.BorderBrush = new SolidColorBrush(Color.Parse("#00000000"));
 
             var resizeWindowBorder = this.GetLogicalDescendants().OfType<Border>().FirstOrDefault(x => x.Name == "ResizeWindowBorder");
             resizeWindowBorder?.Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Arrow);
+        }
+        else
+        {
+            cosmeticBorder!.BorderThickness = new Avalonia.Thickness(1 / CurrentRenderScaling());
         }
     }
 
