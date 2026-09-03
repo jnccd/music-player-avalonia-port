@@ -31,7 +31,7 @@
     </UserControl.Resources>
     <Border
         Name="CosmeticBorder"
-        BorderBrush="#6EA8A8A8"
+        BorderBrush="#2EA8A8A8"
         BorderThickness="1">
         <Border
             Name="ResizeWindowBorder"
