@@ -148,6 +148,7 @@ public partial class OptionsView : UserControl
         var textBoxHost = this.GetNestedControl<TextBox>("hostTextBox");
         var textBoxUsername = this.GetNestedControl<TextBox>("usernameTextBox");
         var textBoxPassword = this.GetNestedControl<TextBox>("passwordTextBox");
+        var syncStateLabel = this.GetNestedControl<TextBlock>("syncStateLabel");
 
         Config.Data.SyncServerHost = textBoxHost.Text;
         Config.Data.SyncServerUsername = textBoxUsername.Text;
@@ -161,6 +162,7 @@ public partial class OptionsView : UserControl
         // song library files), so run them on background threads. The login button stays disabled and the
         // spinner is shown until the whole login+pull finished, keeping the UI responsive meanwhile.
         SetLoginBusy(true);
+        syncStateLabel.Text = "Logging in and pulling…";
         try
         {
             try
@@ -199,9 +201,24 @@ public partial class OptionsView : UserControl
                 }
 
                 // Pulling rewrites the local database and may rename files in the song library (song library
-                // migrations), so refresh the in-memory song lists if a library is already configured.
+                // migrations), so refresh the in-memory song lists if a library is already configured. The
+                // pull already reported "Pull succeeded!" by now, so tell the user that the remaining spinner
+                // time is the (potentially slow) library scan.
                 if (Config.Data.SongLibraryPath != null)
-                    await Task.Run(() => songPlaybackService.UpdateAvailableSongPaths(Config.Data.SongLibraryPath));
+                {
+                    syncStateLabel.Text = "Pull succeeded — refreshing song library…";
+                    try
+                    {
+                        await Task.Run(() => songPlaybackService.UpdateAvailableSongPaths(Config.Data.SongLibraryPath));
+                        syncStateLabel.Text = syncService.State;
+                    }
+                    catch (Exception ex)
+                    {
+                        syncStateLabel.Text = "Pull succeeded, but the song library refresh failed.";
+                        new MessageBox(e => Console.WriteLine(e), window, this)
+                            .Show("Song library refresh failed.", $"{ex}");
+                    }
+                }
             }
             catch (Exception ex)
             {
