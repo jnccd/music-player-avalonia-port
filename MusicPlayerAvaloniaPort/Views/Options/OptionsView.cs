@@ -153,6 +153,10 @@ public partial class OptionsView : UserControl
         Config.Data.SyncServerUsername = textBoxUsername.Text;
         Config.Save();
 
+        // TextBox.Text may only be read on the UI thread, so capture the values before handing
+        // them to the background work.
+        string password = textBoxPassword.Text ?? "";
+
         // Init and Pull do blocking network/DB work (and a pull can rewrite the local database and rename
         // song library files), so run them on background threads. The login button stays disabled and the
         // spinner is shown until the whole login+pull finished, keeping the UI responsive meanwhile.
@@ -161,7 +165,7 @@ public partial class OptionsView : UserControl
         {
             try
             {
-                await Task.Run(() => syncService.Init(textBoxPassword.Text, true));
+                await Task.Run(() => syncService.Init(password, true));
             }
             catch (Exception ex)
             {
