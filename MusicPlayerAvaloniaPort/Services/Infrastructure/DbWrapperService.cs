@@ -41,6 +41,22 @@ public class DbWrapperService
             var songFileName = Path.GetFileName(songPath);
             var newUpvotedSong = new UpvotedSong(songFileName, 0, 0, 0, 0, parent.GetSongAgeFromPath(songPath), -1) { Path = songPath };
 
+            // Record the album/artist tags of the file when they can be read. A song is identified by its
+            // file name plus its tags, so registering a file without its tags can create a duplicate entry
+            // of a song another client already registered WITH its tags (the two rows would differ in tag
+            // completeness and could not be proven to be the same song anymore).
+            try
+            {
+                var (album, artists) = HelperFuncs.GetAlbumAndArtistsFromSong(songPath);
+                newUpvotedSong.Album = album ?? "";
+                newUpvotedSong.Artist = artists ?? "";
+            }
+            catch
+            {
+                // The tags could not be read (e.g. a file that is just being downloaded): keep the entry
+                // metadata-less, it can then only be identified by its file name.
+            }
+
             SongDbContext.UpvotedSongs.Add(newUpvotedSong);
             SongDbContext.SaveChanges();
 
@@ -103,6 +119,128 @@ public class DbWrapperService
             SongDbContext.SaveChanges();
             SongDbContext.SongHistoryEntries.AddRange(pulledData.HistoryEntries);
             SongDbContext.SaveChanges();
+
+            // The server data can contain duplicate entries of one song (e.g. two clients of the same
+            // account registered the same file separately, each under its own SongId, before the server
+            // started rejecting duplicate uploads). Merge them right after the rewrite, so the statistics
+            // and the song matching only ever see one entry per song.
+            MergeDuplicateUpvotedSongs(Config.Data.SongLibraryPath);
+        }
+
+        /// <summary>
+        /// Merges duplicate entries of the same song in the local database, keeping the canonical entry
+        /// (highest score, see MusicPlayerSyncInterface.SongFileMatching). Two kinds of duplicates exist:
+        /// 1. Exact duplicates (same file name AND same stored album/artist tags) - provable without the
+        ///    song files, always merged.
+        /// 2. Duplicates that only differ in tag completeness (one entry carries the album/artist of the
+        ///    song, the other is metadata-less). Those can only be proven to be the same song when the
+        ///    actual song files are available, so they are only merged when songLibraryPath is given and
+        ///    every file of that name in the library carries the tags of the tagged entry.
+        /// The merged-away entries are deleted together with their history rows (the canonical entry keeps
+        /// its own). Returns the number of merged-away entries.
+        /// </summary>
+        public int MergeDuplicateUpvotedSongs(string? songLibraryPath = null)
+        {
+            int mergedAway = 0;
+
+            // 1. Exact duplicates: same user, file name and stored album/artist tags.
+            var duplicateGroups = SongDbContext.UpvotedSongs
+                .ToArray()
+                .GroupBy(s => new { s.UserId, s.Name, s.Artist, s.Album })
+                .Where(group => group.Count() > 1)
+                .ToArray();
+            foreach (var group in duplicateGroups)
+            {
+                var (keep, remove) = SongFileMatching.MergeSameSongEntries(group);
+                mergedAway += RemoveUpvotedSongRows(remove);
+                Console.WriteLine($"Merged {remove.Length} exact duplicate(s) of \"{keep.Name}\" into {keep.SongId}.");
+            }
+
+            // 2. Tag-completeness duplicates (only with a song library whose files can prove the identity).
+            if (!string.IsNullOrWhiteSpace(songLibraryPath) && Directory.Exists(songLibraryPath))
+            {
+                var tagCompletenessGroups = SongDbContext.UpvotedSongs
+                    .ToArray() // re-read after the exact duplicates were removed above
+                    .GroupBy(s => s.Name)
+                    .Where(group => group.Count() > 1)
+                    .Where(group => group.Any(s => SongFileMatching.HasNoAlbumOrArtist(s.Artist, s.Album))
+                                 && group.Any(s => !SongFileMatching.HasNoAlbumOrArtist(s.Artist, s.Album)))
+                    .ToArray();
+                foreach (var group in tagCompletenessGroups)
+                {
+                    var taggedRows = group.Where(s => !SongFileMatching.HasNoAlbumOrArtist(s.Artist, s.Album)).ToArray();
+                    var tagSignatures = taggedRows.Select(s => (s.Artist, s.Album)).Distinct().ToArray();
+                    if (tagSignatures.Length != 1)
+                        continue; // Several differently tagged songs share the file name: a metadata-less row is ambiguous
+                    (string fileArtist, string fileAlbum) = tagSignatures[0];
+
+                    // Every file of that name in the library must be this one song, otherwise the
+                    // metadata-less rows could belong to a different same-named file.
+                    var files = SongSyncService.FindSongFilesByName(songLibraryPath, group.Key);
+                    if (files.Count == 0)
+                        continue;
+                    if (files.Any(file => !SongSyncService.SongFileMatchesTags(file, fileArtist, fileAlbum)))
+                        continue;
+
+                    var (keep, remove) = SongFileMatching.MergeSameSongEntries(group, fileAlbum, fileArtist);
+                    mergedAway += RemoveUpvotedSongRows(remove);
+                    Console.WriteLine($"Merged {remove.Length} metadata-less duplicate(s) of \"{keep.Name}\" into {keep.SongId}.");
+                }
+            }
+
+            if (mergedAway > 0)
+                SongDbContext.SaveChanges();
+
+            return mergedAway;
+        }
+
+        int RemoveUpvotedSongRows(UpvotedSong[] remove)
+        {
+            if (remove.Length == 0)
+                return 0;
+
+            // Drop the history entries of the merged-away rows with them (the kept row keeps its own).
+            Guid[] removedIds = remove.Select(song => song.SongId).ToArray();
+            var orphanedHistory = SongDbContext.SongHistoryEntries
+                .Where(h => h.SongId != null && removedIds.Contains(h.SongId.Value))
+                .ToArray();
+            if (orphanedHistory.Length > 0)
+                SongDbContext.SongHistoryEntries.RemoveRange(orphanedHistory);
+
+            SongDbContext.UpvotedSongs.RemoveRange(remove);
+            return remove.Length;
+        }
+
+        /// <summary>
+        /// Rewrites every queued (not yet synced) request that refers to fromSongId so it refers to
+        /// toSongId instead (the SongId in the serialized body and the BelongedToSongId marker). Used when
+        /// the server rejects a queued "/sync/new-song" upload as a duplicate and returns the existing row
+        /// of the song: the upload itself is dropped by the caller, while queued votes/volume changes that
+        /// used the client-local SongId of the song are redirected to the server row, so they are not lost
+        /// and do not get stuck forever. Returns how many queued entries were redirected.
+        /// </summary>
+        public int RedirectQueuedEntriesToSong(Guid fromSongId, Guid toSongId)
+        {
+            if (fromSongId == Guid.Empty || fromSongId == toSongId)
+                return 0;
+
+            // Guid.ToString() (lowercase "d") is the format System.Text.Json writes, so a plain replace is
+            // safe: the SongId is the only Guid in these request bodies.
+            string fromIdString = fromSongId.ToString();
+            var affected = SongDbContext.NotYetSyncedData
+                .Where(x => x.BelongedToSongId == fromSongId && x.Body.Contains(fromIdString))
+                .ToArray();
+
+            foreach (var queued in affected)
+            {
+                queued.Body = queued.Body.Replace(fromIdString, toSongId.ToString());
+                queued.BelongedToSongId = toSongId;
+            }
+
+            if (affected.Length > 0)
+                SongDbContext.SaveChanges();
+
+            return affected.Length;
         }
         public SyncInitRequest GetSyncInitRequest()
         {

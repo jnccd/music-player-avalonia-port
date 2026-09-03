@@ -130,9 +130,54 @@ public class SongSyncService
 
                     Console.WriteLine($"Synced data for endpoint {unsyncedData.Endpoint}: {res.StatusCode}, {unsyncedData.Body}");
 
-                    if (res.IsSuccessStatusCode || res.StatusCode == System.Net.HttpStatusCode.Conflict)
+                    if (res.StatusCode == System.Net.HttpStatusCode.Conflict && unsyncedData.Endpoint == "/sync/new-song")
+                    {
+                        // The server rejected the song upload because the same song (same file name and
+                        // album/artist tags) already exists under another SongId - e.g. another client of
+                        // this account registered the same file, or this upload went through before while
+                        // the response was lost. The response body is the existing (canonical) row.
+                        // Redirect everything this client still has queued under its own SongId of that
+                        // song (votes etc.) to the canonical row and drop the upload itself.
+                        try
+                        {
+                            var queuedSong = JsonSerializer.Deserialize<UpvotedSong>(unsyncedData.Body, jsonOptions);
+                            var canonicalSong = JsonSerializer.Deserialize<UpvotedSong>(res.Content.ReadAsStringAsync().Result, jsonOptions);
+                            if (queuedSong?.SongId != Guid.Empty && canonicalSong?.SongId != Guid.Empty && queuedSong!.SongId != canonicalSong!.SongId)
+                            {
+                                int redirected = dbContext.RedirectQueuedEntriesToSong(queuedSong!.SongId, canonicalSong!.SongId);
+                                Console.WriteLine($"Song \"{queuedSong.Name}\" already exists on the server as {canonicalSong.SongId}, redirected {redirected} queued entr(y/ies) to it.");
+                            }
+                            else
+                            {
+                                Console.WriteLine($"Song upload was rejected as duplicate, but no canonical row could be read from the response - dropping the queued upload.");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            // E.g. an older server version that rejects duplicates without returning the
+                            // existing row: nothing can be redirected, just drop the upload like before.
+                            Console.WriteLine($"Could not read the canonical row of a rejected song upload: {ex.Message}");
+                        }
+                        dbContext.RemoveNotYetSyncedDataEntries(unsyncedData);
+                    }
+                    else if (res.IsSuccessStatusCode || res.StatusCode == System.Net.HttpStatusCode.Conflict)
                     {
                         dbContext.RemoveNotYetSyncedDataEntries(unsyncedData);
+                    }
+                    else if (res.StatusCode == System.Net.HttpStatusCode.NotFound && unsyncedData.Endpoint != "/sync/new-song")
+                    {
+                        // The server does not know the song this request refers to: its upload was merged
+                        // away or the row was deleted. Retrying can never succeed. If an upload of the same
+                        // song is still queued (behind this entry), leave it for the upload's conflict
+                        // handling to redirect; otherwise drop it so it is not retried on every startup.
+                        bool uploadStillQueued = unsyncedData.BelongedToSongId != null && dbContext
+                            .GetNotYetSyncedDataEntries()
+                            .Any(x => x.Endpoint == "/sync/new-song" && x.BelongedToSongId == unsyncedData.BelongedToSongId);
+                        if (!uploadStillQueued)
+                        {
+                            Console.WriteLine($"Server does not know the song of queued {unsyncedData.Endpoint} data (anymore), dropping it: {unsyncedData.Body}");
+                            dbContext.RemoveNotYetSyncedDataEntries(unsyncedData);
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -588,8 +633,32 @@ public class SongSyncService
             var newSongContent = new StringContent(newSongJson, Encoding.UTF8, "application/json");
             var res = client!.PostAsync($"{Config.Data.SyncServerHost}{endpoint}", newSongContent).Result;
 
-            if (!res.IsSuccessStatusCode && res.StatusCode != System.Net.HttpStatusCode.Conflict)
+            if (res.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                // The same song already exists on the server under another SongId (another client of this
+                // account registered the same file, or the upload went through earlier and the response
+                // was lost). The response body is the existing row: redirect queued data (e.g. votes that
+                // were made offline) from our local SongId of this song to the server row, so it is not
+                // lost and does not get stuck in the queue. The local duplicate entry is merged away by
+                // the next pull.
+                try
+                {
+                    var canonicalSong = JsonSerializer.Deserialize<UpvotedSong>(res.Content.ReadAsStringAsync().Result, jsonOptions);
+                    if (canonicalSong?.SongId != Guid.Empty && canonicalSong!.SongId != newSong.SongId)
+                    {
+                        int redirected = dbContext.RedirectQueuedEntriesToSong(newSong.SongId, canonicalSong!.SongId);
+                        Console.WriteLine($"Song \"{newSong.Name}\" already exists on the server as {canonicalSong.SongId}, redirected {redirected} queued entr(y/ies) to it.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Could not read the canonical row of a rejected song upload: {ex.Message}");
+                }
+            }
+            else if (!res.IsSuccessStatusCode)
+            {
                 dbContext.AddNewNotYetSyncedDataEntry(newSongJson, queuedEndpoint, $"{res.IsSuccessStatusCode} {res.Content.ReadAsStringAsync().Result}", newSong.SongId);
+            }
 
             State = $"UploadNewSong {res.StatusCode} {res.Content.ReadAsStringAsync().Result}";
         }
