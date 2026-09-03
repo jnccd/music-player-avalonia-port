@@ -28,8 +28,10 @@
                     <TextBox x:Name="passwordTextBox" MinWidth="150" PasswordChar="*" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button Click="LoginButton_Click">Login</Button>
-                    <Button Click="RegisterButton_Click">Register</Button>
+                    <Button x:Name="loginButton" Click="LoginButton_Click">Login</Button>
+                    <Button x:Name="registerButton" Click="RegisterButton_Click">Register</Button>
+                    <ProgressBar x:Name="loginProgressBar" Width="90" Height="12" VerticalAlignment="Center"
+                                 IsIndeterminate="True" IsVisible="False" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <Label Content="State: " />

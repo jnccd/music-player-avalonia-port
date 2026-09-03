@@ -130,61 +130,84 @@ public partial class OptionsView : UserControl
         Config.Save();
     }
 
+    /// <summary>
+    /// Disables the whole sync login section and shows the loading spinner while a login+pull is running.
+    /// </summary>
+    private void SetLoginBusy(bool busy)
+    {
+        this.GetNestedControl<Button>("loginButton").IsEnabled = !busy;
+        this.GetNestedControl<Button>("registerButton").IsEnabled = !busy;
+        this.GetNestedControl<TextBox>("hostTextBox").IsEnabled = !busy;
+        this.GetNestedControl<TextBox>("usernameTextBox").IsEnabled = !busy;
+        this.GetNestedControl<TextBox>("passwordTextBox").IsEnabled = !busy;
+        this.GetNestedControl<ProgressBar>("loginProgressBar").IsVisible = busy;
+    }
+
     private async void LoginButton_Click(object? sender, RoutedEventArgs e)
     {
+        var textBoxHost = this.GetNestedControl<TextBox>("hostTextBox");
+        var textBoxUsername = this.GetNestedControl<TextBox>("usernameTextBox");
+        var textBoxPassword = this.GetNestedControl<TextBox>("passwordTextBox");
+
+        Config.Data.SyncServerHost = textBoxHost.Text;
+        Config.Data.SyncServerUsername = textBoxUsername.Text;
+        Config.Save();
+
+        // Init and Pull do blocking network/DB work (and a pull can rewrite the local database and rename
+        // song library files), so run them on background threads. The login button stays disabled and the
+        // spinner is shown until the whole login+pull finished, keeping the UI responsive meanwhile.
+        SetLoginBusy(true);
         try
         {
-            var textBoxHost = this.GetNestedControl<TextBox>("hostTextBox");
-            var textBoxUsername = this.GetNestedControl<TextBox>("usernameTextBox");
-            var textBoxPassword = this.GetNestedControl<TextBox>("passwordTextBox");
-
-            Config.Data.SyncServerHost = textBoxHost.Text;
-            Config.Data.SyncServerUsername = textBoxUsername.Text;
-            Config.Save();
-
-            syncService.Init(textBoxPassword.Text, true);
-        }
-        catch (Exception ex)
-        {
-            new MessageBox(e => Console.WriteLine(e), window, this)
-                .Show("Can't initialize login.", $"{syncService.State}\n\n{ex}");
-            return;
-        }
-
-        try
-        {
-            syncService.Pull();
-
-            // If the song library is registered for a different account, the pull was aborted before
-            // anything was synced (local database and library state file are untouched). Ask the user
-            // whether they want to take the library over for the account they just logged in with.
-            var ownerWarning = syncService.TakeSongLibraryOwnerWarning();
-            if (ownerWarning != null)
+            try
             {
-                bool takeOver = await new MessageBox(e => Console.WriteLine(e), window, this)
-                    .AskYesNoAsync("Song library belongs to another account",
-                        ownerWarning + "\n\nDo you want to take the library over for your account and sync anyway?");
-                if (!takeOver)
-                {
-                    new MessageBox(e => Console.WriteLine(e), window, this)
-                        .Show("Song library", "Nothing was synced. Log in with the account that owns this library or choose a different song library to sync with this account.");
-                    return;
-                }
-
-                // User agreed: sync the data and register the library for the current account.
-                await Task.Run(() => syncService.Pull(AdoptSongLibraryOnMismatch: true));
+                await Task.Run(() => syncService.Init(textBoxPassword.Text, true));
+            }
+            catch (Exception ex)
+            {
+                new MessageBox(e => Console.WriteLine(e), window, this)
+                    .Show("Can't initialize login.", $"{syncService.State}\n\n{ex}");
+                return;
             }
 
-            // Pulling rewrites the local database and may rename files in the song library (song library
-            // migrations), so refresh the in-memory song lists if a library is already configured.
-            if (Config.Data.SongLibraryPath != null)
-                songPlaybackService.UpdateAvailableSongPaths(Config.Data.SongLibraryPath);
+            try
+            {
+                await Task.Run(() => syncService.Pull());
+
+                // If the song library is registered for a different account, the pull was aborted before
+                // anything was synced (local database and library state file are untouched). Ask the user
+                // whether they want to take the library over for the account they just logged in with.
+                var ownerWarning = syncService.TakeSongLibraryOwnerWarning();
+                if (ownerWarning != null)
+                {
+                    bool takeOver = await new MessageBox(e => Console.WriteLine(e), window, this)
+                        .AskYesNoAsync("Song library belongs to another account",
+                            ownerWarning + "\n\nDo you want to take the library over for your account and sync anyway?");
+                    if (!takeOver)
+                    {
+                        new MessageBox(e => Console.WriteLine(e), window, this)
+                            .Show("Song library", "Nothing was synced. Log in with the account that owns this library or choose a different song library to sync with this account.");
+                        return;
+                    }
+
+                    // User agreed: sync the data and register the library for the current account.
+                    await Task.Run(() => syncService.Pull(AdoptSongLibraryOnMismatch: true));
+                }
+
+                // Pulling rewrites the local database and may rename files in the song library (song library
+                // migrations), so refresh the in-memory song lists if a library is already configured.
+                if (Config.Data.SongLibraryPath != null)
+                    await Task.Run(() => songPlaybackService.UpdateAvailableSongPaths(Config.Data.SongLibraryPath));
+            }
+            catch (Exception ex)
+            {
+                new MessageBox(e => Console.WriteLine(e), window, this)
+                    .Show("Can't pull.", $"{syncService.State}\n\n{ex}");
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            new MessageBox(e => Console.WriteLine(e), window, this)
-                .Show("Can't pull.", $"{syncService.State}\n\n{ex}");
-            return;
+            SetLoginBusy(false);
         }
     }
 
