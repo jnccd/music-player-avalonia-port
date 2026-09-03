@@ -12,6 +12,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
+using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using MusicPlayerAvaloniaPort.Services.Song;
 
 namespace MusicPlayerAvaloniaPort.Views.Main;
@@ -20,7 +21,12 @@ public partial class MainView : UserControl
 {
     const bool FolderPickerFallbackEnabled = false;
 
-    void MapLocalSongLibrary()
+    /// <summary>
+    /// Resolves the song library folder: the configured path is used when present, otherwise the
+    /// MUSIC_FOLDER environment variable or a folder picker dialog. Only resolves the folder, the
+    /// actual scan happens later (see <see cref="ScanSongLibrary"/>).
+    /// </summary>
+    void ResolveSongLibraryPath()
     {
         if (Config.Data.SongLibraryPath == null)
         {
@@ -53,8 +59,54 @@ public partial class MainView : UserControl
             // Set SongLibraryPath
             Config.Data.SongLibraryPath = folder;
         }
+    }
 
-        songPlaybackService.UpdateAvailableSongPaths(Config.Data.SongLibraryPath!);
+    /// <summary>
+    /// Startup sync like in the DXMG client (see Assets.cs): once the song library folder is known but
+    /// before the library scan, try to pull the latest data from the sync server. That way the pulled
+    /// upvotedSong rows and the applied song library migrations (file renames, see Pull()) line up with
+    /// the files the scan afterwards is going to find. Fails silently when the user is not logged in yet
+    /// or the server is unreachable; logging in via the options view pulls again.
+    /// </summary>
+    void StartupSync()
+    {
+        if (Config.Data.SongLibraryPath == null)
+            return; // No song library folder resolved (yet), nothing to check or apply
+
+        var syncService = ServiceContainer.GetService<SongSyncService>();
+        syncService.Pull();
+
+        // If the song library is registered for a different account, the pull was aborted BEFORE
+        // anything was synced (local database and library state file are untouched). This runs on the
+        // background song setup thread, so ask the user on the UI thread and block until they answer:
+        // only with their consent is the library taken over and the pull retried.
+        var ownerWarning = syncService.TakeSongLibraryOwnerWarning();
+        if (ownerWarning != null)
+        {
+            string warning = ownerWarning;
+            bool? takeOver = null;
+            Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                takeOver = await new MessageBox(ex => Console.WriteLine(ex), Window, this)
+                    .AskYesNoAsync("Song library belongs to another account",
+                        warning + "\n\nDo you want to take the library over for your account and sync anyway?");
+            }).Wait();
+
+            if (takeOver == true)
+                syncService.Pull(AdoptSongLibraryOnMismatch: true);
+            else
+                Console.WriteLine("Song library sync skipped: the library is registered for another account.");
+        }
+    }
+
+    /// <summary>
+    /// Scans the resolved song library folder and builds the in-memory song lists. Has to run after the
+    /// startup sync, so the file names, the database rows and the applied song library migrations line up.
+    /// </summary>
+    void ScanSongLibrary()
+    {
+        if (Config.Data.SongLibraryPath != null)
+            songPlaybackService.UpdateAvailableSongPaths(Config.Data.SongLibraryPath);
     }
 
     void UpdateUiForNewSong(AvailableSong song)

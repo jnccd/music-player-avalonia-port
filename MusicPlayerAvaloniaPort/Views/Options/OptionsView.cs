@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
@@ -99,18 +100,37 @@ public partial class OptionsView : UserControl
         });
     }
 
-    private void SetMusicLibraryButton_Click(object? sender, RoutedEventArgs e)
+    private async void SetMusicLibraryButton_Click(object? sender, RoutedEventArgs e)
     {
         var musicLibraryTextBox = this.GetNestedControl<TextBox>("musicLibraryTextBox");
         Config.Data.SongLibraryPath = musicLibraryTextBox.Text;
 
         if (musicLibraryTextBox?.Text != null)
+        {
+            // If a pull already brought song library migrations (e.g. the user logged in before setting the
+            // library folder), apply the pending ones before the library scan, so the file names line up.
+            // Nothing is applied when the library is registered for a different account.
+            syncService.ApplySongLibraryMigrations(musicLibraryTextBox.Text);
+
+            // If the song library is registered for a different account, nothing was applied to it. Ask the
+            // user whether they want to take it over for the account of the last successful pull.
+            var ownerWarning = syncService.TakeSongLibraryOwnerWarning();
+            if (ownerWarning != null)
+            {
+                bool takeOver = await new MessageBox(e => Console.WriteLine(e), window, this)
+                    .AskYesNoAsync("Song library belongs to another account",
+                        ownerWarning + "\n\nDo you want to take the library over for your account?");
+                if (takeOver)
+                    syncService.AdoptSongLibrary(musicLibraryTextBox.Text);
+            }
+
             songPlaybackService.UpdateAvailableSongPaths(musicLibraryTextBox.Text);
+        }
 
         Config.Save();
     }
 
-    private void LoginButton_Click(object? sender, RoutedEventArgs e)
+    private async void LoginButton_Click(object? sender, RoutedEventArgs e)
     {
         try
         {
@@ -134,6 +154,31 @@ public partial class OptionsView : UserControl
         try
         {
             syncService.Pull();
+
+            // If the song library is registered for a different account, the pull was aborted before
+            // anything was synced (local database and library state file are untouched). Ask the user
+            // whether they want to take the library over for the account they just logged in with.
+            var ownerWarning = syncService.TakeSongLibraryOwnerWarning();
+            if (ownerWarning != null)
+            {
+                bool takeOver = await new MessageBox(e => Console.WriteLine(e), window, this)
+                    .AskYesNoAsync("Song library belongs to another account",
+                        ownerWarning + "\n\nDo you want to take the library over for your account and sync anyway?");
+                if (!takeOver)
+                {
+                    new MessageBox(e => Console.WriteLine(e), window, this)
+                        .Show("Song library", "Nothing was synced. Log in with the account that owns this library or choose a different song library to sync with this account.");
+                    return;
+                }
+
+                // User agreed: sync the data and register the library for the current account.
+                await Task.Run(() => syncService.Pull(AdoptSongLibraryOnMismatch: true));
+            }
+
+            // Pulling rewrites the local database and may rename files in the song library (song library
+            // migrations), so refresh the in-memory song lists if a library is already configured.
+            if (Config.Data.SongLibraryPath != null)
+                songPlaybackService.UpdateAvailableSongPaths(Config.Data.SongLibraryPath);
         }
         catch (Exception ex)
         {

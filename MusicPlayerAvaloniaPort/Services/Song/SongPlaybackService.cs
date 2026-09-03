@@ -90,6 +90,34 @@ public class SongPlaybackService
 
         return newAvailableSong;
     }
+    /// <summary>
+    /// Swaps the file paths of available songs after their files got renamed in the song library (a song
+    /// can exist as multiple copies in different subfolders, so several entries can be affected). The
+    /// upvotedSong ids stay the same, since the database entries keep their identity. Entries in the
+    /// runtime play history are updated as well, so replaying them uses the new path.
+    /// </summary>
+    public void RenameSongFiles(IReadOnlyCollection<(string OldPath, string NewPath)> renamedFiles)
+    {
+        if (renamedFiles.Count == 0)
+            return;
+
+        var pathMap = new Dictionary<string, string>();
+        foreach (var (oldPath, newPath) in renamedFiles)
+            pathMap[oldPath] = newPath;
+
+        for (int i = 0; i < AvailableSongs.Count; i++)
+            if (pathMap.ContainsKey(AvailableSongs[i].FilePath))
+                AvailableSongs[i] = new AvailableSong(pathMap[AvailableSongs[i].FilePath], AvailableSongs[i].UpvotedSongId);
+
+        lock (RuntimePlayHistory)
+        {
+            for (int i = 0; i < RuntimePlayHistory.Count; i++)
+                if (pathMap.ContainsKey(RuntimePlayHistory[i].FilePath))
+                    RuntimePlayHistory[i] = new AvailableSong(pathMap[RuntimePlayHistory[i].FilePath], RuntimePlayHistory[i].UpvotedSongId);
+        }
+
+        SongChoosingService.CreateSongChoosingDataStructure(AvailableSongs);
+    }
     public AvailableSong? FindAvailableSong(string fileNameWithoutExtension)
     {
         var foundSong = AvailableSongs

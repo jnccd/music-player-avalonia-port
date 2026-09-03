@@ -50,6 +50,26 @@ public class MessageBox(Action<Exception>? OnError, Window? OriginWindow, Contro
         }
     }
 
+    public async Task<bool> AskYesNoAsync(string title, string message, bool AlwaysAsFlyout = false, bool TakeFocus = true)
+    {
+        try
+        {
+            if (Globals.IsDesktop && !AlwaysAsFlyout)
+            {
+                return await ShowYesNoWindowAsync(title, message, TakeFocus);
+            }
+            else
+            {
+                throw new NotImplementedException();
+            }
+        }
+        catch (Exception ex)
+        {
+            OnError?.Invoke(ex);
+            return false;
+        }
+    }
+
     private async Task<string> ShowTextInputWindowAsync(string title, bool TakeFocus = true)
     {
         var tcs = new TaskCompletionSource<string>();
@@ -112,6 +132,79 @@ public class MessageBox(Action<Exception>? OnError, Window? OriginWindow, Contro
         currentWindow.ShowActivated = TakeFocus;
         await currentWindow.ShowDialog(OriginWindow!);
         textBox.Focus();
+
+        return await tcs.Task;
+    }
+
+    private async Task<bool> ShowYesNoWindowAsync(string title, string message, bool TakeFocus = true)
+    {
+        var tcs = new TaskCompletionSource<bool>();
+
+        var textBlock = new TextBlock
+        {
+            Text = message,
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+        };
+        var yesButton = new Button
+        {
+            Content = "Yes",
+            Width = 100,
+            Height = 30
+        };
+        var noButton = new Button
+        {
+            Content = "No",
+            Width = 100,
+            Height = 30
+        };
+        var buttonStack = new StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+            Spacing = 10,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+        };
+        buttonStack.Children.Add(yesButton);
+        buttonStack.Children.Add(noButton);
+
+        var grid = new Grid
+        {
+            Margin = new Thickness(10),
+            RowDefinitions =
+            {
+                new RowDefinition { Height = GridLength.Star },
+                new RowDefinition { Height = new GridLength(40) },
+            }
+        };
+        grid.Children.Add(message.Length > 1000 ? new ScrollViewer { Content = textBlock, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch } : textBlock);
+        grid.Children.Add(buttonStack);
+        Grid.SetRow(grid.Children[0], 0);
+        Grid.SetRow(grid.Children[1], 1);
+
+        currentWindow?.Close();
+        currentWindow = new Window
+        {
+            Title = title,
+            Content = grid,
+            Width = 450,
+            Height = 190,
+            Padding = new Thickness(10),
+        };
+
+        void closeWithResult(bool result)
+        {
+            currentWindow?.Close();
+            tcs.TrySetResult(result);
+        }
+        yesButton.Click += (s, e) => closeWithResult(true);
+        noButton.Click += (s, e) => closeWithResult(false);
+        // Closing the window without pressing a button counts as "No"
+        currentWindow.Closed += (s, e) => tcs.TrySetResult(false);
+
+        currentWindow.ShowActivated = TakeFocus;
+        await currentWindow.ShowDialog(OriginWindow!);
 
         return await tcs.Task;
     }

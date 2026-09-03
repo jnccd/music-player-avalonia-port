@@ -57,6 +57,7 @@
         <DataGrid.ContextMenu>
             <ContextMenu>
                 <MenuItem Click="Play_Click" Header="Play" />
+                <MenuItem Click="Rename_Click" Header="Rename" />
             </ContextMenu>
         </DataGrid.ContextMenu>
     </DataGrid>

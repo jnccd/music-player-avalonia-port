@@ -74,7 +74,14 @@ public partial class MainView : UserControl
         {
             Thread.CurrentThread.Name = "SongSetupThread";
 
-            MapLocalSongLibrary();
+            // Song library setup: first resolve the folder (config, env var or folder picker), then pull
+            // the latest data from the sync server (the folder has to be known for the account check and
+            // the migration application, see StartupSync()), and only then scan the library, so the file
+            // names, the database rows and the applied migrations line up. Afterwards playback can start.
+            ResolveSongLibraryPath();
+            StartupSync();
+            ScanSongLibrary();
+
             songPlaybackService.GetNextSong();
 
             mprisService?.Init();

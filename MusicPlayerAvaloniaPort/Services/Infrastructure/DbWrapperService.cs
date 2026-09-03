@@ -1,6 +1,7 @@
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Persistence.Database;
+using MusicPlayerSyncInterface;
 using MusicPlayerSyncInterface.DTOs;
 using MusicPlayerSyncInterface.DTOs.Composites;
 using System;
@@ -9,6 +10,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 
 namespace MusicPlayerAvaloniaPort.Services.Infrastructure;
 
@@ -67,21 +69,18 @@ public class DbWrapperService
                 ?? throw new InvalidDataException($"SongId {Id} not found!");
         public UpvotedSong? GetUpvotedSongByFullPath([StringSyntax(StringSyntaxAttribute.Uri)] string fullSongPath)
         {
-            // TODO: The matching logic should ideally be part of the interface repo since it concerns all projects using the db schema
+            // The matching logic lives in the interface project (see MusicPlayerSyncInterface.SongFileMatching),
+            // since it concerns all projects that use the db schema and the song library.
             var fileName = Path.GetFileName(fullSongPath);
+            var candidateSongs = SongDbContext.UpvotedSongs
+                .Where(x => x.UserId == "" || x.UserId == Config.Data.SyncServerUsername)
+                .ToArray();
 
-            var filenameMatchingSongs = SongDbContext.UpvotedSongs.Where(x => x.Name == fileName && (x.UserId == "" || x.UserId == Config.Data.SyncServerUsername)).ToArray();
-            if (filenameMatchingSongs.Length == 1)
-                return filenameMatchingSongs.First();
-            else if (filenameMatchingSongs.Length == 0)
-                return null; // No songs at all means nothing we can do
-
-            (var album, var artists) = HelperFuncs.GetAlbumAndArtistsFromSong(fullSongPath);
-            var fullMatchingSongs = SongDbContext.UpvotedSongs.Where(x => x.Name == fileName && x.Album == album && x.Artist == artists && (x.UserId == "" || x.UserId == Config.Data.SyncServerUsername)).ToArray();
-            if (fullMatchingSongs.Length == 1)
-                return fullMatchingSongs.First();
-
-            throw new Exception("Master Skywalker there are too many of them what are we going to do!?");
+            return SongFileMatching.ResolveUpvotedSongEntry(fileName, candidateSongs, () =>
+            {
+                var (album, artists) = HelperFuncs.GetAlbumAndArtistsFromSong(fullSongPath);
+                return (album, artists);
+            });
         }
         public bool DoesSongHaveVolume(Guid? SongId) =>
             SongDbContext.UpvotedSongs.FirstOrDefault(x => x.SongId == SongId && (x.UserId == "" || x.UserId == Config.Data.SyncServerUsername))?.Volume > 0;
@@ -119,6 +118,33 @@ public class DbWrapperService
         public void RemoveNotYetSyncedDataEntries(NotYetSyncedData unsyncedData)
         {
             SongDbContext.NotYetSyncedData.Remove(unsyncedData);
+            SongDbContext.SaveChanges();
+        }
+
+        /// <summary>
+        /// Renames the song inside queued "/sync/new-song" upload bodies of the given songs. The queued
+        /// bodies were serialized when the song was added, so after a song got renamed they would otherwise
+        /// still create the server row under the old name when they are retried.
+        /// </summary>
+        public void RenameQueuedSongUploads(Guid[] songIds, string newName)
+        {
+            var queuedUploadsToRename = SongDbContext.NotYetSyncedData
+                .Where(x => x.Endpoint.EndsWith("/sync/new-song") && x.BelongedToSongId != null && songIds.Contains(x.BelongedToSongId.Value))
+                .ToArray();
+            foreach (var queuedUpload in queuedUploadsToRename)
+            {
+                var queuedSong = JsonSerializer.Deserialize<UpvotedSong>(queuedUpload.Body, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                if (queuedSong == null)
+                    continue;
+                queuedSong.Name = newName;
+                queuedUpload.Body = JsonSerializer.Serialize(queuedSong, new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+            }
             SongDbContext.SaveChanges();
         }
 
