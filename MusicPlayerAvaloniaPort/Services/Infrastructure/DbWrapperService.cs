@@ -128,14 +128,14 @@ public class DbWrapperService
         }
 
         /// <summary>
-        /// Merges duplicate entries of the same song in the local database, keeping the canonical entry
-        /// (highest score, see MusicPlayerSyncInterface.SongFileMatching). Two kinds of duplicates exist:
-        /// 1. Exact duplicates (same file name AND same stored album/artist tags) - provable without the
-        ///    song files, always merged.
-        /// 2. Duplicates that only differ in tag completeness (one entry carries the album/artist of the
-        ///    song, the other is metadata-less). Those can only be proven to be the same song when the
-        ///    actual song files are available, so they are only merged when songLibraryPath is given and
-        ///    every file of that name in the library carries the tags of the tagged entry.
+        /// Merges duplicate entries of the same song in the local database (see
+        /// MusicPlayerSyncInterface.SongFileMatching for the canonical rules). Two kinds of duplicates:
+        /// 1. Exact duplicates (same file name AND same stored album/artist tags) - always merged.
+        /// 2. Duplicates that differ in tag completeness: metadata-less entries ("" tags) plus entries
+        ///    that carry the album/artist of the song. Those are absorbed into the tagged entry when all
+        ///    tagged entries of that file name share ONE tag signature. When songLibraryPath is given,
+        ///    the merge is only done if the files of the library agree (every file of that name carries
+        ///    these tags); without a library the single-signature rule alone decides, like on the server.
         /// The merged-away entries are deleted together with their history rows (the canonical entry keeps
         /// its own). Returns the number of merged-away entries.
         /// </summary>
@@ -156,36 +156,39 @@ public class DbWrapperService
                 Console.WriteLine($"Merged {remove.Length} exact duplicate(s) of \"{keep.Name}\" into {keep.SongId}.");
             }
 
-            // 2. Tag-completeness duplicates (only with a song library whose files can prove the identity).
-            if (!string.IsNullOrWhiteSpace(songLibraryPath) && Directory.Exists(songLibraryPath))
+            if (mergedAway > 0)
+                SongDbContext.SaveChanges(); // Persist pass 1, so pass 2 only sees the surviving rows
+
+            // 2. Tag-completeness duplicates (metadata-less entries absorbed into the tagged entry).
+            bool libraryAvailable = !string.IsNullOrWhiteSpace(songLibraryPath) && Directory.Exists(songLibraryPath);
+            var tagCompletenessGroups = SongDbContext.UpvotedSongs
+                .ToArray() // re-read after the exact duplicates were removed above
+                .GroupBy(s => new { s.UserId, s.Name })
+                .Where(group => group.Count() > 1)
+                .Where(group => group.Any(s => SongFileMatching.HasNoAlbumOrArtist(s.Artist, s.Album))
+                             && group.Any(s => !SongFileMatching.HasNoAlbumOrArtist(s.Artist, s.Album)))
+                .ToArray();
+            foreach (var group in tagCompletenessGroups)
             {
-                var tagCompletenessGroups = SongDbContext.UpvotedSongs
-                    .ToArray() // re-read after the exact duplicates were removed above
-                    .GroupBy(s => s.Name)
-                    .Where(group => group.Count() > 1)
-                    .Where(group => group.Any(s => SongFileMatching.HasNoAlbumOrArtist(s.Artist, s.Album))
-                                 && group.Any(s => !SongFileMatching.HasNoAlbumOrArtist(s.Artist, s.Album)))
-                    .ToArray();
-                foreach (var group in tagCompletenessGroups)
+                var taggedRows = group.Where(s => !SongFileMatching.HasNoAlbumOrArtist(s.Artist, s.Album)).ToArray();
+                var tagSignatures = taggedRows.Select(s => (s.Artist, s.Album)).Distinct().ToArray();
+                if (tagSignatures.Length != 1)
+                    continue; // Several differently tagged songs share the file name: a metadata-less row is ambiguous
+                (string fileArtist, string fileAlbum) = tagSignatures[0];
+
+                // When a song library is available, only merge when its files agree: every file of that
+                // name in the library must carry these tags, otherwise the metadata-less rows could belong
+                // to a different same-named file. Without a library the single-signature rule decides.
+                if (libraryAvailable)
                 {
-                    var taggedRows = group.Where(s => !SongFileMatching.HasNoAlbumOrArtist(s.Artist, s.Album)).ToArray();
-                    var tagSignatures = taggedRows.Select(s => (s.Artist, s.Album)).Distinct().ToArray();
-                    if (tagSignatures.Length != 1)
-                        continue; // Several differently tagged songs share the file name: a metadata-less row is ambiguous
-                    (string fileArtist, string fileAlbum) = tagSignatures[0];
-
-                    // Every file of that name in the library must be this one song, otherwise the
-                    // metadata-less rows could belong to a different same-named file.
-                    var files = SongSyncService.FindSongFilesByName(songLibraryPath, group.Key);
-                    if (files.Count == 0)
+                    var files = SongSyncService.FindSongFilesByName(songLibraryPath!, group.Key.Name);
+                    if (files.Count > 0 && files.Any(file => !SongSyncService.SongFileMatchesTags(file, fileArtist, fileAlbum)))
                         continue;
-                    if (files.Any(file => !SongSyncService.SongFileMatchesTags(file, fileArtist, fileAlbum)))
-                        continue;
-
-                    var (keep, remove) = SongFileMatching.MergeSameSongEntries(group, fileAlbum, fileArtist);
-                    mergedAway += RemoveUpvotedSongRows(remove);
-                    Console.WriteLine($"Merged {remove.Length} metadata-less duplicate(s) of \"{keep.Name}\" into {keep.SongId}.");
                 }
+
+                var (keep, remove) = SongFileMatching.MergeSameSongEntries(group, fileAlbum, fileArtist);
+                mergedAway += RemoveUpvotedSongRows(remove);
+                Console.WriteLine($"Merged {remove.Length} metadata-less duplicate(s) of \"{keep.Name}\" into {keep.SongId}.");
             }
 
             if (mergedAway > 0)
