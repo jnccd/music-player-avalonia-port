@@ -203,12 +203,16 @@ public class DbWrapperService
                 return 0;
 
             // Drop the history entries of the merged-away rows with them (the kept row keeps its own).
-            Guid[] removedIds = remove.Select(song => song.SongId).ToArray();
-            var orphanedHistory = SongDbContext.SongHistoryEntries
-                .Where(h => h.SongId != null && removedIds.Contains(h.SongId.Value))
-                .ToArray();
-            if (orphanedHistory.Length > 0)
-                SongDbContext.SongHistoryEntries.RemoveRange(orphanedHistory);
+            // Queried per row: EF Core 8 on .NET 10 cannot parameterize "array.Contains(...)" in a query
+            // (it tries to compile a ReadOnlySpan closure and throws), so the ids are compared one by one.
+            foreach (UpvotedSong removed in remove)
+            {
+                var orphanedHistory = SongDbContext.SongHistoryEntries
+                    .Where(h => h.SongId == removed.SongId)
+                    .ToArray();
+                if (orphanedHistory.Length > 0)
+                    SongDbContext.SongHistoryEntries.RemoveRange(orphanedHistory);
+            }
 
             SongDbContext.UpvotedSongs.RemoveRange(remove);
             return remove.Length;
@@ -269,8 +273,12 @@ public class DbWrapperService
         /// </summary>
         public void RenameQueuedSongUploads(Guid[] songIds, string newName)
         {
+            // Materialize first: EF Core 8 on .NET 10 cannot parameterize "array.Contains(...)" in a query
+            // (it tries to compile a ReadOnlySpan closure and throws), so the filter runs in memory.
             var queuedUploadsToRename = SongDbContext.NotYetSyncedData
-                .Where(x => x.Endpoint.EndsWith("/sync/new-song") && x.BelongedToSongId != null && songIds.Contains(x.BelongedToSongId.Value))
+                .Where(x => x.Endpoint.EndsWith("/sync/new-song") && x.BelongedToSongId != null)
+                .ToArray()
+                .Where(x => x.BelongedToSongId != null && songIds.Contains(x.BelongedToSongId.Value))
                 .ToArray();
             foreach (var queuedUpload in queuedUploadsToRename)
             {
