@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-cd ./MusicPlayerAvaloniaPort
+cd "$(dirname "$0")/MusicPlayerAvaloniaPort"
 
 if [ -z "$NIXOS_JNCCD_GUI_STARTER_UNCHANGED" ] || [ "$NIXOS_JNCCD_GUI_STARTER_UNCHANGED" != "1" ]; then
   # Changed - run database update and rebuild
