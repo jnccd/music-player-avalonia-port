@@ -111,6 +111,10 @@ public class SongVotingService(AudioLibWrapperService AudioLibWrapper, SongSyncS
         upvotedSong.Score += scoreChange;
         upvotedSong.TotalLikes++;
 
+        // Persist the changed row (score/streak/votes), otherwise only the history entry is saved and the
+        // statistics view keeps showing the old values until a server pull happens.
+        dbContext.SaveChanges();
+
         SaveScoreChange(upvotedSong, scoreChange);
 
         SongChoosingService.UpdateSongChoosingDataStructure(songToUpvote, AvailableSongs);
@@ -138,6 +142,10 @@ public class SongVotingService(AudioLibWrapperService AudioLibWrapper, SongSyncS
         var scoreChange = upvotedSong.Streak * GetDownvoteWeight(upvotedSong.Score) * (1 - totalPlayProgress) * 32;
         upvotedSong.Score += scoreChange;
         upvotedSong.TotalDislikes++;
+
+        // Persist the changed row (score/streak/votes), otherwise only the history entry is saved and the
+        // statistics view keeps showing the old values until a server pull happens.
+        dbContext.SaveChanges();
 
         SaveScoreChange(upvotedSong, scoreChange);
 
