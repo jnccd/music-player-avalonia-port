@@ -14,10 +14,10 @@
     </UserControl.Resources>
     <Grid RowDefinitions="Auto,*">
         <!-- Toolbar row: the controls the statistics view was originally supposed to have
-             (like in the DxMGP port): Refresh | To Playing | search box | Search -->
+        (like in the DxMGP port): Refresh | To Playing | search box | Search -->
         <Grid
             Grid.Row="0"
-            Margin="6,6,6,4"
+            Margin="12,12,12,10"
             ColumnDefinitions="Auto,Auto,*,Auto"
             ColumnSpacing="8">
             <Button
@@ -43,8 +43,8 @@
         </Grid>
 
         <!-- The DataGrid has to sit in a star-sized row, never inside a StackPanel/auto-sized container.
-             Only a bounded height keeps its row virtualization working - measured with infinite height it
-             realizes every row of the whole library at once and becomes unusably slow. -->
+        Only a bounded height keeps its row virtualization working - measured with infinite height it
+        realizes every row of the whole library at once and becomes unusably slow. -->
         <DataGrid
             Name="DataGrid"
             Grid.Row="1"
