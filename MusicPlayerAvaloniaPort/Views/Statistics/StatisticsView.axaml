@@ -105,11 +105,11 @@
                     <MenuItem Click="OpenInExplorer_Click" Header="Open in Explorer" />
                     <Separator />
                     <MenuItem Click="ResetVolumeMultiplier_Click" Header="Reset Volume Multiplier" />
-                    <MenuItem Click="Rename_Click" Header="Rename" />
                     <MenuItem Click="ShowCoverPicture_Click" Header="Show Cover Picture" />
-                    <Separator />
                     <MenuItem Click="FilterFor_Click" Header="Filter for..." />
-                    <MenuItem Click="DeleteEntry_Click" Header="Delete Entry" />
+                    <Separator />
+                    <MenuItem Click="Rename_Click" Header="Rename Entry and File" />
+                    <MenuItem Click="DeleteEntry_Click" Header="Delete Entry and File" />
                 </ContextMenu>
             </DataGrid.ContextMenu>
         </DataGrid>
