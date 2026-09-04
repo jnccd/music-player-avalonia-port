@@ -2,11 +2,14 @@ using Avalonia.Diagnostics;
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
+using MusicPlayerSyncInterface.DTOs;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace MusicPlayerAvaloniaPort.Services.Song;
 
@@ -19,6 +22,12 @@ public class SongPlaybackService
     readonly DbWrapperService DbWrapper;
 
     readonly List<AvailableSong> AvailableSongs = [];
+
+    // Serializes "the song is not registered yet, so register it" (see CreateAvailableSong): with a
+    // parallel library scan two files of the very same song must not race and insert duplicate rows.
+    readonly object songRegistrationLock = new();
+    // Guards the progress bar value against out-of-order writes from the parallel scan tasks.
+    readonly object progressLock = new();
 
     int RuntimePlayHistoryIndex = 0;
     readonly List<AvailableSong> RuntimePlayHistory = [];
@@ -59,15 +68,39 @@ public class SongPlaybackService
         var mp3Files = HelperFuncs.FindAllMp3FilesInDir(libraryRootPath);
         UpdateAvailableSongPathsProgress = 0.33f;
 
-        for (int i = 0; i < mp3Files.Count; i++)
+        // Resolving and registering the songs is independent per file, so the scan runs in parallel
+        // (the per-file database lookup is a small read; registering a brand new song is serialized and
+        // re-checks inside a lock, see CreateAvailableSong, so two files of the very same song can never
+        // race and insert duplicate rows). The results are collected into an indexed array and added in
+        // order afterwards, so the final list order is deterministic.
+        var availableSongs = new AvailableSong[mp3Files.Count];
+        int completedCount = 0;
+        int totalCount = mp3Files.Count;
+
+        try
         {
-            var file = mp3Files[i];
+            Parallel.For(0, totalCount, new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount, 2, 16) }, i =>
+            {
+                availableSongs[i] = CreateAvailableSong(mp3Files[i]);
 
-            var availableSong = CreateAvailableSong(file);
-            AvailableSongs.Add(availableSong);
-
-            UpdateAvailableSongPathsProgress = 0.33f + (0.33f * (i / (float)mp3Files.Count));
+                // The progress is based on a completion counter and only ever raised, so it cannot wobble
+                // backwards when files finish out of order.
+                int completed = Interlocked.Increment(ref completedCount);
+                lock (progressLock)
+                {
+                    float progress = 0.33f + 0.33f * completed / totalCount;
+                    if (progress > UpdateAvailableSongPathsProgress)
+                        UpdateAvailableSongPathsProgress = progress;
+                }
+            });
         }
+        catch (AggregateException ex)
+        {
+            // Preserve the serial behavior: the first failing file aborts the scan with its exception.
+            throw ex.Flatten().InnerExceptions[0];
+        }
+
+        AvailableSongs.AddRange(availableSongs);
 
         UpdateAvailableSongPathsProgress = 0.66f;
         SongChoosingService.CreateSongChoosingDataStructure(AvailableSongs);
@@ -75,9 +108,24 @@ public class SongPlaybackService
     }
     AvailableSong CreateAvailableSong(string fullPath)
     {
-        using var dbContext = DbWrapper.GetContext();
-        var upvotedSong = dbContext.GetUpvotedSongByFullPath(fullPath);
-        upvotedSong ??= SongVotingService.RegisterNewUpvotedSong(fullPath);
+        UpvotedSong? upvotedSong;
+        using (var dbContext = DbWrapper.GetContext())
+            upvotedSong = dbContext.GetUpvotedSongByFullPath(fullPath);
+
+        if (upvotedSong == null)
+        {
+            // The song is not registered yet. Registering writes to the database and uploads the song,
+            // so it is serialized: when the scan runs in parallel, another file of the very same song
+            // (e.g. copies in several folders) could otherwise race past the "not registered" check and
+            // insert a duplicate row. The lookup is repeated inside the lock, so the first registration
+            // wins and the second file maps to the same row.
+            lock (songRegistrationLock)
+            {
+                using (var dbContext = DbWrapper.GetContext())
+                    upvotedSong = dbContext.GetUpvotedSongByFullPath(fullPath);
+                upvotedSong ??= SongVotingService.RegisterNewUpvotedSong(fullPath);
+            }
+        }
 
         return new AvailableSong(fullPath, upvotedSong.SongId);
     }

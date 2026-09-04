@@ -87,12 +87,20 @@ public class DbWrapperService
         {
             // The matching logic lives in the interface project (see MusicPlayerSyncInterface.SongFileMatching),
             // since it concerns all projects that use the db schema and the song library.
+            // This is a hot path (it runs once per song file during library scans), so filter on the
+            // database side instead of loading every row of the user and filtering in memory.
             var fileName = Path.GetFileName(fullSongPath);
-            var candidateSongs = SongDbContext.UpvotedSongs
-                .Where(x => x.UserId == "" || x.UserId == Config.Data.SyncServerUsername)
+            var sameNameSongs = SongDbContext.UpvotedSongs
+                .Where(x => (x.UserId == "" || x.UserId == Config.Data.SyncServerUsername) && x.Name == fileName)
                 .ToArray();
 
-            return SongFileMatching.ResolveUpvotedSongEntry(fileName, candidateSongs, () =>
+            // Zero or one entry with the file name: the file name alone identifies the song, so the tags
+            // of the file are never read here - reading them (file IO) is only needed to disambiguate
+            // when several entries share the file name.
+            if (sameNameSongs.Length <= 1)
+                return sameNameSongs.FirstOrDefault();
+
+            return SongFileMatching.ResolveUpvotedSongEntry(fileName, sameNameSongs, () =>
             {
                 var (album, artists) = HelperFuncs.GetAlbumAndArtistsFromSong(fullSongPath);
                 return (album, artists);
