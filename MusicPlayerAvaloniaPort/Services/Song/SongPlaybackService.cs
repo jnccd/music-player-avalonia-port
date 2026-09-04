@@ -2,6 +2,7 @@ using Avalonia.Diagnostics;
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
+using MusicPlayerSyncInterface;
 using MusicPlayerSyncInterface.DTOs;
 using System;
 using System.Collections.Generic;
@@ -20,12 +21,10 @@ public class SongPlaybackService
     readonly SongVotingService SongVotingService;
     readonly SongChoosingService SongChoosingService;
     readonly DbWrapperService DbWrapper;
+    readonly SongSyncService SyncService;
 
     readonly List<AvailableSong> AvailableSongs = [];
 
-    // Serializes "the song is not registered yet, so register it" (see CreateAvailableSong): with a
-    // parallel library scan two files of the very same song must not race and insert duplicate rows.
-    readonly object songRegistrationLock = new();
     // Guards the progress bar value against out-of-order writes from the parallel scan tasks.
     readonly object progressLock = new();
 
@@ -48,7 +47,7 @@ public class SongPlaybackService
     public event EventHandler<AvailableSong>? NewSongStarted;
     public event EventHandler<bool>? UpvoteLockedInChanged;
 
-    public SongPlaybackService(AudioLibWrapperService AudioLibWrapper, SongVotingService UpvotedSongManager, SongChoosingService SongChoosingService, DbWrapperService DbWrapper)
+    public SongPlaybackService(AudioLibWrapperService AudioLibWrapper, SongVotingService UpvotedSongManager, SongChoosingService SongChoosingService, DbWrapperService DbWrapper, SongSyncService SyncService)
     {
         this.AudioLibWrapper = AudioLibWrapper;
         AudioLibWrapper.PlaybackEnded += (sender, args) =>
@@ -59,6 +58,7 @@ public class SongPlaybackService
         this.SongVotingService = UpvotedSongManager;
         this.SongChoosingService = SongChoosingService;
         this.DbWrapper = DbWrapper;
+        this.SyncService = SyncService;
     }
 
     public void UpdateAvailableSongPaths(string libraryRootPath)
@@ -68,11 +68,25 @@ public class SongPlaybackService
         var mp3Files = HelperFuncs.FindAllMp3FilesInDir(libraryRootPath);
         UpdateAvailableSongPathsProgress = 0.33f;
 
-        // Resolving and registering the songs is independent per file, so the scan runs in parallel
-        // (the per-file database lookup is a small read; registering a brand new song is serialized and
-        // re-checks inside a lock, see CreateAvailableSong, so two files of the very same song can never
-        // race and insert duplicate rows). The results are collected into an indexed array and added in
+        // Resolving and registering the songs is independent per file, so the scan runs in parallel.
+        // Brand new songs are registered WITHOUT reading their tags (on slow media such as a NAS that
+        // read takes hundreds of ms per file): the insert + a durable pending-upload marker are written
+        // in one transaction (SongVotingService.RegisterNewUpvotedSong + DbWrapperService), and the tag
+        // read + upload happen afterwards in the background (see SyncService.ProcessPendingSongUploads
+        // InBackground, kicked off below). The results are collected into an indexed array and added in
         // order afterwards, so the final list order is deterministic.
+        //
+        // Files whose name occurs MORE THAN ONCE in the library are the exception: for them the file
+        // name alone cannot identify the song, so their tags are read right away (strict identity, see
+        // CreateAmbiguousNameAvailableSong) - lazily tagging them later would be ambiguous anyway, since
+        // the worker could not know which copy a row belongs to. This only costs tag reads for the rare
+        // duplicate-named files.
+        var ambiguousNames = mp3Files
+            .GroupBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key ?? "")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         var availableSongs = new AvailableSong[mp3Files.Count];
         int completedCount = 0;
         int totalCount = mp3Files.Count;
@@ -81,7 +95,7 @@ public class SongPlaybackService
         {
             Parallel.For(0, totalCount, new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount, 2, 16) }, i =>
             {
-                availableSongs[i] = CreateAvailableSong(mp3Files[i]);
+                availableSongs[i] = CreateAvailableSong(mp3Files[i], deferTagReadingAndUpload: true, ambiguousLibraryNames: ambiguousNames);
 
                 // The progress is based on a completion counter and only ever raised, so it cannot wobble
                 // backwards when files finish out of order.
@@ -105,29 +119,100 @@ public class SongPlaybackService
         UpdateAvailableSongPathsProgress = 0.66f;
         SongChoosingService.CreateSongChoosingDataStructure(AvailableSongs);
         UpdateAvailableSongPathsProgress = 1.0f;
-    }
-    AvailableSong CreateAvailableSong(string fullPath)
-    {
-        UpvotedSong? upvotedSong;
-        using (var dbContext = DbWrapper.GetContext())
-            upvotedSong = dbContext.GetUpvotedSongByFullPath(fullPath);
 
-        if (upvotedSong == null)
+        // Songs registered lazily during this scan (and leftovers of a previously killed run) are tagged
+        // and uploaded in the background now - the app is already fully usable, the reads just must not
+        // block it. The file-name map comes from this scan's enumeration.
+        var filesByName = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (string filePath in mp3Files)
         {
-            // The song is not registered yet. Registering writes to the database and uploads the song,
-            // so it is serialized: when the scan runs in parallel, another file of the very same song
-            // (e.g. copies in several folders) could otherwise race past the "not registered" check and
-            // insert a duplicate row. The lookup is repeated inside the lock, so the first registration
-            // wins and the second file maps to the same row.
-            lock (songRegistrationLock)
+            string name = Path.GetFileName(filePath);
+            if (filesByName.TryGetValue(name, out var list))
+                ((List<string>)list).Add(filePath);
+            else
+                filesByName[name] = new List<string> { filePath };
+        }
+        SyncService.ProcessPendingSongUploadsInBackground(filesByName);
+    }
+    AvailableSong CreateAvailableSong(string fullPath, bool deferTagReadingAndUpload = false, IReadOnlySet<string>? ambiguousLibraryNames = null)
+    {
+        // When several files of the library share this file name, the name alone cannot identify which
+        // row (if any) the file belongs to - its tags have to decide. Those files are resolved strictly
+        // with their tags read now.
+        if (ambiguousLibraryNames != null && ambiguousLibraryNames.Contains(Path.GetFileName(fullPath)))
+            return CreateAmbiguousNameAvailableSong(fullPath);
+
+        // The database lookup is a quick read and is the common case for already registered songs.
+        // Registering a brand new song happens in SongVotingService.RegisterNewUpvotedSong: during a
+        // library scan (deferTagReadingAndUpload) it only inserts the row and defers the slow tag read
+        // and the upload to the background worker; single-song registrations while the app runs read
+        // the tags and upload immediately as before.
+        using var dbContext = DbWrapper.GetContext();
+        var upvotedSong = dbContext.GetUpvotedSongByFullPath(fullPath);
+        upvotedSong ??= SongVotingService.RegisterNewUpvotedSong(fullPath, deferTagReadingAndUpload);
+
+        return new AvailableSong(fullPath, upvotedSong.SongId);
+    }
+
+    /// <summary>
+    /// Resolves a file whose name is shared by several files of the library. The tags of THIS file are
+    /// read first and decide between three cases:
+    /// - an existing row carries exactly these tags: the file belongs to it (identical copies of the
+    ///   same song share the row);
+    /// - the file carries no readable tags and a metadata-less row of the same name exists: it belongs
+    ///   to that row;
+    /// - otherwise the file is a distinct same-named song: a NEW row is registered with its tags
+    ///   (RegisterUpvotedSongWithTags), so different songs of the same name stay distinguishable from
+    ///   the very first scan on.
+    /// Never lazy: such rows must carry their real tags (a lazy row could not be matched back to the
+    /// right copy later).
+    /// </summary>
+    AvailableSong CreateAmbiguousNameAvailableSong(string fullPath)
+    {
+        string fileName = Path.GetFileName(fullPath);
+        var tags = DbWrapper.ReadTagsFromSongFile(fullPath);
+
+        UpvotedSong? row;
+        using (var dbContext = DbWrapper.GetContext())
+        {
+            var sameNameRows = dbContext.GetUpvotedSongsByName(fileName);
+            bool fileHasTags = !SongFileMatching.HasNoAlbumOrArtist(tags.Artists, tags.Album);
+
+            if (sameNameRows.Length == 0)
             {
-                using (var dbContext = DbWrapper.GetContext())
-                    upvotedSong = dbContext.GetUpvotedSongByFullPath(fullPath);
-                upvotedSong ??= SongVotingService.RegisterNewUpvotedSong(fullPath);
+                row = null;
+            }
+            else if (fileHasTags)
+            {
+                var exactMatches = sameNameRows
+                    .Where(s => SongFileMatching.TagsEqual(s.Artist, s.Album, tags.Artists, tags.Album))
+                    .ToArray();
+                if (exactMatches.Length > 0)
+                {
+                    // Identical copies of the same song share the row (identical duplicates: pick the
+                    // canonical one deterministically).
+                    row = SongFileMatching.ChooseCanonicalEntry(exactMatches, tags.Album, tags.Artists);
+                }
+                else
+                {
+                    // No row carries these tags. A single metadata-less row is the historical catch-all
+                    // for this name (rows from other clients/pulls); with any other rows present the
+                    // file is a new, distinct same-named song.
+                    var metadataLessRows = sameNameRows.Where(s => SongFileMatching.HasNoAlbumOrArtist(s.Artist, s.Album)).ToArray();
+                    row = metadataLessRows.Length == 1 && sameNameRows.Length == 1 ? metadataLessRows[0] : null;
+                }
+            }
+            else
+            {
+                // The file carries no readable tags: bind it to a metadata-less row of the same name if
+                // one exists, otherwise it is a new (metadata-less) song.
+                var metadataLessRows = sameNameRows.Where(s => SongFileMatching.HasNoAlbumOrArtist(s.Artist, s.Album)).ToArray();
+                row = metadataLessRows.Length > 0 ? SongFileMatching.ChooseCanonicalEntry(metadataLessRows) : null;
             }
         }
 
-        return new AvailableSong(fullPath, upvotedSong.SongId);
+        row ??= SongVotingService.RegisterUpvotedSongWithTags(fullPath, tags.Album, tags.Artists);
+        return new AvailableSong(fullPath, row.SongId);
     }
     public AvailableSong? RegisterNewSong(string fullPath)
     {

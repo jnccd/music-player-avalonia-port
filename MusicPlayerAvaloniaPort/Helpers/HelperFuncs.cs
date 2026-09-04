@@ -46,8 +46,11 @@ public static class HelperFuncs
 
     public static (string Album, string Artists) GetAlbumAndArtistsFromSong(string songPath)
     {
-        TagLib.File file = TagLib.File.Create(songPath);
-        return (file.Tag.Album, file.Tag.AlbumArtists.Length == 0 ? "" : file.Tag.AlbumArtists.Aggregate((x, y) => x + " + " + y));
+        // Dispose the TagLib file (and with it the underlying file stream): reading the tags of every
+        // song file of a library scan must not leave thousands of open file handles behind until the
+        // finalizer collects them (that caused GC/finalizer churn and sluggishness after the scan).
+        using var file = TagLib.File.Create(songPath);
+        return (file.Tag.Album ?? "", file.Tag.AlbumArtists.Length == 0 ? "" : file.Tag.AlbumArtists.Aggregate((x, y) => x + " + " + y));
     }
 
     public static float Sigmoid(double value)

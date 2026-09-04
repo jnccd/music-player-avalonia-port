@@ -219,6 +219,12 @@ public partial class OptionsView : UserControl
                             .Show("Song library refresh failed.", $"{ex}");
                     }
                 }
+
+                // A sync session exists now: songs that were registered and tagged before the login (or
+                // whose upload was skipped because there was no session) are uploaded in the background.
+                // The worker is a no-op when there is nothing pending, and the scan above already kicked
+                // it if one ran.
+                syncService.ProcessPendingSongUploadsInBackground();
             }
             catch (Exception ex)
             {

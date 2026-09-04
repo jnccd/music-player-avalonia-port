@@ -17,6 +17,14 @@ namespace MusicPlayerAvaloniaPort.Services.Infrastructure;
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(DbWrapperService))]
 public class DbWrapperService
 {
+    /// <summary>
+    /// Error text stored on queued "/sync/new-song" entries that were created by the lazy registration
+    /// flow (library scan): the tags of the song have not been read and uploaded yet. Such entries are
+    /// owned by the background tag/upload worker (SongSyncService.ProcessPendingSongUploadsInBackground)
+    /// and are skipped by the plain startup retry loop.
+    /// </summary>
+    public const string PendingTagReadError = "Lazy registration: waiting for tag read + upload.";
+
     public Context GetContext() => new(this);
 
     public class Context(DbWrapperService parent) : IDisposable
@@ -29,7 +37,7 @@ public class DbWrapperService
         }
 
         // Create
-        public UpvotedSong AddNewUpvotedSong([StringSyntax(StringSyntaxAttribute.Uri)] string songPath)
+        public UpvotedSong AddNewUpvotedSong([StringSyntax(StringSyntaxAttribute.Uri)] string songPath, (string Album, string Artists)? preReadTags = null)
         {
             // Add empty local user if necessary
             if (!SongDbContext.Users.Any(x => x.UserId == ""))
@@ -44,23 +52,109 @@ public class DbWrapperService
             // Record the album/artist tags of the file when they can be read. A song is identified by its
             // file name plus its tags, so registering a file without its tags can create a duplicate entry
             // of a song another client already registered WITH its tags (the two rows would differ in tag
-            // completeness and could not be proven to be the same song anymore).
-            try
+            // completeness and could not be proven to be the same song anymore). Callers of a parallel
+            // scan pass pre-read tags (reading them before the registration lock keeps the lock short);
+            // without them the tags are read here.
+            if (preReadTags.HasValue)
             {
-                var (album, artists) = HelperFuncs.GetAlbumAndArtistsFromSong(songPath);
-                newUpvotedSong.Album = album ?? "";
-                newUpvotedSong.Artist = artists ?? "";
+                newUpvotedSong.Album = preReadTags.Value.Album;
+                newUpvotedSong.Artist = preReadTags.Value.Artists;
             }
-            catch
+            else
             {
-                // The tags could not be read (e.g. a file that is just being downloaded): keep the entry
-                // metadata-less, it can then only be identified by its file name.
+                var tags = parent.ReadTagsFromSongFile(songPath);
+                newUpvotedSong.Album = tags.Album;
+                newUpvotedSong.Artist = tags.Artists;
             }
 
             SongDbContext.UpvotedSongs.Add(newUpvotedSong);
             SongDbContext.SaveChanges();
 
             return newUpvotedSong;
+        }
+
+        /// <summary>
+        /// Registers a brand new song row WITHOUT reading its tags from the file (the tag read on slow
+        /// media such as a NAS is deferred to the background tag/upload worker, see
+        /// SongSyncService.ProcessPendingSongUploadsInBackground) and WITHOUT uploading it yet. The row
+        /// and its pending-upload marker are written in ONE SaveChanges, so a crash cannot leave a row
+        /// without a marker (it would just be registered again on the next scan).
+        /// </summary>
+        public UpvotedSong AddNewUpvotedSongLazy([StringSyntax(StringSyntaxAttribute.Uri)] string songPath)
+        {
+            // Add empty local user if necessary (only the very first song has to do this).
+            if (!SongDbContext.Users.Any(x => x.UserId == ""))
+            {
+                SongDbContext.Users.Add(new User("", "", ""));
+            }
+
+            var songFileName = Path.GetFileName(songPath);
+            var newUpvotedSong = new UpvotedSong(songFileName, 0, 0, 0, 0, parent.GetSongAgeFromPath(songPath), -1) { Path = songPath };
+
+            // Pending-upload marker: the tag/upload worker finds this entry, reads the tags of the file,
+            // uploads the song WITH its tags and removes the marker. Until then the song stays tag-less
+            // locally, which is also what makes the whole flow restart-safe (a killed worker leaves the
+            // marker behind and the next scan picks it up again).
+            var pendingUpload = new NotYetSyncedData(Guid.NewGuid(), "/sync/new-song",
+                JsonSerializer.Serialize(newUpvotedSong, new JsonSerializerOptions { WriteIndented = true }),
+                DbWrapperService.PendingTagReadError, newUpvotedSong.SongId);
+
+            SongDbContext.UpvotedSongs.Add(newUpvotedSong);
+            SongDbContext.NotYetSyncedData.Add(pendingUpload);
+            SongDbContext.SaveChanges(); // One transaction: row + marker are either both there or neither
+
+            return newUpvotedSong;
+        }
+        public NotYetSyncedData[] GetPendingSongUploads() =>
+            SongDbContext.NotYetSyncedData
+                .Where(x => x.Endpoint == "/sync/new-song" && x.BelongedToSongId != null)
+                .ToArray();
+        public UpvotedSong? GetUpvotedSongByIdOrNull(Guid? Id) =>
+            SongDbContext.UpvotedSongs.FirstOrDefault(x => x.SongId == Id && (x.UserId == "" || x.UserId == Config.Data.SyncServerUsername));
+        public UpvotedSong[] GetUpvotedSongsByName(string fileName) =>
+            SongDbContext.UpvotedSongs
+                .Where(x => (x.UserId == "" || x.UserId == Config.Data.SyncServerUsername) && x.Name == fileName)
+                .ToArray();
+        public UpvotedSong? GetUpvotedSongByTags(string fileName, string artist, string album) =>
+            SongDbContext.UpvotedSongs.FirstOrDefault(x =>
+                (x.UserId == "" || x.UserId == Config.Data.SyncServerUsername) && x.Name == fileName && x.Artist == artist && x.Album == album);
+
+        /// <summary>
+        /// Persists the given album/artist tags onto the row. If another row of the same user already
+        /// carries exactly these tags for the same file name, the row is a duplicate that cannot take
+        /// them (the unique index forbids it): the tag-less duplicate is removed (with its history) and
+        /// false is returned. The caller should then drop the pending-upload marker instead of uploading.
+        /// </summary>
+        public bool TryApplyTagsToSong(Guid songId, string album, string artist, out bool removedAsDuplicate)
+        {
+            removedAsDuplicate = false;
+            var row = GetUpvotedSongByIdOrNull(songId);
+            if (row == null)
+                return false; // Row vanished in the meantime (e.g. server merge + pull)
+
+            var identityDuplicate = SongDbContext.UpvotedSongs.FirstOrDefault(x =>
+                x.UserId == row.UserId && x.Name == row.Name && x.Artist == artist && x.Album == album && x.SongId != row.SongId);
+            if (identityDuplicate != null)
+            {
+                // The tags belong to another (already tagged) row - this row was a metadata-less
+                // duplicate of it, so it is removed instead of updated.
+                RemoveUpvotedSongRows([row]);
+                removedAsDuplicate = true;
+                return false;
+            }
+
+            row.Artist = artist;
+            row.Album = album;
+            SongDbContext.SaveChanges();
+            return true;
+        }
+        public void UpdateNotYetSyncedDataEntry(NotYetSyncedData entry, string? newBody, string? newError)
+        {
+            if (newBody != null)
+                entry.Body = newBody;
+            if (newError != null)
+                entry.Error = newError;
+            SongDbContext.SaveChanges();
         }
         public SongHistoryEntry AddNewSongHistoryEntry(Guid upvotedSongId, float scoreChange)
         {
@@ -112,7 +206,12 @@ public class DbWrapperService
             [.. SongDbContext.UpvotedSongs.Where(x => x.UserId == "" || x.UserId == Config.Data.SyncServerUsername)];
 
         // Sync
-        public void RewriteDatabase(SyncPullResponse pulledData)
+        /// <summary>
+        /// Replaces the whole local database with the pulled data, then merges duplicate entries of the
+        /// same song (exact and tag-completeness duplicates, see <see cref="MergeDuplicateUpvotedSongs"/>).
+        /// Returns how many duplicate rows were merged away.
+        /// </summary>
+        public int RewriteDatabase(SyncPullResponse pulledData)
         {
             SongDbContext.SongHistoryEntries.RemoveRange(SongDbContext.SongHistoryEntries);
             SongDbContext.SaveChanges();
@@ -132,7 +231,7 @@ public class DbWrapperService
             // account registered the same file separately, each under its own SongId, before the server
             // started rejecting duplicate uploads). Merge them right after the rewrite, so the statistics
             // and the song matching only ever see one entry per song.
-            MergeDuplicateUpvotedSongs(Config.Data.SongLibraryPath);
+            return MergeDuplicateUpvotedSongs(Config.Data.SongLibraryPath);
         }
 
         /// <summary>
@@ -176,6 +275,23 @@ public class DbWrapperService
                 .Where(group => group.Any(s => SongFileMatching.HasNoAlbumOrArtist(s.Artist, s.Album))
                              && group.Any(s => !SongFileMatching.HasNoAlbumOrArtist(s.Artist, s.Album)))
                 .ToArray();
+
+            // The library is enumerated ONCE (walking a NAS recursively for every duplicate group would
+            // be far too slow); the resulting name->files map is then used for all groups.
+            Dictionary<string, List<string>>? libraryFilesByName = null;
+            if (libraryAvailable && tagCompletenessGroups.Length > 0)
+            {
+                libraryFilesByName = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+                foreach (string filePath in HelperFuncs.FindAllMp3FilesInDir(songLibraryPath!))
+                {
+                    string name = Path.GetFileName(filePath);
+                    if (libraryFilesByName.TryGetValue(name, out var list))
+                        list.Add(filePath);
+                    else
+                        libraryFilesByName[name] = new List<string> { filePath };
+                }
+            }
+
             foreach (var group in tagCompletenessGroups)
             {
                 var taggedRows = group.Where(s => !SongFileMatching.HasNoAlbumOrArtist(s.Artist, s.Album)).ToArray();
@@ -187,12 +303,11 @@ public class DbWrapperService
                 // When a song library is available, only merge when its files agree: every file of that
                 // name in the library must carry these tags, otherwise the metadata-less rows could belong
                 // to a different same-named file. Without a library the single-signature rule decides.
-                if (libraryAvailable)
-                {
-                    var files = SongSyncService.FindSongFilesByName(songLibraryPath!, group.Key.Name);
-                    if (files.Count > 0 && files.Any(file => !SongSyncService.SongFileMatchesTags(file, fileArtist, fileAlbum)))
-                        continue;
-                }
+                if (libraryAvailable
+                    && libraryFilesByName!.TryGetValue(group.Key.Name, out var files)
+                    && files.Count > 0
+                    && files.Any(file => !SongSyncService.SongFileMatchesTags(file, fileArtist, fileAlbum)))
+                    continue;
 
                 var (keep, remove) = SongFileMatching.MergeSameSongEntries(group, fileAlbum, fileArtist);
                 mergedAway += RemoveUpvotedSongRows(remove);
@@ -308,6 +423,24 @@ public class DbWrapperService
         public void Dispose()
         {
             SongDbContext.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Reads the album/artist tags of a song file (same convention as everywhere in this codebase, see
+    /// MusicPlayerSyncInterface.SongFileMatching). Returns empty strings when the tags cannot be read -
+    /// the entry is then metadata-less and can only be identified by its file name.
+    /// </summary>
+    public (string Album, string Artists) ReadTagsFromSongFile([StringSyntax(StringSyntaxAttribute.Uri)] string songPath)
+    {
+        try
+        {
+            var (album, artists) = HelperFuncs.GetAlbumAndArtistsFromSong(songPath);
+            return (album ?? "", artists ?? "");
+        }
+        catch
+        {
+            return ("", "");
         }
     }
 

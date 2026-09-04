@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
@@ -32,7 +32,8 @@ public class SongDbContext : DbContext
             var sqlitePath = $"{Environment.GetEnvironmentVariable("MUSIC_PLAYER_SQLITE_DB_PATH") ?? exePath}{Path.DirectorySeparatorChar}Persistence{Path.DirectorySeparatorChar}song.db";
             Directory.CreateDirectory(Path.GetDirectoryName(sqlitePath)!);
 
-            options.UseSqlite($"Data Source={sqlitePath}");
+            options.UseSqlite($"Data Source={sqlitePath}")
+                .AddInterceptors(new SqlitePragmasInterceptor()); // WAL mode, synchronous=NORMAL, busy timeout
             DbStatus = $"Using SQLite DB at {sqlitePath}";
         }
         else

@@ -5,10 +5,13 @@ using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using EzAuth.Interfaces;
 using EzAuth.Keycloak;
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
+using MusicPlayerAvaloniaPort.Persistence.Database;
 using MusicPlayerSyncInterface;
 using MusicPlayerSyncInterface.DTOs;
 using MusicPlayerSyncInterface.DTOs.Composites;
@@ -49,6 +52,13 @@ public class SongSyncService
     public string? LastPulledUserId { get; private set; } = null;
 
     string? songLibraryOwnerWarning = null;
+
+    // Guards the background tag/upload worker so only one runs at a time (a scan and a previous worker
+    // must not process the same pending songs twice concurrently).
+    readonly object pendingUploadWorkerLock = new();
+    bool pendingUploadWorkerRunning = false;
+    // Reads the tags of lazily registered songs from the (slow, e.g. NAS) library with this concurrency.
+    const int PENDING_UPLOAD_WORKER_DEGREE_OF_PARALLELISM = 4;
 
     /// <summary>
     /// Returns the last recorded song library account warning (see <see cref="WriteSongLibraryMigrationState"/>) and clears it.
@@ -121,6 +131,33 @@ public class SongSyncService
             {
                 try
                 {
+                    if (unsyncedData.Endpoint == "/sync/new-song")
+                    {
+                        // Lazy registrations (see DbWrapperService.AddNewUpvotedSongLazy) are only
+                        // uploaded after their tags were read and persisted by the background worker.
+                        UpvotedSong? currentRow = unsyncedData.BelongedToSongId != null
+                            ? dbContext.GetUpvotedSongByIdOrNull(unsyncedData.BelongedToSongId)
+                            : null;
+                        if (unsyncedData.Error == DbWrapperService.PendingTagReadError)
+                        {
+                            if (currentRow == null)
+                            {
+                                // The row was removed (e.g. by an earlier pull): the marker is
+                                // meaningless - the next library scan re-registers the song if needed.
+                                dbContext.RemoveNotYetSyncedDataEntries(unsyncedData);
+                                continue;
+                            }
+                            if (SongFileMatching.HasNoAlbumOrArtist(currentRow.Artist, currentRow.Album))
+                                continue; // Tags not read yet - the background worker owns this marker
+                        }
+
+                        // Refresh the queued body from the current row (its tags may have been filled in
+                        // the meantime, it may have been renamed): a stale body could otherwise recreate
+                        // the row under an old state on the server.
+                        if (currentRow != null && currentRow.Name.Length > 0)
+                            unsyncedData.Body = JsonSerializer.Serialize(currentRow, jsonOptions);
+                    }
+
                     var sendContent = new StringContent(unsyncedData.Body, Encoding.UTF8, "application/json");
                     HttpResponseMessage res;
                     if (unsyncedData.Endpoint == "/sync/volume") // Horrible way to do this, TODO: change unsyncedData to include HTTP method type (POST/PUT) instead of hardcoding it here
@@ -254,8 +291,13 @@ public class SongSyncService
             LastPulledMigrations = pulledData.Migrations ?? [];
             LastPulledUserId = authedUserId != "" ? authedUserId : pulledData.User?.UserId;
 
-            using var dbContext = DbWrapper.GetContext();
-            dbContext.RewriteDatabase(pulledData);
+            // The rewrite (and especially the duplicate-entry merge that follows it, which can remove a
+            // few hundred rows when the server data used to contain duplicates) can take a moment - the
+            // options view mirrors State, so say what is happening instead of appearing frozen.
+            State = "Merging duplicate song entries after the pull…";
+            int mergedDuplicates;
+            using (var dbContext = DbWrapper.GetContext())
+                mergedDuplicates = dbContext.RewriteDatabase(pulledData);
 
             // If the user explicitly agreed to take the library over, register it for the current account
             // now (treated as fully migrated for it). Migrations are then applied as usual below, which is
@@ -273,7 +315,9 @@ public class SongSyncService
             if (Config.Data.SongLibraryPath != null)
                 ApplySongLibraryMigrations(Config.Data.SongLibraryPath);
 
-            State = $"Pull Succeeded!";
+            State = mergedDuplicates > 0
+                ? $"Pull Succeeded! (merged {mergedDuplicates} duplicate song entr{(mergedDuplicates == 1 ? "y" : "ies")})"
+                : "Pull Succeeded!";
         }
         catch (Exception ex)
         {
@@ -693,5 +737,205 @@ public class SongSyncService
 
             dbContext.AddNewNotYetSyncedDataEntry(newEntryJson, queuedEndpoint, ex.Message, newEntry.SongId);
         }
+    }
+
+    /// <summary>
+    /// Starts the background worker for songs that were registered lazily during a library scan (see
+    /// DbWrapperService.AddNewUpvotedSongLazy). The worker does two independent things:
+    /// 1. TAG READING: reads the album/artist tags of each pending song from its file and persists them
+    ///    on the row (bounded concurrency, so slow NAS reads never block the app). This only needs the
+    ///    files and therefore also runs while the user is not logged in.
+    /// 2. UPLOADING: posts each now-tagged song to the sync server. This only happens when a sync
+    ///    session exists (client != null); otherwise the markers are simply left in place and a later
+    ///    login kicks the worker again (the uploads are NOT attempted when there is no session, so a
+    ///    not-logged-in first boot does not burn hundreds of pointless 401s).
+    /// Crash-safe by construction:
+    /// - Row + marker are written in one transaction at registration, so a killed app can neither lose
+    ///   a song nor leave it without a marker.
+    /// - Tags are persisted before the upload, but the marker is only removed after the upload succeeded
+    ///   (or the server answered 409 for the duplicate upload), so the upload always carries the tags
+    ///   and an app close between any two steps just leads to a harmless retry on the next run.
+    /// songFilesByName optionally maps file names to the paths of the current library scan (used to
+    /// match pending rows to their files; rows left over from a killed run are picked up here too).
+    /// When it is null/empty and a song library is configured, the map is built once from the library.
+    /// Never throws on the caller; failures are logged and the markers stay for the next run.
+    /// </summary>
+    public void ProcessPendingSongUploadsInBackground(IReadOnlyDictionary<string, IReadOnlyList<string>>? songFilesByName = null)
+    {
+        lock (pendingUploadWorkerLock)
+        {
+            if (pendingUploadWorkerRunning)
+                return;
+            pendingUploadWorkerRunning = true;
+        }
+
+        Task.Run(() =>
+        {
+            try
+            {
+                ProcessPendingSongUploads(songFilesByName);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Pending song upload worker failed: {ex}");
+            }
+            finally
+            {
+                lock (pendingUploadWorkerLock)
+                    pendingUploadWorkerRunning = false;
+            }
+        });
+    }
+
+    void ProcessPendingSongUploads(IReadOnlyDictionary<string, IReadOnlyList<string>>? songFilesByName)
+    {
+        NotYetSyncedData[] pending;
+        using (var listContext = DbWrapper.GetContext())
+            pending = listContext.GetPendingSongUploads();
+        if (pending.Length == 0)
+            return;
+
+        // When the caller did not provide the current library scan (e.g. this was kicked after a login),
+        // build the file-name map from the configured library once, so tag-less rows can still be tagged.
+        if ((songFilesByName == null || songFilesByName.Count == 0) && !string.IsNullOrWhiteSpace(Config.Data.SongLibraryPath) && Directory.Exists(Config.Data.SongLibraryPath))
+        {
+            var map = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (string filePath in HelperFuncs.FindAllMp3FilesInDir(Config.Data.SongLibraryPath))
+            {
+                string name = Path.GetFileName(filePath);
+                if (map.TryGetValue(name, out var list))
+                    ((List<string>)list).Add(filePath);
+                else
+                    map[name] = new List<string> { filePath };
+            }
+            songFilesByName = map;
+        }
+        songFilesByName ??= new Dictionary<string, IReadOnlyList<string>>();
+
+        // Uploads require a sync session (created by Init/Login). Without one (e.g. first boot before
+        // any login) only the tags are read and persisted; the markers stay for a later kick.
+        bool canUpload = client != null;
+        Console.WriteLine($"[SongUpload] Processing {pending.Length} pending song(s) in the background (tag reading: yes, uploads: {canUpload}); parallelism {PENDING_UPLOAD_WORKER_DEGREE_OF_PARALLELISM}");
+
+        int uploaded = 0;
+        int tagged = 0;
+        int leftLoggedOut = 0;
+        int failed = 0;
+        bool authFailed = false;
+
+        Parallel.ForEach(pending, new ParallelOptions { MaxDegreeOfParallelism = PENDING_UPLOAD_WORKER_DEGREE_OF_PARALLELISM }, entry =>
+        {
+            try
+            {
+                using var dbContext = DbWrapper.GetContext();
+
+                UpvotedSong? row = dbContext.GetUpvotedSongByIdOrNull(entry.BelongedToSongId);
+                if (row == null)
+                {
+                    // The row was merged away or removed by a pull in the meantime; the marker is
+                    // meaningless now (the song is re-registered and re-marked by the next library scan
+                    // if it is still on disk and was never uploaded).
+                    dbContext.RemoveNotYetSyncedDataEntries(entry);
+                    return;
+                }
+
+                bool fileFound = songFilesByName.TryGetValue(row.Name, out var paths) && paths != null && paths.Count > 0;
+
+                // 1. Tag reading + persisting (only for rows that never had their tags attempted).
+                if (SongFileMatching.HasNoAlbumOrArtist(row.Artist, row.Album)
+                    && fileFound
+                    && entry.Error == DbWrapperService.PendingTagReadError)
+                {
+                    var tags = DbWrapper.ReadTagsFromSongFile(paths![0]);
+                    if (SongFileMatching.HasNoAlbumOrArtist(tags.Artists, tags.Album))
+                    {
+                        // The file really carries no readable tags: remember that this was attempted, so
+                        // it is not re-read on every scan. It stays tag-less and is uploaded tag-less as
+                        // the last resort once a session exists.
+                        dbContext.UpdateNotYetSyncedDataEntry(entry, null, "No readable tags (uploaded without tags when possible).");
+                    }
+                    else if (dbContext.TryApplyTagsToSong(row.SongId, tags.Album, tags.Artists, out bool removedAsDuplicate))
+                    {
+                        Interlocked.Increment(ref tagged);
+                        if (removedAsDuplicate)
+                        {
+                            // The tags belonged to an already tagged row: our tag-less row was the
+                            // duplicate and is gone now - drop its marker as well.
+                            dbContext.RemoveNotYetSyncedDataEntries(entry);
+                            return;
+                        }
+                    }
+                }
+
+                // 2. Upload (only with a sync session and only if the upload would be meaningful).
+                if (!canUpload || authFailed)
+                {
+                    Interlocked.Increment(ref leftLoggedOut);
+                    return;
+                }
+
+                string body = JsonSerializer.Serialize(row, jsonOptions);
+                var content = new StringContent(body, Encoding.UTF8, "application/json");
+                var res = client!.PostAsync($"{Config.Data.SyncServerHost}{ROUTE_VERSION_PREFIX}/sync/new-song", content).Result;
+
+                if (res.IsSuccessStatusCode)
+                {
+                    dbContext.RemoveNotYetSyncedDataEntries(entry);
+                    Interlocked.Increment(ref uploaded);
+                }
+                else if (res.StatusCode == System.Net.HttpStatusCode.Conflict)
+                {
+                    // The song already exists on the server (registered by another client, or this very
+                    // upload went through before the app was killed): redirect queued data that still
+                    // uses our SongId to the canonical row and drop the marker. The next pull merges the
+                    // local duplicate away.
+                    try
+                    {
+                        var canonicalSong = JsonSerializer.Deserialize<UpvotedSong>(res.Content.ReadAsStringAsync().Result, jsonOptions);
+                        if (canonicalSong?.SongId != Guid.Empty && canonicalSong!.SongId != row.SongId)
+                        {
+                            int redirected = dbContext.RedirectQueuedEntriesToSong(row.SongId, canonicalSong!.SongId);
+                            Console.WriteLine($"Song \"{row.Name}\" already exists on the server as {canonicalSong.SongId}, redirected {redirected} queued entr(y/ies) to it.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Could not read the canonical row of a rejected song upload: {ex.Message}");
+                    }
+                    dbContext.RemoveNotYetSyncedDataEntries(entry);
+                    Interlocked.Increment(ref uploaded);
+                }
+                else if (res.StatusCode == System.Net.HttpStatusCode.Unauthorized || res.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                {
+                    // No valid session (anymore): stop attempting uploads for the rest of this run, the
+                    // markers stay and a login kicks the worker again.
+                    authFailed = true;
+                    Interlocked.Increment(ref leftLoggedOut);
+                }
+                else
+                {
+                    // Real failure (server offline, 5xx, ...): keep the marker (retried by the next run
+                    // or the startup retry) and record the error on it.
+                    dbContext.UpdateNotYetSyncedDataEntry(entry, null, $"{(int)res.StatusCode} {res.Content.ReadAsStringAsync().Result}");
+                    Interlocked.Increment(ref failed);
+                }
+            }
+            catch (Exception ex)
+            {
+                // E.g. a transient network exception: keep the marker so it is retried on the next run.
+                try
+                {
+                    using var errorContext = DbWrapper.GetContext();
+                    errorContext.UpdateNotYetSyncedDataEntry(entry, entry.Body, ex.Message);
+                }
+                catch (Exception logEx)
+                {
+                    Console.WriteLine($"Pending song upload of {entry.BelongedToSongId} failed and its error could not be recorded: {logEx.Message}");
+                }
+                Interlocked.Increment(ref failed);
+            }
+        });
+
+        Console.WriteLine($"[SongUpload] Done: {uploaded} uploaded/deduplicated, {tagged} tagged, {leftLoggedOut} left for a later run (no session / file missing), {failed} failed and kept for retry.");
     }
 }
