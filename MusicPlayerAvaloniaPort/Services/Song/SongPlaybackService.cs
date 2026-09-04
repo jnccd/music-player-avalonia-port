@@ -270,6 +270,48 @@ public class SongPlaybackService
     }
     public int AvailableSongsCount => AvailableSongs.Count;
 
+    /// <summary>
+    /// Queues a song at the END of the runtime history (like the "Queue" entry of the statistics view
+    /// in the DxMGP port appended to the playlist). The song is played once the playback reaches the
+    /// end of the history - i.e. normally right after the currently playing song (and after anything
+    /// that was queued before it).
+    /// </summary>
+    public void QueueSong(AvailableSong songToQueue)
+    {
+        lock (RuntimePlayHistory)
+        {
+            RuntimePlayHistory.Add(songToQueue);
+        }
+    }
+
+    /// <summary>
+    /// Drops the given songs from the in-memory available songs and the runtime history after their
+    /// files/entries were deleted (a song library deletion). The currently playing entry is identified
+    /// by instance and kept current; the choosing data structure is rebuilt without the deleted songs.
+    /// </summary>
+    public void RemoveSongsByIds(IReadOnlyCollection<Guid> removedSongIds)
+    {
+        if (removedSongIds.Count == 0)
+            return;
+
+        var removedIds = removedSongIds.ToHashSet();
+
+        AvailableSongs.RemoveAll(song => song.UpvotedSongId is Guid removedId && removedIds.Contains(removedId));
+
+        lock (RuntimePlayHistory)
+        {
+            AvailableSong? current = CurrentlyPlaying;
+            RuntimePlayHistory.RemoveAll(song => song.UpvotedSongId is Guid removedId && removedIds.Contains(removedId));
+
+            // Keep the index on the same song instance if it survived, otherwise clamp to the new end.
+            RuntimePlayHistoryIndex = current != null && RuntimePlayHistory.Contains(current)
+                ? RuntimePlayHistory.IndexOf(current)
+                : Math.Max(0, RuntimePlayHistory.Count - 1);
+        }
+
+        SongChoosingService.CreateSongChoosingDataStructure(AvailableSongs);
+    }
+
     public void PlaySpecificSong(AvailableSong availableSong, float? secondToStartAt = null)
     {
         lock (RuntimePlayHistory)

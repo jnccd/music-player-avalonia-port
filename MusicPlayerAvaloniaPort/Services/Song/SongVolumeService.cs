@@ -70,6 +70,24 @@ public class SongVolumeService
         return currentUpvotedSong.Volume > 0;
     }
 
+    /// <summary>
+    /// Resets the stored volume multiplier of a song to "unknown" (-1), like the DxMGP statistics
+    /// context menu did. The next time the song is read it is measured and stored again automatically
+    /// (see <see cref="SetCurrentSongsVolumeIfNecessary"/>). If the song is playing right now its
+    /// audio volume is switched back to the plain user volume immediately.
+    /// </summary>
+    public void ResetVolumeMultiplier(Guid songId)
+    {
+        using var dbContext = dbWrapperService.GetContext();
+        var currentUpvotedSong = dbContext.GetUpvotedSongById(songId);
+
+        currentUpvotedSong.Volume = -1;
+        dbContext.SaveChanges();
+
+        if (songPlaybackService.CurrentlyPlaying?.UpvotedSongId == songId)
+            UpdateAudioLibVolume();
+    }
+
     private void SetCurrentSongsVolumeIfNecessary()
     {
         var currentSong = songPlaybackService.CurrentlyPlaying;

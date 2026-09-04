@@ -91,9 +91,25 @@
                     Header="Play Chance" />
             </DataGrid.Columns>
             <DataGrid.ContextMenu>
-                <ContextMenu>
+                <ContextMenu Opening="StatisticsContextMenu_Opening">
                     <MenuItem Click="Play_Click" Header="Play" />
+                    <MenuItem Click="Queue_Click" Header="Queue" />
+                    <Separator />
+                    <MenuItem Click="CopyTitle_Click" Header="Copy Title to Clipboard" />
+                    <MenuItem Click="CopyUrl_Click" Header="Copy URL to Clipboard" />
+                    <MenuItem Click="OpenInBrowser_Click" Header="Open in Browser" />
+                    <MenuItem
+                        Name="OpenInBrowserWithTimestampMenuItem"
+                        Click="OpenInBrowserWithTimestamp_Click"
+                        Header="Open in Browser with timestamp" />
+                    <MenuItem Click="OpenInExplorer_Click" Header="Open in Explorer" />
+                    <Separator />
+                    <MenuItem Click="ResetVolumeMultiplier_Click" Header="Reset Volume Multiplier" />
                     <MenuItem Click="Rename_Click" Header="Rename" />
+                    <MenuItem Click="ShowCoverPicture_Click" Header="Show Cover Picture" />
+                    <Separator />
+                    <MenuItem Click="FilterFor_Click" Header="Filter for..." />
+                    <MenuItem Click="DeleteEntry_Click" Header="Delete Entry" />
                 </ContextMenu>
             </DataGrid.ContextMenu>
         </DataGrid>

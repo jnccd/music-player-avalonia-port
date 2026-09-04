@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml;
@@ -34,6 +35,12 @@ public partial class StatisticsView : UserControl
     // The search text that is currently applied (null = no search active -> default score order).
     // Searching only reorders the list (like the DxMGP port), it doesn't filter rows out.
     string? appliedSearchText;
+    // Substring filter applied through the "Filter for..." context menu entry (null = all rows shown).
+    // Like in the DxMGP port a reload (Refresh / after rename etc.) clears the filter again.
+    string? appliedFilter;
+
+    StatisticsSongViewModel? SelectedSong => dataGrid?.SelectedItem as StatisticsSongViewModel;
+    MessageBox GetMessageBox() => new((ex) => Console.WriteLine(ex), window, this);
 
     public StatisticsView()
     {
@@ -57,15 +64,25 @@ public partial class StatisticsView : UserControl
         var songs = await GetSongsAsync();
         allSongs.Clear();
         allSongs.AddRange(songs);
+
+        // Like the Refresh button of the DxMGP port: a reload brings ALL rows back (the "Filter for..."
+        // view is temporary). An applied search/column sort is kept.
+        appliedFilter = null;
+
         RepopulateSongList();
     }
 
     void RepopulateSongList()
     {
-        IEnumerable<StatisticsSongViewModel> orderedSongs =
-            !string.IsNullOrEmpty(appliedSearchText)
-                ? allSongs.OrderBy(song => HelperFuncs.LevenshteinDistanceWrapper(appliedSearchText, song.Name))
-                : allSongs.OrderByDescending(song => song.Score);
+        IEnumerable<StatisticsSongViewModel> orderedSongs = allSongs;
+
+        // "Filter for..." restricts the shown rows to those whose name contains the filter text.
+        if (!string.IsNullOrEmpty(appliedFilter))
+            orderedSongs = orderedSongs.Where(song => song.Name.Contains(appliedFilter, StringComparison.OrdinalIgnoreCase));
+
+        orderedSongs = !string.IsNullOrEmpty(appliedSearchText)
+            ? orderedSongs.OrderBy(song => HelperFuncs.LevenshteinDistanceWrapper(appliedSearchText, song.Name))
+            : orderedSongs.OrderByDescending(song => song.Score);
 
         viewModel?.StatisticsSongVMs.Clear();
         foreach (var song in orderedSongs)
@@ -163,6 +180,363 @@ public partial class StatisticsView : UserControl
             return;
 
         songPlaybackService.PlaySpecificSong(availableSong);
+    }
+
+    // Queues the selected song at the end of the runtime playback history (like the "Queue" entry of
+    // the DxMGP statistics context menu appended to its playlist).
+    private void Queue_Click(object? sender, RoutedEventArgs e)
+    {
+        if (SelectedSong is not { } song)
+            return;
+
+        var availableSong = songPlaybackService.FindAvailableSong(song.SongId);
+        if (availableSong == null)
+            return;
+
+        songPlaybackService.QueueSong(availableSong);
+    }
+
+    // Shows/hides context menu entries that only make sense for the row that is currently playing
+    // ("Open in Browser with timestamp" jumps to the current playback position of that very song).
+    private void StatisticsContextMenu_Opening(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (sender is not ContextMenu menu)
+            return;
+
+        var timestampMenuItem = menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.Name == "OpenInBrowserWithTimestampMenuItem");
+        if (timestampMenuItem != null)
+        {
+            var selectedSong = SelectedSong;
+            timestampMenuItem.IsVisible =
+                selectedSong != null && selectedSong.SongId == songPlaybackService.CurrentlyPlaying?.UpvotedSongId;
+        }
+    }
+
+    private async void CopyTitle_Click(object? sender, RoutedEventArgs e)
+    {
+        if (SelectedSong is not { } song)
+            return;
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard == null)
+            return;
+
+        await clipboard.SetTextAsync(song.Name);
+    }
+
+    private async void CopyUrl_Click(object? sender, RoutedEventArgs e)
+    {
+        if (SelectedSong is not { } song)
+            return;
+
+        string? url = await ResolveYoutubeUrlAsync(song);
+        if (url == null)
+        {
+            GetMessageBox().Show("Copy URL failed", "Could not resolve the YouTube video of this song (yt-dlp search failed).");
+            return;
+        }
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard == null)
+            return;
+
+        await clipboard.SetTextAsync(url);
+    }
+
+    private async void OpenInBrowser_Click(object? sender, RoutedEventArgs e)
+    {
+        if (SelectedSong is not { } song)
+            return;
+
+        string? url = await ResolveYoutubeUrlAsync(song);
+        if (url == null)
+        {
+            GetMessageBox().Show("Open in Browser failed", "Could not resolve the YouTube video of this song (yt-dlp search failed).");
+            return;
+        }
+
+        OpenWithDefaultApp(url);
+    }
+
+    // Only offered for the currently playing song (see StatisticsContextMenu_Opening): opens its YouTube
+    // video at the current playback position and pauses playback, like the DxMGP context menu did.
+    private async void OpenInBrowserWithTimestamp_Click(object? sender, RoutedEventArgs e)
+    {
+        if (SelectedSong is not { } song)
+            return;
+
+        string? url = await ResolveYoutubeUrlAsync(song);
+        if (url == null)
+        {
+            GetMessageBox().Show("Open in Browser failed", "Could not resolve the YouTube video of this song (yt-dlp search failed).");
+            return;
+        }
+
+        if (songPlaybackService.CurrentlyPlaying?.UpvotedSongId == song.SongId)
+        {
+            var audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
+            int seconds = audioLibWrapper.PlayProgress != null && audioLibWrapper.SongDurationSeconds != null
+                ? (int)(audioLibWrapper.PlayProgress.Value * audioLibWrapper.SongDurationSeconds.Value)
+                : 0;
+            if (seconds > 0)
+                url += $"&t={seconds}s";
+
+            audioLibWrapper.TogglePlayPause();
+        }
+
+        OpenWithDefaultApp(url);
+    }
+
+    private void OpenInExplorer_Click(object? sender, RoutedEventArgs e)
+    {
+        if (SelectedSong is not { } song)
+            return;
+
+        var availableSong = songPlaybackService.FindAvailableSong(song.SongId);
+        if (availableSong == null || !File.Exists(availableSong.FilePath))
+        {
+            GetMessageBox().Show("Open in Explorer failed", "This entry isnt linked to a song file in the music library!");
+            return;
+        }
+
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                // Reveals the file in the Windows Explorer, exactly like the DxMGP port.
+                Process.Start("explorer.exe", $"/select, \"{availableSong.FilePath}\"");
+            }
+            else
+            {
+                // No "select file" equivalent: just open the containing folder.
+                Process.Start("xdg-open", Path.GetDirectoryName(availableSong.FilePath) ?? ".");
+            }
+        }
+        catch (Exception ex)
+        {
+            GetMessageBox().Show("Open in Explorer failed", ex.Message);
+        }
+    }
+
+    private async void ResetVolumeMultiplier_Click(object? sender, RoutedEventArgs e)
+    {
+        if (SelectedSong is not { } song)
+            return;
+
+        ServiceContainer.GetService<SongVolumeService>().ResetVolumeMultiplier(song.SongId);
+
+        // Reload so the Volume column shows the reset value immediately (like the DxMGP refresh did).
+        await ReloadSongsAsync();
+    }
+
+    private void ShowCoverPicture_Click(object? sender, RoutedEventArgs e)
+    {
+        if (SelectedSong is not { } song)
+            return;
+
+        var availableSong = songPlaybackService.FindAvailableSong(song.SongId);
+        if (availableSong == null || !File.Exists(availableSong.FilePath))
+        {
+            GetMessageBox().Show("Show Cover Picture failed", "This entry isnt linked to a song file in the music library!");
+            return;
+        }
+
+        try
+        {
+            using var tagFile = TagLib.File.Create(availableSong.FilePath);
+            if (tagFile.Tag.Pictures.Length == 0)
+            {
+                GetMessageBox().Show("Show Cover Picture failed", "This song file has no embedded cover picture!");
+                return;
+            }
+
+            byte[] pictureData = tagFile.Tag.Pictures[0].Data.Data;
+            if (pictureData.Length <= 4096)
+            {
+                GetMessageBox().Show("Show Cover Picture failed", "The embedded cover picture is smaller than 4096 bytes, so it is ignored.");
+                return;
+            }
+
+            string coverPath = Path.Combine(Path.GetTempPath(), "MusicPlayerCoverPicture.png");
+            File.WriteAllBytes(coverPath, pictureData);
+
+            if (!OpenWithDefaultApp(coverPath))
+                GetMessageBox().Show("Show Cover Picture failed", $"Could not open \"{coverPath}\".");
+        }
+        catch (Exception ex)
+        {
+            GetMessageBox().Show("Show Cover Picture failed", ex.Message);
+        }
+    }
+
+    private async void FilterFor_Click(object? sender, RoutedEventArgs e)
+    {
+        // Like the DxMGP port: a substring filter over the song names, applied until the next reload.
+        string filter = await GetMessageBox().GetTextAsync("What do you want to filter for?");
+        if (string.IsNullOrEmpty(filter))
+            return;
+
+        appliedFilter = filter;
+        RepopulateSongList();
+    }
+
+    private async void DeleteEntry_Click(object? sender, RoutedEventArgs e)
+    {
+        if (SelectedSong is not { } song)
+            return;
+
+        var syncService = ServiceContainer.GetService<SongSyncService>();
+
+        if (songPlaybackService.CurrentlyPlaying?.UpvotedSongId == song.SongId)
+        {
+            GetMessageBox().Show("Cant delete song", "You cant play a file and delete it at the same time!");
+            return;
+        }
+
+        // Resolve the database entry (its Name is the file name including the extension)
+        UpvotedSong? upvotedSong;
+        using (var dbContext = dbWrapper.GetContext())
+        {
+            upvotedSong = dbContext.DumpUpvotedSongs().FirstOrDefault(x => x.SongId == song.SongId);
+        }
+        if (upvotedSong == null)
+        {
+            GetMessageBox().Show("Cant delete song", "The database entry for this song was not found anymore!");
+            return;
+        }
+
+        string songName = upvotedSong.Name;
+        Guid targetSongId = upvotedSong.SongId;
+
+        if (!await GetMessageBox().AskYesNoAsync("Delete Entry", $"Do you really want to delete \"{songName}\"?\n\n" +
+            "This deletes the song entry AND the song file from the database and from all synchronized song libraries!"))
+            return;
+
+        // Only delete files whose tags match this entry (a file with the same name but different
+        // album/artist tags is a different song). Entries without album/artist metadata (legacy entries)
+        // can only be identified by their file name.
+        var filesToDelete = new List<string>();
+        int skippedCopies = 0;
+        var candidates = Config.Data.SongLibraryPath != null
+            ? SongSyncService.FindSongFilesByName(Config.Data.SongLibraryPath, songName)
+            : new List<string>();
+        if (string.IsNullOrWhiteSpace(upvotedSong.Artist) && string.IsNullOrWhiteSpace(upvotedSong.Album))
+        {
+            filesToDelete.AddRange(candidates);
+        }
+        else
+        {
+            foreach (string candidate in candidates)
+            {
+                if (SongSyncService.SongFileMatchesEntry(candidate, upvotedSong))
+                    filesToDelete.Add(candidate);
+                else
+                    skippedCopies++;
+            }
+        }
+
+        // Commit point: the migration POST on the server. The server assigns the migration number and
+        // deletes the entry with the given SongId. If this fails, abort without changing anything locally,
+        // since migrations should only be done with a working server connection.
+        var createdMigration = await Task.Run(() =>
+            syncService.PostSongLibraryMigration(new SongLibraryMigration(songName, "", SongLibraryMigrationType.Delete)
+            {
+                SongId = targetSongId
+            }));
+
+        if (createdMigration == null)
+        {
+            GetMessageBox().Show("Delete aborted", "The sync server did not accept the deletion.\n\n" + syncService.State +
+                "\n\n(Songs can only be deleted while the connection to the sync server is up and their entry was synced)");
+            return;
+        }
+
+        // Delete every copy of the file in the song library (there can be copies in multiple subfolders).
+        // If a copy is already gone (e.g. another client sharing the library deleted it), that counts as
+        // done. Only if all deletions went through is the migration state bumped, so a failed deletion
+        // is going to be retried automatically on the next sync.
+        try
+        {
+            foreach (string songFilePath in filesToDelete)
+            {
+                try
+                {
+                    File.Delete(songFilePath);
+                }
+                catch (Exception ex)
+                {
+                    if (!File.Exists(songFilePath))
+                        continue; // Another client already deleted this copy
+
+                    // The migration is already on the server, but the library migration state was not
+                    // bumped, so this deletion is going to be retried automatically on the next sync.
+                    GetMessageBox().Show("Delete incomplete", $"The server registered the deletion, but the file could not be deleted locally:\n{ex.Message}");
+                    return;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            GetMessageBox().Show("Delete incomplete", $"The server registered the deletion, but the files could not be deleted locally:\n{ex.Message}");
+            return;
+        }
+
+        // Remove the local database entry (the server already deleted its copy of the row), plus its
+        // history entries and queued unsynced requests that can never succeed meaningfully anymore.
+        try
+        {
+            using var dbContext = dbWrapper.GetContext();
+            dbContext.RemoveUpvotedSongEntry(targetSongId);
+        }
+        catch (Exception ex)
+        {
+            GetMessageBox().Show("Delete incomplete", $"The files were deleted, but the local database could not be updated:\n{ex.Message}");
+            return;
+        }
+
+        // Update the in-memory available songs, play history and choosing list (the files are gone)
+        songPlaybackService.RemoveSongsByIds([targetSongId]);
+
+        // Remember the migration state so it is not applied again on the next sync. The migration response
+        // carries the account user id, which is recorded in the library config file as the library owner.
+        if (Config.Data.SongLibraryPath != null)
+            syncService.WriteSongLibraryMigrationState(Config.Data.SongLibraryPath, createdMigration.UserId, createdMigration.MigrationNumber);
+
+        // If the library turned out to be registered for a different account, warn about it
+        var ownerWarning = syncService.TakeSongLibraryOwnerWarning();
+        if (ownerWarning != null)
+            GetMessageBox().Show("Song library account warning", ownerWarning);
+
+        // Refresh the statistics list (the row is gone)
+        await ReloadSongsAsync();
+
+        GetMessageBox().Show("Delete successful", $"Successfully deleted \"{songName}\" from the database and the song libraries!" + (skippedCopies > 0
+            ? $"\n\nNote: {skippedCopies} file(s) with the old name were left alone, since their album/artist metadata did not match this song entry."
+            : ""));
+    }
+
+    // Resolves the YouTube watch URL of a song title through a yt-dlp search (see YoutubeHelper).
+    static async Task<string?> ResolveYoutubeUrlAsync(StatisticsSongViewModel song)
+    {
+        string? videoId = await YoutubeHelper.GetYoutubeVideoIdAsync(song.Name);
+        return videoId == null ? null : YoutubeHelper.BuildWatchUrl(videoId);
+    }
+
+    // Opens a file/URL with the OS default application (explorer/shell on Windows, xdg-open elsewhere).
+    static bool OpenWithDefaultApp(string target)
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+                Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
+            else
+                Process.Start("xdg-open", target);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private async void Rename_Click(object? sender, RoutedEventArgs e)

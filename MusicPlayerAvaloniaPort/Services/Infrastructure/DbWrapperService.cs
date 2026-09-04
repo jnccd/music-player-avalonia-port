@@ -342,6 +342,34 @@ public class DbWrapperService
         }
 
         /// <summary>
+        /// Removes one upvoted song entry together with its history entries and its queued (not yet
+        /// synced) requests (votes/volume changes that can never succeed meaningfully anymore once the
+        /// entry is gone). The caller is expected to have created the server-side deletion migration
+        /// and to have deleted the song files already (mirrors the delete flow of the DxMGP port).
+        /// </summary>
+        public void RemoveUpvotedSongEntry(Guid songId)
+        {
+            var historyToRemove = SongDbContext.SongHistoryEntries
+                .Where(h => h.SongId == songId)
+                .ToArray();
+            var queuedToRemove = SongDbContext.NotYetSyncedData
+                .Where(n => n.BelongedToSongId == songId)
+                .ToArray();
+            var rowsToRemove = SongDbContext.UpvotedSongs
+                .Where(s => s.SongId == songId)
+                .ToArray();
+
+            if (historyToRemove.Length > 0)
+                SongDbContext.SongHistoryEntries.RemoveRange(historyToRemove);
+            if (queuedToRemove.Length > 0)
+                SongDbContext.NotYetSyncedData.RemoveRange(queuedToRemove);
+            if (rowsToRemove.Length > 0)
+                SongDbContext.UpvotedSongs.RemoveRange(rowsToRemove);
+
+            SongDbContext.SaveChanges();
+        }
+
+        /// <summary>
         /// Rewrites every queued (not yet synced) request that refers to fromSongId so it refers to
         /// toSongId instead (the SongId in the serialized body and the BelongedToSongId marker). Used when
         /// the server rejects a queued "/sync/new-song" upload as a duplicate and returns the existing row

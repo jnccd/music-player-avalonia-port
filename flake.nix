@@ -26,6 +26,7 @@
             dotnetVersion = "10.0";
             includeAndroidSdk = false;
 
+            additionalPackages = [ pkgs.yt-dlp ];
             command = "cd music-player-avalonia-port ; bash ./start_desktop_app.sh";
           };
 
@@ -34,7 +35,7 @@
             dotnetVersion = "10.0";
             includeAndroidSdk = false;
 
-            additionalPackages = [ pkgs.pulseaudio ];
+            additionalPackages = [ pkgs.pulseaudio pkgs.yt-dlp ];
             preExecBash = ''
               export LD_LIBRARY_PATH="${pkgs.pulseaudio}/lib/:$LD_LIBRARY_PATH"
               export PULSE_SERVER=unix:/run/user/$(id -u)/pulse/native
