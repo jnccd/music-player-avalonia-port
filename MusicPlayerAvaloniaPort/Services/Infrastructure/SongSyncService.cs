@@ -30,6 +30,15 @@ public class SongSyncService
     public string State { get => state; private set { OnStateChanged?.Invoke(value); state = value; } }
     private string state = "";
     public Action<string>? OnStateChanged = null;
+    /// <summary>
+    /// Coarse progress (0..1) of the ongoing sync pull, reported at its milestones: 0 while the pull
+    /// request is still in flight (a network request has no measurable progress until the server
+    /// answers), then rising as the payload arrives, the local database rewrite runs and the song
+    /// library migrations are applied. Always reaches 1 before <see cref="Pull"/> returns - on success,
+    /// on the account-mismatch abort and on failure alike - so a startup sequence can hand the progress
+    /// bar over to the next stage once the pull finished.
+    /// </summary>
+    public float SyncProgress { get; private set; } = 0;
     readonly JsonSerializerOptions jsonOptions = new()
     {
         WriteIndented = true,
@@ -251,6 +260,7 @@ public class SongSyncService
     public void Pull(bool AdoptSongLibraryOnMismatch = false)
     {
         var endpoint = $"{ROUTE_VERSION_PREFIX}/sync/pull";
+        SyncProgress = 0; // A previous pull (e.g. a login pull) may have left it at the end state.
         try
         {
             var res = client!.GetStringAsync($"{Config.Data.SyncServerHost}{endpoint}").Result;
@@ -260,6 +270,10 @@ public class SongSyncService
                 throw new Exception("Pulled data was null!");
             if (pulledData.Songs.Count() == 0 || pulledData.HistoryEntries.Count() == 0)
                 throw new Exception("Pulled data was empty!");
+
+            // The payload arrived. From here on the remaining pull work (local database rewrite,
+            // duplicate merge, song library migrations) is measurable, so start reporting progress.
+            SyncProgress = 0.4f;
 
             string authedUserId = pulledData.User?.UserId ?? "";
 
@@ -297,7 +311,15 @@ public class SongSyncService
             State = "Merging duplicate song entries after the pull…";
             int mergedDuplicates;
             using (var dbContext = DbWrapper.GetContext())
-                mergedDuplicates = dbContext.RewriteDatabase(pulledData);
+            {
+                mergedDuplicates = dbContext.RewriteDatabase(pulledData, rewriteProgress =>
+                {
+                    // The rewrite reports its coarse write milestones, mapped onto the middle section
+                    // of the sync stage (the duplicate merge after it is not covered by the callback).
+                    SyncProgress = 0.4f + 0.4f * rewriteProgress;
+                });
+            }
+            SyncProgress = 0.9f; // Database rewrite and duplicate merge done
 
             // If the user explicitly agreed to take the library over, register it for the current account
             // now (treated as fully migrated for it). Migrations are then applied as usual below, which is
@@ -322,6 +344,12 @@ public class SongSyncService
         catch (Exception ex)
         {
             State = $"Pull failed: {ex.Message}";
+        }
+        finally
+        {
+            // Every exit path (success, account-mismatch abort, failure) means the sync stage is done:
+            // the caller hands the progress bar over to the next startup stage once Pull() returns.
+            SyncProgress = 1;
         }
     }
 

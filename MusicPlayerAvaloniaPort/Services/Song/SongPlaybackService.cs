@@ -65,7 +65,33 @@ public class SongPlaybackService
     {
         UpdateAvailableSongPathsProgress = 0;
         AvailableSongs.Clear();
-        var mp3Files = HelperFuncs.FindAllMp3FilesInDir(libraryRootPath);
+
+        // Enumeration phase (0 → 0.33 of UpdateAvailableSongPathsProgress). FindAllMp3FilesInDir only
+        // learns the total number of songs once it finished walking the library, so while it walks the
+        // count of the previous scan of this exact folder (persisted in the config) is used as the
+        // expected total: each progress report (every 25th found file) advances the bar by its
+        // found/expected share of the phase. The first scan of a folder has no previous count to
+        // estimate with - the bar stays at 0 until the walk ends and the exact 0.33f is set right below.
+        bool scanCountKnownForThisFolder = Config.Data.LastScanMp3CountLibraryPath == libraryRootPath;
+        int expectedMp3Count = scanCountKnownForThisFolder ? Config.Data.LastScanMp3Count : 0;
+
+        Action<int>? enumerationProgressCallback = null;
+        if (expectedMp3Count > 0)
+        {
+            enumerationProgressCallback = mp3FilesFound =>
+            {
+                float fractionOfEnumerationPhase = Math.Min(1f, mp3FilesFound / (float)expectedMp3Count);
+                RaiseUpdateAvailableSongPathsProgress(0.33f * fractionOfEnumerationPhase);
+            };
+        }
+        var mp3Files = HelperFuncs.FindAllMp3FilesInDir(libraryRootPath, enumerationProgressCallback);
+
+        // Persist this scan's file count so the NEXT scan of this folder can report progress during its
+        // enumeration too (the very first scan had no estimate - every later scan has one).
+        Config.Data.LastScanMp3Count = mp3Files.Count;
+        Config.Data.LastScanMp3CountLibraryPath = libraryRootPath;
+        Config.Save();
+
         UpdateAvailableSongPathsProgress = 0.33f;
 
         // Resolving and registering the songs is independent per file, so the scan runs in parallel.
@@ -100,12 +126,7 @@ public class SongPlaybackService
                 // The progress is based on a completion counter and only ever raised, so it cannot wobble
                 // backwards when files finish out of order.
                 int completed = Interlocked.Increment(ref completedCount);
-                lock (progressLock)
-                {
-                    float progress = 0.33f + 0.33f * completed / totalCount;
-                    if (progress > UpdateAvailableSongPathsProgress)
-                        UpdateAvailableSongPathsProgress = progress;
-                }
+                RaiseUpdateAvailableSongPathsProgress(0.33f + 0.33f * completed / totalCount);
             });
         }
         catch (AggregateException ex)
@@ -133,6 +154,19 @@ public class SongPlaybackService
                 filesByName[name] = new List<string> { filePath };
         }
         SyncService.ProcessPendingSongUploadsInBackground(filesByName);
+    }
+    /// <summary>
+    /// Raises <see cref="UpdateAvailableSongPathsProgress"/> to the given value. Lower values are
+    /// ignored, so out-of-order progress writes (parallel scan tasks finishing in any order, the
+    /// enumeration walk) can never move the progress bar backwards.
+    /// </summary>
+    void RaiseUpdateAvailableSongPathsProgress(float progress)
+    {
+        lock (progressLock)
+        {
+            if (progress > UpdateAvailableSongPathsProgress)
+                UpdateAvailableSongPathsProgress = progress;
+        }
     }
     AvailableSong CreateAvailableSong(string fullPath, bool deferTagReadingAndUpload = false, IReadOnlySet<string>? ambiguousLibraryNames = null)
     {

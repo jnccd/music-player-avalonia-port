@@ -20,16 +20,41 @@ public static class HelperFuncs
     /// <returns>Absolute paths of all mp3 files</returns>
     public static List<string> FindAllMp3FilesInDir(string StartDir)
     {
+        return FindAllMp3FilesInDir(StartDir, null);
+    }
+    /// <summary>
+    /// Recursively finds all mp3 files in a directory and its subdirectories, reporting progress while
+    /// the walk is still running.
+    /// </summary>
+    /// <param name="StartDir">The directory to search in.</param>
+    /// <param name="mp3FileFound">Optional callback invoked on the calling thread while walking - on
+    /// every 25th found mp3 file, and once more with the final count after the walk finished (the count
+    /// passed is monotonic). Reporting every single file would be pure overhead for progress purposes;
+    /// callers see the same movement from a negligible number of calls. The final total is only known
+    /// once the walk finished.</param>
+    /// <returns>Absolute paths of all mp3 files</returns>
+    public static List<string> FindAllMp3FilesInDir(string StartDir, Action<int>? mp3FileFound = null)
+    {
         List<string> re = new();
-        foreach (string s in Directory.GetFiles(StartDir))
-            if (s.EndsWith(".mp3"))
-            {
-                re.Add(s);
-            }
+        int filesFound = 0;
+        void Walk(string dir)
+        {
+            foreach (string s in Directory.GetFiles(dir))
+                if (s.EndsWith(".mp3"))
+                {
+                    re.Add(s);
+                    filesFound++;
+                    if (filesFound % 25 == 0)
+                        mp3FileFound?.Invoke(filesFound);
+                }
 
-        foreach (string D in Directory.GetDirectories(StartDir))
-            re.AddRange(FindAllMp3FilesInDir(D));
-
+            foreach (string D in Directory.GetDirectories(dir))
+                Walk(D);
+        }
+        Walk(StartDir);
+        // The final partial chunk (fewer than 25 files) would otherwise never be reported.
+        if (filesFound % 25 != 0)
+            mp3FileFound?.Invoke(filesFound);
         return re;
     }
     public static bool DirOrSubDirsContainMp3(string StartDir)

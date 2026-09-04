@@ -211,12 +211,18 @@ public class DbWrapperService
         /// same song (exact and tag-completeness duplicates, see <see cref="MergeDuplicateUpvotedSongs"/>).
         /// Returns how many duplicate rows were merged away.
         /// </summary>
-        public int RewriteDatabase(SyncPullResponse pulledData)
+        /// <param name="pulledData">The pulled sync data to write into the local database.</param>
+        /// <param name="progress">Optional callback reporting coarse progress (0..1) of the table
+        /// rewrite (the duplicate merge that follows is not covered by it), so callers can move a
+        /// progress bar while the rewrite runs.</param>
+        public int RewriteDatabase(SyncPullResponse pulledData, Action<float>? progress = null)
         {
             SongDbContext.SongHistoryEntries.RemoveRange(SongDbContext.SongHistoryEntries);
             SongDbContext.SaveChanges();
+            progress?.Invoke(0.15f);
             SongDbContext.UpvotedSongs.RemoveRange(SongDbContext.UpvotedSongs);
             SongDbContext.SaveChanges();
+            progress?.Invoke(0.35f);
 
             // Add missing user (should just be one, ourselves)
             User pulledUser = pulledData.User ?? throw new Exception($"pulledData contains no user!");
@@ -224,8 +230,10 @@ public class DbWrapperService
                 SongDbContext.Users.Add(pulledUser);
             SongDbContext.UpvotedSongs.AddRange(pulledData.Songs);
             SongDbContext.SaveChanges();
+            progress?.Invoke(0.6f);
             SongDbContext.SongHistoryEntries.AddRange(pulledData.HistoryEntries);
             SongDbContext.SaveChanges();
+            progress?.Invoke(0.8f);
 
             // The server data can contain duplicate entries of one song (e.g. two clients of the same
             // account registered the same file separately, each under its own SongId, before the server

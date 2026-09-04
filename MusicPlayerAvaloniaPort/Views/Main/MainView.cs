@@ -32,6 +32,13 @@ public partial class MainView : UserControl
     readonly SongVolumeService songVolumeService = ServiceContainer.GetService<SongVolumeService>();
     readonly AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
     readonly MprisService? mprisService = ServiceContainer.TryGetService<MprisService>();
+    /// <summary>
+    /// Resolved by the background song-setup thread (see <see cref="SetupUi"/>) instead of at view
+    /// construction: the SongSyncService constructor performs a network init, which must not run on
+    /// the UI thread. Its <see cref="SongSyncService.SyncProgress"/> drives the sync segment of the
+    /// startup progress bar.
+    /// </summary>
+    volatile SongSyncService? songSyncService;
 
     const double MAX_VOLUME = 1;
 
@@ -67,12 +74,23 @@ public partial class MainView : UserControl
             Dispatcher.UIThread);
         timer.Tick += (s, e) =>
         {
-            ProgressBarInit_Getter.Value = songPlaybackService.UpdateAvailableSongPathsProgress * 100 + songChoosingService.CreateSongChoosingDataStructureProgress * 33;
+            // Bar composition over the whole startup: the startup sync pull (SongSyncService.SyncProgress,
+            // 0..1 coarse milestones) gets the first quarter of the bar; the song library setup - the
+            // scan + choosing-data-structure progress composite, at most 100 + 33 - fills the remaining
+            // three quarters.
+            float syncPart = (songSyncService?.SyncProgress ?? 0) * 25;
+            float libraryPart = (songPlaybackService.UpdateAvailableSongPathsProgress * 100
+                + songChoosingService.CreateSongChoosingDataStructureProgress * 33) * (75f / 133f);
+            ProgressBarInit_Getter.Value = syncPart + libraryPart;
         };
         timer.Start();
         Task.Run((Action)(() =>
         {
             Thread.CurrentThread.Name = "SongSetupThread";
+
+            // Resolve the sync service on this background thread (its constructor does a network init):
+            // the progress bar above polls its SyncProgress while the StartupSync pull below runs.
+            songSyncService = ServiceContainer.GetService<SongSyncService>();
 
             // Song library setup: first resolve the folder (config, env var or folder picker), then pull
             // the latest data from the sync server (the folder has to be known for the account check and
