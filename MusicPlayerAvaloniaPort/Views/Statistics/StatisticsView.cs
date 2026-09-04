@@ -1,11 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Threading;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml;
@@ -13,8 +13,6 @@ using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Services.Song;
 using MusicPlayerAvaloniaPort.ViewModels;
-using Avalonia.Collections;
-using System.Collections.Generic;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using MusicPlayerSyncInterface.DTOs;
 
@@ -27,7 +25,15 @@ public partial class StatisticsView : UserControl
 
     Window? window => TopLevel.GetTopLevel(this) as Window;
     StatisticsViewModel? viewModel => DataContext as StatisticsViewModel;
-    DateTime lastStatisticsView_KeyDownTime = DateTime.MinValue;
+
+    DataGrid? dataGrid => this.GetLogicalDescendants().OfType<DataGrid>().FirstOrDefault(x => x.Name == "DataGrid");
+
+    // In-memory snapshot of the songs loaded from the DB. Search/reload reorder this list instead of
+    // hitting the database again and again (a per-keystroke DB reload is what made the grid feel dead).
+    readonly List<StatisticsSongViewModel> allSongs = [];
+    // The search text that is currently applied (null = no search active -> default score order).
+    // Searching only reorders the list (like the DxMGP port), it doesn't filter rows out.
+    string? appliedSearchText;
 
     public StatisticsView()
     {
@@ -41,61 +47,114 @@ public partial class StatisticsView : UserControl
     private async void StatisticsView_Loaded(object? sender, RoutedEventArgs e)
     {
         Debug.WriteLine("StatisticsView loaded!");
-
-        this.AddHandler(
-            InputElement.KeyDownEvent,
-            StatisticsView_KeyDown,
-            RoutingStrategies.Bubble | RoutingStrategies.Tunnel,
-            handledEventsToo: true
-        );
-
-        await SetupUi();
+        await ReloadSongsAsync();
     }
 
-    private async Task SetupUi()
+    // ---------- Loading / ordering ----------
+
+    async Task ReloadSongsAsync()
     {
-        viewModel!.StatisticsSongVMs.Clear();
-        var songs = await GetSongs();
-        foreach (var song in songs.OrderByDescending(song => song.Score))
-        {
-            viewModel.StatisticsSongVMs.Add(song);
-        }
+        var songs = await GetSongsAsync();
+        allSongs.Clear();
+        allSongs.AddRange(songs);
+        RepopulateSongList();
     }
 
-    private void StatisticsView_KeyDown(object? sender, KeyEventArgs e)
+    void RepopulateSongList()
     {
-        if (lastStatisticsView_KeyDownTime.AddMilliseconds(500) > DateTime.Now)
+        IEnumerable<StatisticsSongViewModel> orderedSongs =
+            !string.IsNullOrEmpty(appliedSearchText)
+                ? allSongs.OrderBy(song => HelperFuncs.LevenshteinDistanceWrapper(appliedSearchText, song.Name))
+                : allSongs.OrderByDescending(song => song.Score);
+
+        viewModel?.StatisticsSongVMs.Clear();
+        foreach (var song in orderedSongs)
+            viewModel?.StatisticsSongVMs.Add(song);
+
+        // If a column sort is active the DataGrid keeps its SortDescriptions across reloads and re-applies
+        // them to the fresh rows here. Without an active sort this simply shows the order filled in above.
+        dataGrid?.CollectionView.Refresh();
+    }
+
+    public async Task<List<StatisticsSongViewModel>> GetSongsAsync() =>
+        await Task.Run(() =>
+            (dbWrapper?
+                .GetContext()
+                .DumpUpvotedSongs()
+                .Select(song => new StatisticsSongViewModel(song))
+            ?? []).ToList());
+
+    // ---------- Toolbar ----------
+
+    // Reloads the data from the database. Any active ordering (search or column sort) is kept,
+    // like the Refresh button in the DxMGP port re-applied the last sort.
+    private async void RefreshButton_Click(object? sender, RoutedEventArgs e)
+    {
+        await ReloadSongsAsync();
+    }
+
+    // Selects and scrolls to the row of the song that is currently playing.
+    private void ToPlayingButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var grid = dataGrid;
+        var currentlyPlaying = songPlaybackService.CurrentlyPlaying;
+        var currentlyPlayingVM = viewModel?.StatisticsSongVMs.FirstOrDefault(x => x.SongId == currentlyPlaying?.UpvotedSongId);
+        if (grid == null || currentlyPlayingVM == null)
             return;
 
-        if (e.Key == Key.S)
-        {
-            Task.Run(() =>
-            {
-                Dispatcher.UIThread.InvokeAsync(async () =>
-                {
-                    var searchString = await new MessageBox((e) => { }, window, this).GetTextAsync("Search");
-                    await SearchSort(searchString);
-                });
-            });
-        }
-
-        if (e.Key == Key.J)
-        {
-            var grid = this.GetLogicalDescendants().OfType<DataGrid>().FirstOrDefault(x => x.Name == "DataGrid");
-            var currentlyPlaying = songPlaybackService.CurrentlyPlaying;
-            var currentyPlayingVM = viewModel?.StatisticsSongVMs.FirstOrDefault(x => x.SongId == currentlyPlaying?.UpvotedSongId);
-            grid?.ScrollIntoView(currentyPlayingVM, null);
-            grid?.SelectedItem = currentyPlayingVM;
-        }
-
-        lastStatisticsView_KeyDownTime = DateTime.Now;
+        grid.ScrollIntoView(currentlyPlayingVM, null);
+        grid.SelectedItem = currentlyPlayingVM;
     }
+
+    private async void SearchButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var searchTextBox = this.GetLogicalDescendants().OfType<TextBox>().FirstOrDefault(x => x.Name == "searchTextBox");
+        var searchString = searchTextBox?.Text;
+        if (searchString == null)
+            return;
+
+        await ApplySearchAsync(searchString);
+    }
+
+    private void searchTextBox_KeyDown(object? sender, Avalonia.Input.KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+            return;
+
+        e.Handled = true;
+        SearchButton_Click(sender, new RoutedEventArgs());
+    }
+
+    // Called when a column header is clicked: the DataGrid applies its own sort (ascending/descending).
+    // That sort replaces an applied search ordering - the text stays in the box, so hitting Search
+    // again simply re-applies the search.
+    private void DataGrid_Sorting(object? sender, DataGridColumnEventArgs e)
+    {
+        appliedSearchText = null;
+    }
+
+    async Task ApplySearchAsync(string searchString)
+    {
+        searchString = searchString.Trim();
+        appliedSearchText = searchString.Length == 0 ? null : searchString;
+
+        // A search (or an empty search = reset to default order) shows the raw collection order, so any
+        // column sort the DataGrid is currently holding has to be dropped first.
+        var grid = dataGrid;
+        if (grid?.CollectionView.SortDescriptions is { Count: > 0 })
+        {
+            using (grid.CollectionView.DeferRefresh())
+                grid.CollectionView.SortDescriptions.Clear();
+        }
+
+        RepopulateSongList();
+    }
+
+    // ---------- Context menu ----------
 
     private void Play_Click(object? sender, RoutedEventArgs e)
     {
-        var grid = this.GetLogicalDescendants().OfType<DataGrid>().FirstOrDefault(x => x.Name == "DataGrid");
-
-        if (grid?.SelectedItem is not StatisticsSongViewModel song)
+        if (dataGrid?.SelectedItem is not StatisticsSongViewModel song)
             return;
 
         var availableSong = songPlaybackService.FindAvailableSong(song.SongId);
@@ -110,8 +169,7 @@ public partial class StatisticsView : UserControl
     {
         MessageBox GetMessageBox() => new((ex) => Console.WriteLine(ex), window, this);
 
-        var grid = this.GetLogicalDescendants().OfType<DataGrid>().FirstOrDefault(x => x.Name == "DataGrid");
-        if (grid?.SelectedItem is not StatisticsSongViewModel song)
+        if (dataGrid?.SelectedItem is not StatisticsSongViewModel song)
             return;
 
         var syncService = ServiceContainer.GetService<SongSyncService>();
@@ -311,52 +369,12 @@ public partial class StatisticsView : UserControl
         if (ownerWarning != null)
             GetMessageBox().Show("Song library account warning", ownerWarning);
 
-        // Refresh the statistics grid (row name etc.)
-        await SetupUi();
+        // Refresh the statistics list (row name etc.), keeping the active search/column sort
+        await ReloadSongsAsync();
 
         GetMessageBox().Show("Rename successful", $"Successfully renamed \"{oldName}\" to \"{newName}\"!" + (skippedCopies > 0
             ? $"\n\nNote: {skippedCopies} file(s) with the old name were left alone, since their album/artist metadata did not match this song entry."
             : ""));
-    }
-
-    private async void SearchButton_Click(object? sender, RoutedEventArgs e)
-    {
-        var searchTextBox = this.GetLogicalDescendants().OfType<TextBox>().FirstOrDefault(x => x.Name == "searchTextBox");
-        var searchString = searchTextBox?.Text;
-        if (searchString == null)
-            return;
-
-        await SearchSort(searchString);
-    }
-
-    private void searchTextBox_KeyDown(object? sender, Avalonia.Input.KeyEventArgs e)
-    {
-        SearchButton_Click(sender, new RoutedEventArgs());
-    }
-
-    public async Task<IEnumerable<StatisticsSongViewModel>> GetSongs() =>
-        await Task.Run(() =>
-            dbWrapper?
-                .GetContext()
-                .DumpUpvotedSongs()
-                .Select(song => new StatisticsSongViewModel(song))
-            ?? []);
-
-    async Task SearchSort(string searchString)
-    {
-        var grid = this.GetLogicalDescendants().OfType<DataGrid>().FirstOrDefault(x => x.Name == "DataGrid");
-
-        grid?.CollectionView.Refresh();
-
-        viewModel?.StatisticsSongVMs.Clear();
-        var songs = await GetSongs();
-
-        var searchSortedSongs = songs.OrderBy(s => HelperFuncs.LevenshteinDistanceWrapper(searchString, s.Name));
-
-        foreach (var song in searchSortedSongs)
-            viewModel?.StatisticsSongVMs.Add(song);
-
-        grid?.CollectionView.Refresh();
     }
 
     static void RollbackFileRenames(List<(string OldPath, string NewPath)> renamedFiles)

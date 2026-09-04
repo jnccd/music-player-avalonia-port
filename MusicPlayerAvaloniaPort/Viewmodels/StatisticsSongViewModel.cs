@@ -22,7 +22,12 @@ public partial class StatisticsSongViewModel(UpvotedSong Song) : ViewModelBase
     public float? VoteRatio => Song.TotalDislikes > 0 ? (float)Song.TotalLikes / Song.TotalDislikes : null;
     public float? Volume => Song.Volume > 0 ? Song.Volume : null;
     public DateTime? DateAdded => Song.DateAdded?.LocalDateTime;
-    public float PlayChance => (float)Math.Round((songChoosingService?.GetSongChoosingChance(songPlaybackService?.FindAvailableSong(Song.SongId)) ?? float.NaN) * 100, 5);
+
+    // Computed lazily but only once per row (it scans the choosing list - the DataGrid re-reads this
+    // property whenever a row is (re)realized during scrolling or while sorting by this column).
+    float? playChanceCache;
+    public float PlayChance => playChanceCache ??=
+        (float)Math.Round((songChoosingService?.GetSongChoosingChance(songPlaybackService?.FindAvailableSong(Song.SongId)) ?? float.NaN) * 100, 5);
 
     // For internal
     public Guid SongId = Song.SongId;

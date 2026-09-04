@@ -12,53 +12,90 @@
         <conv:AddMultiplyConverter x:Key="AddMultiplyConverter" />
         <conv:EitherOrConverter x:Key="EitherOrConverter" />
     </UserControl.Resources>
-    <DataGrid
-        Name="DataGrid"
-        ItemsSource="{Binding StatisticsSongVMs}"
-        VerticalScrollBarVisibility="Visible">
-        <DataGrid.Columns>
-            <DataGridTextColumn
-                Width="*"
-                Binding="{Binding Name}"
-                Header="Name" />
-            <DataGridTextColumn
-                Width="100"
-                Binding="{Binding Score}"
-                Header="Score" />
-            <DataGridTextColumn
-                Width="80"
-                Binding="{Binding Streak}"
-                Header="Streak" />
-            <DataGridTextColumn
-                Width="90"
-                Binding="{Binding Upvotes}"
-                Header="Upvotes" />
-            <DataGridTextColumn
-                Width="115"
-                Binding="{Binding Downvotes}"
-                Header="Downvotes" />
-            <DataGridTextColumn
-                Width="100"
-                Binding="{Binding VoteRatio}"
-                Header="Vote Ratio" />
-            <DataGridTextColumn
-                Width="85"
-                Binding="{Binding Volume}"
-                Header="Volume" />
-            <DataGridTextColumn
-                Width="170"
-                Binding="{Binding DateAdded}"
-                Header="Date Added" />
-            <DataGridTextColumn
-                Width="120"
-                Binding="{Binding PlayChance}"
-                Header="Play Chance" />
-        </DataGrid.Columns>
-        <DataGrid.ContextMenu>
-            <ContextMenu>
-                <MenuItem Click="Play_Click" Header="Play" />
-                <MenuItem Click="Rename_Click" Header="Rename" />
-            </ContextMenu>
-        </DataGrid.ContextMenu>
-    </DataGrid>
+    <Grid RowDefinitions="Auto,*">
+        <!-- Toolbar row: the controls the statistics view was originally supposed to have
+             (like in the DxMGP port): Refresh | To Playing | search box | Search -->
+        <Grid
+            Grid.Row="0"
+            Margin="6,6,6,4"
+            ColumnDefinitions="Auto,Auto,*,Auto"
+            ColumnSpacing="8">
+            <Button
+                Name="refreshButton"
+                Content="Refresh"
+                Click="RefreshButton_Click" />
+            <Button
+                Name="toPlayingButton"
+                Grid.Column="1"
+                Content="To Playing"
+                Click="ToPlayingButton_Click" />
+            <TextBox
+                Name="searchTextBox"
+                Grid.Column="2"
+                PlaceholderText="Search songs..."
+                KeyDown="searchTextBox_KeyDown"
+                VerticalContentAlignment="Center" />
+            <Button
+                Name="searchButton"
+                Grid.Column="3"
+                Content="Search"
+                Click="SearchButton_Click" />
+        </Grid>
+
+        <!-- The DataGrid has to sit in a star-sized row, never inside a StackPanel/auto-sized container.
+             Only a bounded height keeps its row virtualization working - measured with infinite height it
+             realizes every row of the whole library at once and becomes unusably slow. -->
+        <DataGrid
+            Name="DataGrid"
+            Grid.Row="1"
+            ItemsSource="{Binding StatisticsSongVMs}"
+            IsReadOnly="True"
+            Sorting="DataGrid_Sorting"
+            VerticalScrollBarVisibility="Visible">
+            <DataGrid.Columns>
+                <DataGridTextColumn
+                    Width="*"
+                    Binding="{Binding Name}"
+                    Header="Name" />
+                <DataGridTextColumn
+                    Width="100"
+                    Binding="{Binding Score}"
+                    Header="Score" />
+                <DataGridTextColumn
+                    Width="80"
+                    Binding="{Binding Streak}"
+                    Header="Streak" />
+                <DataGridTextColumn
+                    Width="90"
+                    Binding="{Binding Upvotes}"
+                    Header="Upvotes" />
+                <DataGridTextColumn
+                    Width="115"
+                    Binding="{Binding Downvotes}"
+                    Header="Downvotes" />
+                <DataGridTextColumn
+                    Width="100"
+                    Binding="{Binding VoteRatio}"
+                    Header="Vote Ratio" />
+                <DataGridTextColumn
+                    Width="85"
+                    Binding="{Binding Volume}"
+                    Header="Volume" />
+                <DataGridTextColumn
+                    Width="170"
+                    Binding="{Binding DateAdded}"
+                    Header="Date Added" />
+                <DataGridTextColumn
+                    Width="120"
+                    Binding="{Binding PlayChance}"
+                    Header="Play Chance" />
+            </DataGrid.Columns>
+            <DataGrid.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Click="Play_Click" Header="Play" />
+                    <MenuItem Click="Rename_Click" Header="Rename" />
+                </ContextMenu>
+            </DataGrid.ContextMenu>
+        </DataGrid>
+    </Grid>
 </UserControl>
