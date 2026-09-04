@@ -51,10 +51,31 @@ public partial class StatisticsView : UserControl
         this.Loaded += StatisticsView_Loaded;
     }
 
+    bool searchFocusHandlerSubscribed;
+
     private async void StatisticsView_Loaded(object? sender, RoutedEventArgs e)
     {
         Debug.WriteLine("StatisticsView loaded!");
+
+        // Focus the search box whenever the statistics window opens. The window instance is reused
+        // between opens (see AvaloniaWindowManager), so Opened (fires on every show) is subscribed here
+        // instead of only focusing once during Loaded.
+        if (!searchFocusHandlerSubscribed && window is { } statisticsWindow)
+        {
+            statisticsWindow.Opened += StatisticsWindow_Opened;
+            searchFocusHandlerSubscribed = true;
+        }
+
         await ReloadSongsAsync();
+
+        FocusSearchTextBox();
+    }
+
+    private void StatisticsWindow_Opened(object? sender, EventArgs e) => FocusSearchTextBox();
+
+    private void FocusSearchTextBox()
+    {
+        this.GetLogicalDescendants().OfType<TextBox>().FirstOrDefault(x => x.Name == "searchTextBox")?.Focus();
     }
 
     // ---------- Loading / ordering ----------
