@@ -255,7 +255,7 @@ public partial class StatisticsView : UserControl
             return;
         }
 
-        OpenWithDefaultApp(url);
+        PlatformShell.OpenWithDefaultApplication(url);
     }
 
     // Only offered for the currently playing song (see StatisticsContextMenu_Opening): opens its YouTube
@@ -284,7 +284,7 @@ public partial class StatisticsView : UserControl
             audioLibWrapper.TogglePlayPause();
         }
 
-        OpenWithDefaultApp(url);
+        PlatformShell.OpenWithDefaultApplication(url);
     }
 
     private void OpenInExplorer_Click(object? sender, RoutedEventArgs e)
@@ -299,23 +299,9 @@ public partial class StatisticsView : UserControl
             return;
         }
 
-        try
-        {
-            if (OperatingSystem.IsWindows())
-            {
-                // Reveals the file in the Windows Explorer, exactly like the DxMGP port.
-                Process.Start("explorer.exe", $"/select, \"{availableSong.FilePath}\"");
-            }
-            else
-            {
-                // No "select file" equivalent: just open the containing folder.
-                Process.Start("xdg-open", Path.GetDirectoryName(availableSong.FilePath) ?? ".");
-            }
-        }
-        catch (Exception ex)
-        {
-            GetMessageBox().Show("Open in Explorer failed", ex.Message);
-        }
+        // Windows: Explorer with the file selected. Linux: Dolphin/Nautilus reveal (see PlatformShell).
+        if (!PlatformShell.RevealFileInFileManager(availableSong.FilePath))
+            GetMessageBox().Show("Open in Explorer failed", "Could not open the file manager.");
     }
 
     private async void ResetVolumeMultiplier_Click(object? sender, RoutedEventArgs e)
@@ -360,7 +346,7 @@ public partial class StatisticsView : UserControl
             string coverPath = Path.Combine(Path.GetTempPath(), "MusicPlayerCoverPicture.png");
             File.WriteAllBytes(coverPath, pictureData);
 
-            if (!OpenWithDefaultApp(coverPath))
+            if (!PlatformShell.OpenWithDefaultApplication(coverPath))
                 GetMessageBox().Show("Show Cover Picture failed", $"Could not open \"{coverPath}\".");
         }
         catch (Exception ex)
@@ -520,23 +506,6 @@ public partial class StatisticsView : UserControl
     {
         string? videoId = await YoutubeHelper.GetYoutubeVideoIdAsync(song.Name);
         return videoId == null ? null : YoutubeHelper.BuildWatchUrl(videoId);
-    }
-
-    // Opens a file/URL with the OS default application (explorer/shell on Windows, xdg-open elsewhere).
-    static bool OpenWithDefaultApp(string target)
-    {
-        try
-        {
-            if (OperatingSystem.IsWindows())
-                Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
-            else
-                Process.Start("xdg-open", target);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
     }
 
     private async void Rename_Click(object? sender, RoutedEventArgs e)
