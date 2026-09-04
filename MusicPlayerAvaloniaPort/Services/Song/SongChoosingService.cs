@@ -88,8 +88,6 @@ public class SongChoosingService(DbWrapperService DbWrapper)
 
         lock (SongChoosingList)
         {
-            using var dbContext = DbWrapper.GetContext();
-
             // Getting Choosing List Count
             int index = SongChoosingList.FindIndex(x => x == songToCheckChanceFor);
             if (index == -1)
