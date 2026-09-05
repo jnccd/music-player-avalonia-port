@@ -26,6 +26,11 @@ public class CustomRenderControl_Notification : Control
     string? rawTitleText;
     FormattedText? formattedTitleText;
     IBrush? foreground;
+    /// <summary>
+    /// Reused across all notification frames - the old code allocated a new SolidColorBrush (and
+    /// re-set it on the formatted text) on every rendered frame of the fade-out.
+    /// </summary>
+    readonly SolidColorBrush whiteBrush = new(Colors.White);
 
     public CustomRenderControl_Notification()
     {
@@ -58,7 +63,8 @@ public class CustomRenderControl_Notification : Control
         var diff = currentTime - notificationShowTime;
 
         textOpacity = 1 - diff.Value.TotalSeconds / 3;
-        foreground = new SolidColorBrush(Colors.White, textOpacity < 0 ? 0 : textOpacity);
+        whiteBrush.Opacity = textOpacity < 0 ? 0 : textOpacity > 1 ? 1 : textOpacity;
+        foreground = whiteBrush;
         formattedTitleText.SetForegroundBrush(foreground);
     }
 
@@ -75,7 +81,8 @@ public class CustomRenderControl_Notification : Control
         textOpacity = 1;
         notificationShowTime = stopwatch.Elapsed;
         rawTitleText = "Last Song got Upvoted!";
-        foreground = new SolidColorBrush(Colors.White, textOpacity);
+        whiteBrush.Opacity = 1;
+        foreground = whiteBrush;
         formattedTitleText = new FormattedText(rawTitleText, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, new Typeface((view!.FindResource("BigNoodleTitling") as FontFamily)!, FontStyle.Normal, FontWeight.Normal), 30, foreground);
 
         Dispatcher.UIThread.InvokeAsync(InvalidateVisual, DispatcherPriority.Background);
@@ -86,7 +93,8 @@ public class CustomRenderControl_Notification : Control
         textOpacity = 1;
         notificationShowTime = stopwatch.Elapsed;
         rawTitleText = "Last Song got Downvoted!";
-        foreground = new SolidColorBrush(Colors.White, textOpacity);
+        whiteBrush.Opacity = 1;
+        foreground = whiteBrush;
         formattedTitleText = new FormattedText(rawTitleText, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, new Typeface((view!.FindResource("BigNoodleTitling") as FontFamily)!, FontStyle.Normal, FontWeight.Normal), 30, foreground);
 
         Dispatcher.UIThread.InvokeAsync(InvalidateVisual, DispatcherPriority.Background);

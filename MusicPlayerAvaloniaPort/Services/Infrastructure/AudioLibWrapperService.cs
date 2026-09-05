@@ -45,7 +45,18 @@ public class AudioLibWrapperService
     bool CancelReading = false;
     const int SAMPLE_OUTPUT_BUFFER_32BIT_FLOAT_SIZE = 16384;
     SampleReadingStrategy currentSampleReadingStrategy = SampleReadingStrategy.GlobalArray;
-    List<(int framePosition, float[] frameData)> directReadStrategyReadBuffers = [];
+    /// <summary>
+    /// Decoded chunks the DirectRead sample strategy keeps across frames so the overlapping part of
+    /// the read window is not decoded again. <see cref="frameData"/> is a pooled buffer holding
+    /// <see cref="validLength"/> valid floats starting at <see cref="framePosition"/>; buffers are
+    /// returned to the pool when their chunk scrolls out of the read zone.
+    /// </summary>
+    List<(int framePosition, float[] frameData, int validLength)> directReadStrategyReadBuffers = [];
+    /// <summary>
+    /// Reused scratch the DirectRead strategy assembles its read window in. Only valid until the next
+    /// call - every consumer reads it synchronously (see <see cref="GetCurrentlyPlayingSampleData"/>).
+    /// </summary>
+    float[]? directReadWindowScratch;
 
     // FFT Vars
     /// <summary>
@@ -218,7 +229,7 @@ public class AudioLibWrapperService
         if (currentSampleReadingStrategy == SampleReadingStrategy.DirectRead)
         {
             globalSampleArray = null;
-            directReadStrategyReadBuffers.Clear();
+            ReleaseDirectReadBuffers();
         }
         if (currentSampleReadingStrategy == SampleReadingStrategy.GlobalArray)
             SampleReaderThread = Task.Run(() =>
@@ -226,7 +237,7 @@ public class AudioLibWrapperService
                 globalSampleArrayWriteHead = 0;
                 int requiredGlobalSampleArrayLength = playerDataProvider.Length > 0 ? playerDataProvider.Length : 48000 * 60 * 5;
                 globalSampleArray = new float[requiredGlobalSampleArrayLength];
-                directReadStrategyReadBuffers.Clear();
+                ReleaseDirectReadBuffers();
                 GC.Collect();
 
                 var sampleBuffer = arrayPool.Rent(SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE);
@@ -259,6 +270,17 @@ public class AudioLibWrapperService
         });
     }
 
+    /// <summary>
+    /// Returns the decoded window around the currently playing sample (16384 floats, centred on the
+    /// playback position). The window itself stays the same size in every mode - it is what the
+    /// samples visualization shows, and changing its length would change the shown time span.
+    /// <para>
+    /// The <see cref="SampleReadingStrategy.GlobalArray"/> variant returns a slice over the fully
+    /// pre-read song array; the <see cref="SampleReadingStrategy.DirectRead"/> variant assembles the
+    /// window in a reused scratch buffer that is only valid until the NEXT call of this method. All
+    /// callers (FFT analysis and the samples visualization) consume the returned memory synchronously.
+    /// </para>
+    /// </summary>
     public async Task<ReadOnlyMemory<float>> GetCurrentlyPlayingSampleData()
     {
         if (playerDataProvider == null)
@@ -284,31 +306,60 @@ public class AudioLibWrapperService
         }
         else if (currentSampleReadingStrategy == SampleReadingStrategy.DirectRead)
         {
-            float[] returnArray = new float[FFT_BUFFER_32BIT_FLOAT_SIZE];
+            var sampleReader = sampleReaderDataProvider!;
 
-            if (currentlyPlayingFrameBufferZoneEnd < sampleReaderDataProvider!.Position || currentlyPlayingFrameBufferZoneStart > sampleReaderDataProvider.Position)
+            float[] window = directReadWindowScratch ??= new float[FFT_BUFFER_32BIT_FLOAT_SIZE];
+            Array.Clear(window, 0, FFT_BUFFER_32BIT_FLOAT_SIZE);
+
+            // Keep decoding where the previous call left off; only seek when the window left the zone
+            // the decoder is positioned in (forward or backward jump).
+            if (currentlyPlayingFrameBufferZoneEnd < sampleReader.Position || currentlyPlayingFrameBufferZoneStart > sampleReader.Position)
             {
-                sampleReaderDataProvider.Seek(currentlyPlayingFrameBufferZoneStart);
+                sampleReader.Seek(currentlyPlayingFrameBufferZoneStart);
             }
 
-            directReadStrategyReadBuffers.RemoveAll(x => x.framePosition < currentlyPlayingFrameBufferZoneStart);
-
-            var sampleBuffer = arrayPool.Rent(SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE);
-            var sampleBufferSpan = sampleBuffer.AsSpan();
-            int framesRead;
-
-            while (sampleReaderDataProvider!.Position < currentlyPlayingFrameEnd &&
-                    (framesRead = sampleReaderDataProvider!.ReadBytes(sampleBufferSpan)) > 0)
+            // Drop the chunks that scrolled out of the read zone and give their buffers back to the pool.
+            for (int i = directReadStrategyReadBuffers.Count - 1; i >= 0; i--)
             {
-                var position = sampleReaderDataProvider.Position - framesRead;
-                if (position >= currentlyPlayingFrameBufferZoneStart)
-                    directReadStrategyReadBuffers.Add((position, sampleBufferSpan.ToArray()));
+                if (directReadStrategyReadBuffers[i].framePosition < currentlyPlayingFrameBufferZoneStart)
+                {
+                    arrayPool.Return(directReadStrategyReadBuffers[i].frameData);
+                    directReadStrategyReadBuffers.RemoveAt(i);
+                }
             }
 
-            foreach (var (framePosition, frameData) in directReadStrategyReadBuffers)
+            // Decode forward until the end of the read window is covered. Each chunk's buffer is kept
+            // in the list (pooled, no per-chunk copy or allocation), so the part of the window that
+            // overlaps the previous one is not decoded again next frame.
+            float[] sampleBuffer = arrayPool.Rent(SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE);
+            try
+            {
+                int framesRead;
+                while (sampleReader.Position < currentlyPlayingFrameEnd &&
+                    (framesRead = sampleReader.ReadBytes(sampleBuffer.AsSpan(0, SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE))) > 0)
+                {
+                    // The buffer that was just filled belongs to this chunk - rent the next one up
+                    // front so the filled buffer can stay in the list instead of being copied.
+                    float[] filledBuffer = sampleBuffer;
+                    sampleBuffer = arrayPool.Rent(SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE);
+
+                    int position = sampleReader.Position - framesRead;
+                    if (position >= currentlyPlayingFrameBufferZoneStart)
+                        directReadStrategyReadBuffers.Add((position, filledBuffer, framesRead));
+                    else
+                        arrayPool.Return(filledBuffer); // chunk starts below the zone: never needed
+                }
+            }
+            finally
+            {
+                arrayPool.Return(sampleBuffer);
+            }
+
+            // Assemble the window from the kept chunks.
+            foreach (var (framePosition, frameData, validLength) in directReadStrategyReadBuffers)
             {
                 int bufferStart = framePosition;
-                int bufferEnd = framePosition + frameData.Length;
+                int bufferEnd = framePosition + validLength;
 
                 if (bufferEnd < currentlyPlayingFrameStart || bufferStart > currentlyPlayingFrameEnd)
                     continue;
@@ -320,15 +371,25 @@ public class AudioLibWrapperService
                 int destinationIndex = copyStart - currentlyPlayingFrameStart;
                 int lengthToCopy = copyEnd - copyStart;
 
-                Array.Copy(frameData, sourceIndex, returnArray, destinationIndex, lengthToCopy);
+                Array.Copy(frameData, sourceIndex, window, destinationIndex, lengthToCopy);
             }
 
-            return returnArray;
+            return window;
         }
         else
         {
             throw new InvalidOperationException($"Unknown {nameof(SampleReadingStrategy)}: {currentSampleReadingStrategy}");
         }
+    }
+
+    /// <summary>
+    /// Returns all pooled DirectRead chunk buffers to the pool (song or strategy switch).
+    /// </summary>
+    void ReleaseDirectReadBuffers()
+    {
+        foreach (var (_, frameData, _) in directReadStrategyReadBuffers)
+            arrayPool.Return(frameData);
+        directReadStrategyReadBuffers.Clear();
     }
     /// <summary>
     /// FFT size the frequency analysis runs at. In low power mode the analysis resolution drops to
@@ -353,6 +414,18 @@ public class AudioLibWrapperService
         return spectrumAnalyzer;
     }
 
+    /// <summary>
+    /// Runs the spectrum analysis for the current song and returns the resulting spectrum bins.
+    /// The analysis resolution depends on the current mode (see <see cref="GetCurrentFftAnalysisSize"/>):
+    /// in low power mode a smaller, centred slice of the read window is analyzed, so the frequency
+    /// resolution drops while the read window itself (and with it the time span the samples
+    /// visualization shows around the playback position) stays unchanged.
+    /// <para>
+    /// The returned array is the analyzer's internal, reused spectrum buffer: the next analysis
+    /// overwrites it. Callers must consume it synchronously and must not retain or mutate it in a way
+    /// that is expected to survive the next analysis call.
+    /// </para>
+    /// </summary>
     public async Task<float[]> GetCurrentFftSpectrumData(float[]? factorArray = null)
     {
         ReadOnlyMemory<float> sampleBufferMemory = await GetCurrentlyPlayingSampleData();
@@ -388,9 +461,9 @@ public class AudioLibWrapperService
             arrayPool.Return(workingArray);
         }
 
-        var re = spectrumAnalyzer.SpectrumData.ToArray();
-
-        return re;
+        // No per-call allocation: the analyzer fully rewrites its spectrum buffer on every Process,
+        // so the caller may safely read (and scale) it in place until the next analysis.
+        return spectrumAnalyzer.SpectrumData;
     }
 
     public IReadOnlyList<float>? GetCurrentSongEntireSampleData() => globalSampleArray == null || globalSampleArrayWriteHead < globalSampleArray.Length - SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE ? null : Array.AsReadOnly(globalSampleArray);

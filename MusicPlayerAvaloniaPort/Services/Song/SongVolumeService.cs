@@ -31,6 +31,14 @@ public class SongVolumeService
     const float BASE_VOLUME = 0.12f;
 
     public event EventHandler<float>? UserDefinedVolumeChanged;
+    /// <summary>
+    /// Raised after the stored volume of a song row was changed in the DB (measured after its first
+    /// full read, or reset). Consumers that cache the per-song volume - e.g. the diagram's volume
+    /// divisor - subscribe to invalidate their cache instead of polling the DB.
+    /// </summary>
+    public event Action? VolumeDataChanged;
+
+    void RaiseVolumeDataChanged() => VolumeDataChanged?.Invoke();
 
     public SongVolumeService(AudioLibWrapperService audioLibWrapperService, SongPlaybackService songPlaybackService, DbWrapperService dbWrapperService)
     {
@@ -85,6 +93,7 @@ public class SongVolumeService
 
         currentUpvotedSong.Volume = -1;
         dbContext.SaveChanges();
+        RaiseVolumeDataChanged();
 
         if (songPlaybackService.CurrentlyPlaying?.UpvotedSongId == songId)
             UpdateAudioLibVolume();
@@ -112,6 +121,7 @@ public class SongVolumeService
 
         currentUpvotedSong.Volume = rms;
         dbContext.SaveChanges();
+        RaiseVolumeDataChanged();
 
         UpdateAudioLibVolume();
     }

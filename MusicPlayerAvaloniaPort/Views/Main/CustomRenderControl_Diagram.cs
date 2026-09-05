@@ -1,15 +1,15 @@
-using System.Collections.Generic;
+using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
-using MusicPlayerAvaloniaPort.Services.Infrastructure;
-using Path = Avalonia.Controls.Shapes.Path;
 using Avalonia.Threading;
+using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using MusicPlayerAvaloniaPort.Services.Visualization;
-using System;
-using System.Threading.Tasks;
+using Path = Avalonia.Controls.Shapes.Path;
 
 namespace MusicPlayerAvaloniaPort.Views.Main;
 
@@ -41,6 +41,28 @@ public class CustomRenderControl_Diagram : Control
     IPen? currentPen = null;
 
     object lockject = new();
+
+    // ---------------------------------------------------------------------------------------------
+    // Background "data model" producer.
+    //
+    // Building one diagram frame means running the FFT analysis, mapping the spectrum bins onto the
+    // control width, smoothing it (and, per frame, opening the DB for the song volume). Doing that
+    // inside Render - as the old Update() did with Update().Wait() - blocked the UI thread on the
+    // whole chain on every frame. Instead the per-frame data is computed on a background task into a
+    // reusable float[] ("the model": one normalized value per column of the control) and published
+    // under <see cref="lockject"/>. Render then only copies the newest model into the pre-allocated
+    // path segments (which have to live on the UI thread) and draws.
+    //
+    // Only one model computation runs at a time (single-flight). The buffers are recycled: the model
+    // the UI is currently reading is never written to again, because the publish swap and every UI
+    // read of the published model happen while holding <see cref="lockject"/>.
+    // ---------------------------------------------------------------------------------------------
+    // 0/1, accessed with Interlocked (it is written by the background producer and read on the UI thread).
+    int modelComputeInFlight;
+    float[]? publishedModel;
+    float[]? modelRecycleBuffer;
+    int publishedModelWidth = -1;
+    VisMode publishedModelMode;
 
     /// <summary>
     /// Throttles the self-perpetuating redraw loop to a lower frame rate while low power mode is active
@@ -106,75 +128,178 @@ public class CustomRenderControl_Diagram : Control
         };
     }
 
-    public override async void Render(DrawingContext context)
+    public override void Render(DrawingContext context)
     {
-        await Program.WrapInTryAsync(async () =>
+        Program.WrapInTry(() =>
         {
             base.Render(context);
             if (audioLibWrapper.PlayState == SoundFlow.Enums.PlaybackState.Playing)
                 frameScheduler.ScheduleNextFrame();
 
-            Update().Wait();
+            RequestModelUpdate();
+            CopyPublishedModelToFigure();
             Draw(context);
         });
     }
 
-    public async Task Update()
+    /// <summary>
+    /// Starts a background computation of the per-column model for the current visualization mode
+    /// (single-flight). While playback is running every rendered frame requests a fresh model, so the
+    /// model cadence follows the (low-power-aware) render cadence; when paused a model is only
+    /// requested after something actually changed (mode or size), so the UI thread stays idle.
+    /// </summary>
+    void RequestModelUpdate()
     {
-        var controlWidth = (int)this.Bounds.Width;
-        var controlHeight = (int)this.Bounds.Height;
+        if (Interlocked.CompareExchange(ref modelComputeInFlight, 1, 0) != 0)
+            return;
 
-        if (currentVisMode == VisMode.SmoothFFT)
+        int width = fftDiagramFftDataSpace;
+        if (width <= 0)
         {
-            float[] fftData = await diagramDataMapper.GetScaledAndSlicedFftData(fftDiagramFftDataSpace);
-            float[] smoothedData = await diagramDataMapper.SmoothenFftData(fftData, fftDiagramFftDataSpace, 1);
+            Interlocked.Exchange(ref modelComputeInFlight, 0);
+            return;
+        }
 
-            lock (lockject)
+        VisMode mode = currentVisMode;
+        bool playing = audioLibWrapper.PlayState == SoundFlow.Enums.PlaybackState.Playing;
+        if (!playing && publishedModel != null && publishedModelMode == mode && publishedModelWidth == width)
+        {
+            Interlocked.Exchange(ref modelComputeInFlight, 0);
+            return;
+        }
+
+        var _ = Task.Run(async () => await ProduceModel(width, mode));
+    }
+
+    async Task ProduceModel(int width, VisMode mode)
+    {
+        // Recycle the previously published buffer (safe: nothing reads it once the publish swap under
+        // the lock handed it over, see the class comment).
+        float[] model = modelRecycleBuffer ?? new float[width];
+        if (model.Length != width)
+            model = new float[width];
+
+        try
+        {
+            await Program.WrapInTryAsync(async () =>
             {
-                for (int i = 0; i < fftDiagramFftDataSpace; i++)
+                switch (mode)
                 {
-                    var sampleFrom = (int)(i / (float)fftDiagramFftDataSpace * smoothedData.Length);
-                    var sampledListVal = smoothedData[sampleFrom] * (controlHeight - fftDiagramThickness);
-                    (smoothFftDiagramFigure?.Segments?[i + fftDiagramNumBorderSegments] as LineSegment)!.Point = new Point(i, controlHeight - fftDiagramThickness - sampledListVal);
+                    case VisMode.SmoothFFT:
+                    {
+                        float[] fftData = await diagramDataMapper.GetScaledAndSlicedFftData(width);
+                        float[] smoothedData = await diagramDataMapper.SmoothenFftData(fftData, width, 1);
+                        CopyToModel(smoothedData, model, width);
+                        break;
+                    }
+                    case VisMode.RawFFT:
+                    {
+                        float[] fftData = await diagramDataMapper.GetScaledAndSlicedFftData(width);
+                        CopyToModel(fftData, model, width);
+                        break;
+                    }
+                    case VisMode.Samples:
+                    {
+                        ReadOnlyMemory<float> sampleData = await audioLibWrapper.GetCurrentlyPlayingSampleData();
+                        var sampleDataSpan = sampleData.Span;
+                        if (sampleDataSpan.Length == 0)
+                            return;
+                        for (int i = 0; i < width; i++)
+                        {
+                            int sampleFrom = (int)(i / (float)width * (sampleDataSpan.Length - 1));
+                            model[i] = sampleDataSpan[sampleFrom];
+                        }
+                        break;
+                    }
+                }
+
+                // Publish. Both the swap and every UI read of the published model run under lockject,
+                // so the buffer handed back for recycling is never being read anymore.
+                lock (lockject)
+                {
+                    modelRecycleBuffer = publishedModel;
+                    publishedModel = model;
+                    publishedModelWidth = width;
+                    publishedModelMode = mode;
+                }
+            }, EndProgramOnError: false);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref modelComputeInFlight, 0);
+        }
+    }
+
+    static void CopyToModel(float[] source, float[] model, int width)
+    {
+        if (source.Length >= width)
+            Array.Copy(source, 0, model, 0, width);
+        else if (source.Length > 0)
+            Array.Copy(source, model, source.Length);
+    }
+
+    /// <summary>
+    /// Copies the newest published model into the path segments of the current visualization mode.
+    /// Runs on the UI thread (the PathFigure segments must only be touched there) but only does the
+    /// cheap per-column value copy - the FFT/DB/mapping work happened on the background producer.
+    /// The published model is only ever read under <see cref="lockject"/> (the producer publishes
+    /// under the same lock), so a recycled buffer can never be overwritten while it is being read.
+    /// </summary>
+    void CopyPublishedModelToFigure()
+    {
+        // Mirror the original integer arithmetic so the diagram renders pixel-identical values.
+        int controlHeight = (int)this.Bounds.Height;
+        int usableHeight = controlHeight - fftDiagramThickness;
+
+        lock (lockject)
+        {
+            if (publishedModel == null || publishedModelMode != currentVisMode)
+                return;
+
+            int width = publishedModelWidth;
+            if (width != fftDiagramFftDataSpace || width != publishedModel.Length || width <= 0)
+                return;
+
+            float[] model = publishedModel;
+
+            if (currentVisMode == VisMode.SmoothFFT)
+            {
+                if (smoothFftDiagramFigure == null || smoothFftDiagramGeometry == null)
+                    return;
+                for (int i = 0; i < width; i++)
+                {
+                    double y = controlHeight - fftDiagramThickness - model[i] * usableHeight;
+                    (smoothFftDiagramFigure.Segments![i + fftDiagramNumBorderSegments] as LineSegment)!.Point = new Point(i, y);
                 }
 
                 currentGeometry = smoothFftDiagramGeometry;
                 currentBrush = PrimaryColorBrush;
                 currentPen = null;
             }
-        }
-        else if (currentVisMode == VisMode.RawFFT)
-        {
-            float[] fftData = await diagramDataMapper.GetScaledAndSlicedFftData(fftDiagramFftDataSpace);
-
-            lock (lockject)
+            else if (currentVisMode == VisMode.RawFFT)
             {
-                for (int i = 0; i < fftDiagramFftDataSpace; i++)
+                if (rawFftDiagramFigure == null || rawFftDiagramGeometry == null)
+                    return;
+                for (int i = 0; i < width; i++)
                 {
-                    var sampleFrom = (int)(i / (float)fftDiagramFftDataSpace * fftData.Length);
-                    var sampledListVal = fftData[sampleFrom] * (controlHeight - fftDiagramThickness);
-                    (rawFftDiagramFigure?.Segments?[i + fftDiagramNumBorderSegments] as LineSegment)!.Point = new Point(i, controlHeight - fftDiagramThickness - sampledListVal);
+                    double y = controlHeight - fftDiagramThickness - model[i] * usableHeight;
+                    (rawFftDiagramFigure.Segments![i + fftDiagramNumBorderSegments] as LineSegment)!.Point = new Point(i, y);
                 }
 
                 currentGeometry = rawFftDiagramGeometry;
                 currentBrush = PrimaryColorBrush;
                 currentPen = null;
             }
-        }
-        else if (currentVisMode == VisMode.Samples)
-        {
-            ReadOnlyMemory<float> sampleData = await audioLibWrapper.GetCurrentlyPlayingSampleData();
-            var sampleDataSpan = sampleData.Span;
-
-            lock (lockject)
+            else if (currentVisMode == VisMode.Samples)
             {
-                for (int i = 0; i < fftDiagramFftDataSpace; i++)
+                if (samplesDiagramFigure == null || samplesDiagramGeometry == null)
+                    return;
+                for (int i = 0; i < width; i++)
                 {
-                    var sampleFrom = (int)(i / (float)fftDiagramFftDataSpace * (sampleData.Length - 1));
-                    var sampledListVal = sampleDataSpan[sampleFrom] * (controlHeight / 4);
-                    (samplesDiagramFigure?.Segments?[i] as LineSegment)!.Point = new Point(i, controlHeight / 2 + sampledListVal);
+                    double y = controlHeight / 2 + model[i] * (controlHeight / 4);
+                    (samplesDiagramFigure.Segments![i] as LineSegment)!.Point = new Point(i, y);
                 }
-                samplesDiagramFigure!.StartPoint = (samplesDiagramFigure?.Segments?.First() as LineSegment)!.Point;
+                samplesDiagramFigure.StartPoint = (samplesDiagramFigure.Segments?.First() as LineSegment)!.Point;
 
                 currentGeometry = samplesDiagramGeometry;
                 currentBrush = null;
