@@ -54,7 +54,9 @@ public class SongVolumeService
         var currentSong = songPlaybackService.CurrentlyPlaying;
         if (currentSong == null)
             return false;
-        var currentUpvotedSong = dbWrapperService.GetContext().GetUpvotedSongById(currentSong?.UpvotedSongId);
+        var currentUpvotedSong = dbWrapperService.GetContext().GetUpvotedSongByIdOrNull(currentSong.UpvotedSongId);
+        if (currentUpvotedSong == null)
+            return false; // The row vanished (e.g. a pull replaced the local rows) - keep the plain volume
 
         if (currentUpvotedSong.Volume > 0)
         {
@@ -91,8 +93,12 @@ public class SongVolumeService
     private void SetCurrentSongsVolumeIfNecessary()
     {
         var currentSong = songPlaybackService.CurrentlyPlaying;
+        if (currentSong == null)
+            return;
         var dbContext = dbWrapperService.GetContext();
-        var currentUpvotedSong = dbContext.GetUpvotedSongById(currentSong?.UpvotedSongId);
+        var currentUpvotedSong = dbContext.GetUpvotedSongByIdOrNull(currentSong.UpvotedSongId);
+        if (currentUpvotedSong == null)
+            return; // The row vanished (e.g. a pull replaced the local rows) - nothing to measure against
 
         if (currentUpvotedSong.Volume > 0) // Not necessary
             return;

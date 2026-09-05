@@ -32,13 +32,18 @@ public class MprisService(AudioLibWrapperService audioLibWrapperService, SongPla
             using var handler = new MprisHandler(connection,
             GetPlayerStatus: () =>
             {
-                var currentSong = dbWrapperService.GetContext().GetUpvotedSongById(songPlaybackService.CurrentlyPlaying?.UpvotedSongId);
+                var currentSong = songPlaybackService.CurrentlyPlaying;
+                // Tolerant lookup: nothing playing (or a row replaced by a pull) must not throw out of
+                // the MPRIS handler - the status then simply has no song metadata.
+                var upvotedSong = currentSong?.UpvotedSongId is Guid id && id != Guid.Empty
+                    ? dbWrapperService.GetContext().GetUpvotedSongByIdOrNull(id)
+                    : null;
                 return new PlayerStatus(
                     Identity: "MusicPlayerAvaloniaPort",
                     DesktopEntry: "music-player-avalonia-port",
-                    CurrentSongTitle: Path.GetFileNameWithoutExtension(currentSong?.Name) ?? string.Empty,
-                    CurrentSongArtist: currentSong?.Artist ?? string.Empty,
-                    CurrentSongAlbum: currentSong?.Album ?? string.Empty,
+                    CurrentSongTitle: Path.GetFileNameWithoutExtension(upvotedSong?.Name ?? currentSong?.FilePath ?? "") ?? string.Empty,
+                    CurrentSongArtist: upvotedSong?.Artist ?? string.Empty,
+                    CurrentSongAlbum: upvotedSong?.Album ?? string.Empty,
                     CurrentSongPosition: TimeSpan.FromSeconds((audioLibWrapperService.SongDurationSeconds ?? 0) * (audioLibWrapperService.PlayProgress ?? 0)),
                     CurrentSongLength: TimeSpan.FromSeconds(audioLibWrapperService.SongDurationSeconds ?? 0),
                     CurrentSongCoverArtUrl: songInfoService.GetCoverArtUrlOfSong(songPlaybackService.CurrentlyPlaying) ?? "",

@@ -37,12 +37,11 @@ public class DiagramDataMapperService(AudioLibWrapperService audioLibWrapperServ
         }
 
         var currentSong = songPlaybackService.CurrentlyPlaying;
-        UpvotedSong? currentUpvotedSong = null;
-        try
-        {
-            currentUpvotedSong = dbWrapperService.GetContext().GetUpvotedSongById(currentSong?.UpvotedSongId);
-        }
-        catch { }
+        // No DB access when nothing is playing (or the row of the playing song vanished, e.g. right
+        // after a pull replaced the local rows): the visualization simply falls back to no volume data.
+        UpvotedSong? currentUpvotedSong = currentSong?.UpvotedSongId is Guid id && id != Guid.Empty
+            ? dbWrapperService.GetContext().GetUpvotedSongByIdOrNull(id)
+            : null;
 
         var fftData = await audioLibWrapperService.GetCurrentFftSpectrumData();
         for (int i = 0; i < fftData.Length; i++)
