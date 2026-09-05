@@ -123,6 +123,12 @@ public partial class MainView : UserControl
             RoutingStrategies.Bubble | RoutingStrategies.Tunnel,
             handledEventsToo: true
         );
+        this.AddHandler(
+            InputElement.KeyUpEvent,
+            UserControl_KeyUp,
+            RoutingStrategies.Bubble | RoutingStrategies.Tunnel,
+            handledEventsToo: true
+        );
         audioLibWrapper.PlaybackStateChanged += (e, s) =>
         {
             RefreshCustomControls();
@@ -238,10 +244,16 @@ public partial class MainView : UserControl
         {
             CustomRenderControl_Diagram_Getter.CycleVisMode();
         }
+    }
 
+    private void UserControl_KeyUp(object? sender, Avalonia.Input.KeyEventArgs e)
+    {
         // The DxMGP client opened its console with K, where a typed song name was matched and played
         // (see MainView_SongLogic.QuickPlaySong). This port has no console, so K runs the same flow
-        // through message boxes instead.
+        // through message boxes instead. Quick play is triggered on KEY UP on purpose: the dialog
+        // focuses its text box as soon as it opens, and the character of the opening key press would
+        // otherwise still be delivered after the focus switch (a stray "k" typed into the fresh
+        // dialog). It also keeps a held-down K from auto-repeating keys into the text box.
         if (e.Key == Key.K)
         {
             QuickPlaySong();
