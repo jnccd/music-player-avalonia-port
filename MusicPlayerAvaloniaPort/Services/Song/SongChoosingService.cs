@@ -84,7 +84,7 @@ public class SongChoosingService(DbWrapperService DbWrapper)
     public float GetSongChoosingChance(AvailableSong? songToCheckChanceFor)
     {
         if (songToCheckChanceFor == null)
-            return float.NaN;
+            return 0;
 
         lock (SongChoosingList)
         {
