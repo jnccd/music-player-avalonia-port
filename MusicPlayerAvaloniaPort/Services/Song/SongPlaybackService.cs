@@ -305,6 +305,28 @@ public class SongPlaybackService
     public int AvailableSongsCount => AvailableSongs.Count;
 
     /// <summary>
+    /// Finds the up to <paramref name="maxResults"/> songs that fit a free-text input best, closest fit
+    /// first. Like the "Play Song" prompt of the DxMGP console (which this ports, see the quick play
+    /// flow in the main view), the input is matched against the song file names with the modified
+    /// Levenshtein distance (see <see cref="HelperFuncs.LevenshteinDistanceWrapper"/>). Ties are broken
+    /// randomly - the DxMGP client shuffled its playlist before ranking, so entering the same text twice
+    /// could pick different equally-fitting songs.
+    /// </summary>
+    public IReadOnlyList<(AvailableSong Song, float Difference)> FindBestSongMatches(string searchInput, int maxResults = 5)
+    {
+        if (string.IsNullOrWhiteSpace(searchInput) || AvailableSongs.Count == 0 || maxResults <= 0)
+            return [];
+
+        return AvailableSongs
+            .Select(song => (Song: song,
+                Difference: HelperFuncs.LevenshteinDistanceWrapper(searchInput, Path.GetFileNameWithoutExtension(song.FilePath))))
+            .OrderBy(match => match.Difference)
+            .ThenBy(_ => Random.Shared.Next())
+            .Take(maxResults)
+            .ToArray();
+    }
+
+    /// <summary>
     /// Queues a song at the END of the runtime history (like the "Queue" entry of the statistics view
     /// in the DxMGP port appended to the playlist). The song is played once the playback reaches the
     /// end of the history - i.e. normally right after the currently playing song (and after anything

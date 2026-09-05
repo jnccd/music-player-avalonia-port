@@ -63,6 +63,7 @@ public partial class MainView : UserControl
         Debug.WriteLine("MainView loaded!");
 
         SetupUi();
+        SubscribeKeyboardFocusRestore();
     }
 
     void SetupUi()
@@ -202,11 +203,48 @@ public partial class MainView : UserControl
         Environment.Exit(0);
     }
 
+    bool keyboardFocusRestoreSubscribed;
+
+    /// <summary>
+    /// Avalonia only raises key events for the control that holds keyboard focus. While nothing inside
+    /// the main window has focus (before the first click on the view), and again whenever the window
+    /// regains activation without an inner focus (e.g. after coming back from the options/statistics
+    /// window), the V/K hotkeys handled in <see cref="UserControl_KeyDown"/> never fire. This keeps the
+    /// keyboard focus on this root view instead - it is focusable (see the axaml) but has no activation
+    /// behavior of its own, so no accidental button-like side effects.
+    /// </summary>
+    void SubscribeKeyboardFocusRestore()
+    {
+        if (keyboardFocusRestoreSubscribed)
+            return;
+        keyboardFocusRestoreSubscribed = true;
+
+        // Opened covers the startup case, Activated the "came back to the window" case (and retries the
+        // startup focus if the window was not active yet when Opened fired - focusing an inactive window
+        // is ignored).
+        Window?.Opened += (s, e) => RestoreKeyboardFocusIfLost();
+        Window?.Activated += (s, e) => RestoreKeyboardFocusIfLost();
+    }
+
+    void RestoreKeyboardFocusIfLost()
+    {
+        if (!IsKeyboardFocusWithin)
+            Focus();
+    }
+
     private void UserControl_KeyDown(object? sender, Avalonia.Input.KeyEventArgs e)
     {
         if (e.Key == Key.V)
         {
             CustomRenderControl_Diagram_Getter.CycleVisMode();
+        }
+
+        // The DxMGP client opened its console with K, where a typed song name was matched and played
+        // (see MainView_SongLogic.QuickPlaySong). This port has no console, so K runs the same flow
+        // through message boxes instead.
+        if (e.Key == Key.K)
+        {
+            QuickPlaySong();
         }
     }
 }

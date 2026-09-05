@@ -11,13 +11,38 @@ public class MessageBox(Action<Exception>? OnError, Window? OriginWindow, Contro
     Window? currentWindow;
     Flyout? currentFlyout;
 
-    public void Show(string title, string message, bool AlwaysAsFlyout = false, bool TakeFocus = true)
+    public void Show(string title, string message, bool AlwaysAsFlyout = false, bool TakeFocus = true,
+        double width = 400, double height = 115)
     {
         try
         {
             if (Globals.IsDesktop && !AlwaysAsFlyout)
             {
-                ShowPopupWindow(title, message, TakeFocus);
+                ShowPopupWindow(title, message, TakeFocus, width, height);
+            }
+            else
+            {
+                ShowPopupFlyout(title, message);
+            }
+        }
+        catch (Exception ex)
+        {
+            OnError?.Invoke(ex);
+        }
+    }
+
+    /// <summary>
+    /// Like <see cref="Show"/> but opens the message box as a modal dialog of the origin window and only
+    /// returns once the user dismissed it (OK or window close).
+    /// </summary>
+    public async Task ShowAsync(string title, string message, bool AlwaysAsFlyout = false, bool TakeFocus = true,
+        double width = 400, double height = 115)
+    {
+        try
+        {
+            if (Globals.IsDesktop && !AlwaysAsFlyout)
+            {
+                await ShowPopupWindowAsync(title, message, TakeFocus, width, height);
             }
             else
             {
@@ -114,8 +139,8 @@ public class MessageBox(Action<Exception>? OnError, Window? OriginWindow, Contro
 
         void returnAction()
         {
+            tcs.TrySetResult(textBox.Text);
             currentWindow?.Close();
-            tcs.SetResult(textBox.Text);
         }
         textBox.KeyDown += (s, e) =>
         {
@@ -128,10 +153,14 @@ public class MessageBox(Action<Exception>? OnError, Window? OriginWindow, Contro
         {
             returnAction();
         };
+        // Closing the window without pressing OK (window X, Escape, ...) counts as cancelling the input.
+        currentWindow.Closed += (s, e) => tcs.TrySetResult("");
 
         currentWindow.ShowActivated = TakeFocus;
+        // Focus the text box as soon as the dialog opens so the user can start typing right away.
+        // (Focusing it after ShowDialog returns would be pointless - by then the window is closed.)
+        currentWindow.Opened += (s, e) => textBox.Focus();
         await currentWindow.ShowDialog(OriginWindow!);
-        textBox.Focus();
 
         return await tcs.Task;
     }
@@ -209,7 +238,19 @@ public class MessageBox(Action<Exception>? OnError, Window? OriginWindow, Contro
         return await tcs.Task;
     }
 
-    private void ShowPopupWindow(string title, string message, bool TakeFocus = true)
+    private void ShowPopupWindow(string title, string message, bool TakeFocus = true, double width = 400, double height = 115)
+    {
+        var window = BuildPopupWindow(title, message, TakeFocus, width, height);
+        window.Show(OriginWindow!);
+    }
+
+    private async Task ShowPopupWindowAsync(string title, string message, bool TakeFocus = true, double width = 400, double height = 115)
+    {
+        var window = BuildPopupWindow(title, message, TakeFocus, width, height);
+        await window.ShowDialog(OriginWindow!);
+    }
+
+    private Window BuildPopupWindow(string title, string message, bool TakeFocus, double width, double height)
     {
         var button = new Button
         {
@@ -248,14 +289,14 @@ public class MessageBox(Action<Exception>? OnError, Window? OriginWindow, Contro
             Title = title,
             //CanResize = false,
             Content = grid,
-            Width = 400,
-            Height = 115,
+            Width = width,
+            Height = height,
             Padding = new Thickness(10)
         };
         button.Click += (s, e) => currentWindow.Close();
 
         currentWindow.ShowActivated = TakeFocus;
-        currentWindow.Show(OriginWindow!);
+        return currentWindow;
     }
 
     private void ShowPopupFlyout(string title, string message)

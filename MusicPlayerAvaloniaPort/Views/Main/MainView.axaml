@@ -10,6 +10,7 @@
     xmlns:vsmain="using:MusicPlayerAvaloniaPort.Views.Main"
     x:DataType="vm:MainViewModel"
     Background="Transparent"
+    Focusable="True"
     PointerMoved="MainView_PointerMoved"
     PointerPressed="MainView_PointerPressed"
     PointerReleased="MainView_PointerReleased"

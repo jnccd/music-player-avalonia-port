@@ -192,4 +192,65 @@ public partial class MainView : UserControl
 
         e.Handled = true;
     }
+
+    // ---------- Quick Play (the DxMGP console "Play Song:" flow) ----------
+
+    /// <summary>
+    /// True while a quick play dialog is open - guards against re-entering the flow while the K key is
+    /// held down (key repeat) or pressed repeatedly.
+    /// </summary>
+    bool quickPlayDialogOpen;
+
+    /// <summary>
+    /// "Play a song quickly": the DxMGP client opened its console with K, where a typed song name was
+    /// matched against the library with the modified Levenshtein distance, the best fitting song was
+    /// played and the other well fitting songs were printed. This port has no console window, so the
+    /// same flow runs through message boxes:
+    /// 1. ask which song to play,
+    /// 2. start playing the best fitting song,
+    /// 3. show a message box with the top 5 found songs.
+    /// </summary>
+    async void QuickPlaySong()
+    {
+        if (quickPlayDialogOpen)
+            return;
+        quickPlayDialogOpen = true;
+        try
+        {
+            if (songPlaybackService.AvailableSongsCount == 0)
+                return;
+
+            var messageBox = new MessageBox(ex => Console.WriteLine(ex), Window, this);
+            string input = await messageBox.GetTextAsync("Which song do you want to play?");
+            if (string.IsNullOrWhiteSpace(input))
+                return; // Canceled (empty input / closed the dialog)
+
+            var matches = songPlaybackService.FindBestSongMatches(input, maxResults: 5);
+            if (matches.Count == 0)
+                return;
+
+            // Play the best fitting song, then show all top 5 matches (like the console printed the
+            // chosen song plus the other well fitting ones).
+            AvailableSong best = matches[0].Song;
+            songPlaybackService.PlaySpecificSong(best);
+
+            string message = string.Join("\n", matches.Select((match, index) =>
+            {
+                string name = Path.GetFileNameWithoutExtension(match.Song.FilePath);
+                string suffix = index == 0 ? "  <- now playing" : "";
+                return $"{index + 1}. \"{name}\" (difference {match.Difference:0.00}){suffix}";
+            }));
+
+            await messageBox.ShowAsync($"Now playing: {Path.GetFileNameWithoutExtension(best.FilePath)}",
+                message, width: 640, height: 220);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex);
+        }
+        finally
+        {
+            quickPlayDialogOpen = false;
+        }
+    }
 }
