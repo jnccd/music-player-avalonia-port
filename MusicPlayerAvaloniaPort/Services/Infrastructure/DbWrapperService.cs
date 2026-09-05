@@ -137,8 +137,9 @@ public class DbWrapperService
             if (identityDuplicate != null)
             {
                 // The tags belong to another (already tagged) row - this row was a metadata-less
-                // duplicate of it, so it is removed instead of updated.
-                RemoveUpvotedSongRows([row]);
+                // duplicate of it, so it is removed instead of updated (its history is moved onto the
+                // tagged row it turned out to duplicate).
+                RemoveUpvotedSongRows(identityDuplicate, [row]);
                 removedAsDuplicate = true;
                 return false;
             }
@@ -247,12 +248,16 @@ public class DbWrapperService
         /// MusicPlayerSyncInterface.SongFileMatching for the canonical rules). Two kinds of duplicates:
         /// 1. Exact duplicates (same file name AND same stored album/artist tags) - always merged.
         /// 2. Duplicates that differ in tag completeness: metadata-less entries ("" tags) plus entries
-        ///    that carry the album/artist of the song. Those are absorbed into the tagged entry when all
-        ///    tagged entries of that file name share ONE tag signature. When songLibraryPath is given,
-        ///    the merge is only done if the files of the library agree (every file of that name carries
-        ///    these tags); without a library the single-signature rule alone decides, like on the server.
-        /// The merged-away entries are deleted together with their history rows (the canonical entry keeps
-        /// its own). Returns the number of merged-away entries.
+        ///    that carry the album/artist of the song. Those are merged when all tagged entries of that
+        ///    file name share ONE tag signature. When songLibraryPath is given, the merge is only done
+        ///    if the files of the library agree (every file of that name carries these tags); without a
+        ///    library the single-signature rule alone decides, like on the server.
+        /// The canonical row is the one carrying the song data (score/likes/dislikes/streak/volume -
+        /// that data is accumulated over time and never deleted); when it is the metadata-less row of a
+        /// tag-completeness pair, the file's metadata is adopted onto it afterwards. The history of the
+        /// merged-away rows is moved onto the canonical row (same-date duplicates dropped) and its
+        /// counters replayed from the merged history, so no votes are lost. Returns the number of
+        /// merged-away entries.
         /// </summary>
         public int MergeDuplicateUpvotedSongs(string? songLibraryPath = null)
         {
@@ -267,12 +272,13 @@ public class DbWrapperService
             foreach (var group in duplicateGroups)
             {
                 var (keep, remove) = SongFileMatching.MergeSameSongEntries(group);
-                mergedAway += RemoveUpvotedSongRows(remove);
+                if (RemoveUpvotedSongRows(keep, remove) > 0)
+                {
+                    mergedAway += remove.Length;
+                    SongDbContext.SaveChanges(); // Persist each group before the next one is processed
+                }
                 Console.WriteLine($"Merged {remove.Length} exact duplicate(s) of \"{keep.Name}\" into {keep.SongId}.");
             }
-
-            if (mergedAway > 0)
-                SongDbContext.SaveChanges(); // Persist pass 1, so pass 2 only sees the surviving rows
 
             // 2. Tag-completeness duplicates (metadata-less entries absorbed into the tagged entry).
             bool libraryAvailable = !string.IsNullOrWhiteSpace(songLibraryPath) && Directory.Exists(songLibraryPath);
@@ -317,33 +323,75 @@ public class DbWrapperService
                     && files.Any(file => !SongSyncService.SongFileMatchesTags(file, fileArtist, fileAlbum)))
                     continue;
 
+                // The canonical row is the one carrying the song data (score/history) - see
+                // SongFileMatching.ChooseCanonicalEntry. If that row is the metadata-less one, its
+                // metadata is adopted AFTER the tagged loser row was removed (so the adoption can never
+                // collide with the loser's identity).
                 var (keep, remove) = SongFileMatching.MergeSameSongEntries(group, fileAlbum, fileArtist);
-                mergedAway += RemoveUpvotedSongRows(remove);
+                if (RemoveUpvotedSongRows(keep, remove) == 0)
+                    continue;
+                mergedAway += remove.Length;
+                SongDbContext.SaveChanges(); // Drop the loser row(s) first (their identity is still taken)
+
+                if (SongFileMatching.TryGetTagsToAdoptOnto(keep, group, fileAlbum, fileArtist, out string adoptAlbum, out string adoptArtists))
+                {
+                    keep.Artist = adoptArtists;
+                    keep.Album = adoptAlbum;
+                    SongDbContext.SaveChanges();
+                    Console.WriteLine($"Adopted metadata of \"{keep.Name}\" (artist: {keep.Artist}, album: {keep.Album}) onto data-carrying row {keep.SongId}.");
+                }
                 Console.WriteLine($"Merged {remove.Length} metadata-less duplicate(s) of \"{keep.Name}\" into {keep.SongId}.");
             }
-
-            if (mergedAway > 0)
-                SongDbContext.SaveChanges();
 
             return mergedAway;
         }
 
-        int RemoveUpvotedSongRows(UpvotedSong[] remove)
+        /// <summary>
+        /// Removes the merged-away duplicate rows of a merge and moves their history onto the kept row:
+        /// the history entries of the removed rows are re-pointed to the kept row (entries that collide
+        /// with the kept row's own history - same account + same date - are the same listening event
+        /// recorded twice and are dropped). The kept row's counters (score/streak/likes/dislikes) are
+        /// deliberately left untouched - they are the accumulated values of the row with the most data
+        /// and may include votes from before history entries were recorded, so they are never recomputed
+        /// from the history. Returns the number of removed rows.
+        /// </summary>
+        int RemoveUpvotedSongRows(UpvotedSong keep, UpvotedSong[] remove)
         {
             if (remove.Length == 0)
                 return 0;
 
-            // Drop the history entries of the merged-away rows with them (the kept row keeps its own).
             // Queried per row: EF Core 8 on .NET 10 cannot parameterize "array.Contains(...)" in a query
             // (it tries to compile a ReadOnlySpan closure and throws), so the ids are compared one by one.
+            var keepDates = new HashSet<DateTimeOffset>(SongDbContext.SongHistoryEntries
+                .Where(h => h.UserId == keep.UserId && h.SongId == keep.SongId)
+                .Select(h => h.Date));
+
+            int movedHistory = 0;
+            int droppedDuplicateEntries = 0;
             foreach (UpvotedSong removed in remove)
             {
-                var orphanedHistory = SongDbContext.SongHistoryEntries
+                var removedHistory = SongDbContext.SongHistoryEntries
                     .Where(h => h.SongId == removed.SongId)
                     .ToArray();
-                if (orphanedHistory.Length > 0)
-                    SongDbContext.SongHistoryEntries.RemoveRange(orphanedHistory);
+                foreach (SongHistoryEntry entry in removedHistory)
+                {
+                    if (keepDates.Add(entry.Date))
+                    {
+                        entry.UserId = keep.UserId;
+                        entry.SongId = keep.SongId;
+                        movedHistory++;
+                    }
+                    else
+                    {
+                        SongDbContext.SongHistoryEntries.Remove(entry); // Duplicate listening event
+                        droppedDuplicateEntries++;
+                    }
+                }
             }
+
+            // Persist the history moves BEFORE the row deletions, so no cascade can remove them.
+            if (movedHistory > 0 || droppedDuplicateEntries > 0)
+                SongDbContext.SaveChanges();
 
             SongDbContext.UpvotedSongs.RemoveRange(remove);
             return remove.Length;
