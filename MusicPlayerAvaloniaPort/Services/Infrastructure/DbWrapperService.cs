@@ -348,12 +348,13 @@ public class DbWrapperService
 
         /// <summary>
         /// Removes the merged-away duplicate rows of a merge and moves their history onto the kept row:
-        /// the history entries of the removed rows are re-pointed to the kept row (entries that collide
-        /// with the kept row's own history - same account + same date - are the same listening event
-        /// recorded twice and are dropped). The kept row's counters (score/streak/likes/dislikes) are
-        /// deliberately left untouched - they are the accumulated values of the row with the most data
-        /// and may include votes from before history entries were recorded, so they are never recomputed
-        /// from the history. Returns the number of removed rows.
+        /// each history entry of the removed rows is re-created under the kept row's key (EF Core cannot
+        /// modify a key property of a tracked entity in place, so delete + re-add in one SaveChanges).
+        /// Entries that collide with the kept row's own history - same account + same date - are the same
+        /// listening event recorded twice and are dropped. The kept row's counters
+        /// (score/streak/likes/dislikes) are deliberately left untouched - they are the accumulated
+        /// values of the row with the most data and may include votes from before history entries were
+        /// recorded, so they are never recomputed from the history. Returns the number of removed rows.
         /// </summary>
         int RemoveUpvotedSongRows(UpvotedSong keep, UpvotedSong[] remove)
         {
@@ -377,8 +378,8 @@ public class DbWrapperService
                 {
                     if (keepDates.Add(entry.Date))
                     {
-                        entry.UserId = keep.UserId;
-                        entry.SongId = keep.SongId;
+                        SongDbContext.SongHistoryEntries.Remove(entry);
+                        SongDbContext.SongHistoryEntries.Add(new SongHistoryEntry(keep.SongId, entry.ScoreChange, entry.Date, keep.UserId));
                         movedHistory++;
                     }
                     else
