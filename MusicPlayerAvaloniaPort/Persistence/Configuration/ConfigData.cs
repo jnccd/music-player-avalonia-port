@@ -11,6 +11,12 @@ public class ConfigData
     public double? Width { get; set; }
     public double? Height { get; set; }
     public Color PrimaryColor { get; set; }
+    /// <summary>
+    /// When enabled, the player reduces its CPU footprint for devices on a limited power budget
+    /// (e.g. laptops on battery): the continuously redrawn visualizations run at a lower frame
+    /// rate and the FFT analysis runs at a lower resolution. Playback is not affected.
+    /// </summary>
+    public bool LowPowerMode { get; set; }
 
     public string? SongLibraryPath { get; set; }
     /// <summary>

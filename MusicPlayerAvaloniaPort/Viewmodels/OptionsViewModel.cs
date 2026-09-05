@@ -42,6 +42,24 @@ public partial class OptionsViewModel : ViewModelBase
         get { return songPlaybackService.AvailableSongsCount.ToString(); }
     }
 
+    // General
+    private bool _lowPowerMode;
+    /// <summary>
+    /// Reduces the CPU footprint of the visualizations (lower diagram frame rate, lower FFT analysis
+    /// resolution) for devices on a limited power budget. Saved immediately so it survives even when
+    /// the app is closed from the options window.
+    /// </summary>
+    public bool LowPowerMode
+    {
+        get { return Config.Data.LowPowerMode; }
+        set
+        {
+            Config.Data.LowPowerMode = value;
+            SetProperty(ref _lowPowerMode, value);
+            Config.Save();
+        }
+    }
+
     // --- Commands ---
 
     // ...

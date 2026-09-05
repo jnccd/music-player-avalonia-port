@@ -39,8 +39,20 @@ public class CustomRenderControl_Title : Control
     LinearGradientBrush? titleInitialOpacityMask = null;
     double opacityMaskStartX => (titleInitialOpacityMask?.GradientStops.Skip(1).FirstOrDefault()?.Offset ?? 0.2) / 2;
 
+    /// <summary>
+    /// Throttles the self-perpetuating redraw loop to a lower frame rate while low power mode is active
+    /// (see <see cref="LowPowerFrameScheduler"/>). The title scrolls by elapsed time per frame, so it
+    /// keeps its speed at any frame rate.
+    /// </summary>
+    readonly LowPowerFrameScheduler frameScheduler;
+
     public CustomRenderControl_Title()
     {
+        frameScheduler = new LowPowerFrameScheduler(
+            () => Dispatcher.UIThread.InvokeAsync(InvalidateVisual, DispatcherPriority.Background),
+            () => audioLibWrapper.PlayState == SoundFlow.Enums.PlaybackState.Playing,
+            Dispatcher.UIThread);
+
         this.Loaded += (s, e) =>
         {
             stopwatch.Start();
@@ -59,7 +71,7 @@ public class CustomRenderControl_Title : Control
         {
             base.Render(context);
             if (audioLibWrapper.PlayState == SoundFlow.Enums.PlaybackState.Playing)
-                Dispatcher.UIThread.InvokeAsync(InvalidateVisual, DispatcherPriority.Background);
+                frameScheduler.ScheduleNextFrame();
 
             if (rawTitleText == null || formattedTitleText == null)
                 return;

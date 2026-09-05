@@ -1,3 +1,4 @@
+using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using SoundFlow.Abstracts;
 using SoundFlow.Abstracts.Devices;
 using SoundFlow.Backends.MiniAudio;
@@ -47,9 +48,21 @@ public class AudioLibWrapperService
     List<(int framePosition, float[] frameData)> directReadStrategyReadBuffers = [];
 
     // FFT Vars
+    /// <summary>
+    /// Number of (float) samples of the read window around the currently playing sample and the FFT
+    /// size of the full-resolution frequency analysis. Changing this changes the time span the samples
+    /// visualization shows around the playback position, so it must stay the same for both.
+    /// </summary>
     public const int FFT_BUFFER_32BIT_FLOAT_SIZE = 16384;
-    private static readonly AudioFormat AnalyzeFormat = AudioFormat.Studio;
-    SpectrumAnalyzer spectrumAnalyzer = new(AnalyzeFormat, FFT_BUFFER_32BIT_FLOAT_SIZE);
+    /// <summary>
+    /// FFT size the frequency analysis runs at in low power mode (a power of two, smaller than
+    /// <see cref="FFT_BUFFER_32BIT_FLOAT_SIZE"/>). Only the analysis resolution shrinks - the read
+    /// window itself keeps its full size, because its time span around the currently playing sample
+    /// is what the diagram shows.
+    /// </summary>
+    public const int FFT_BUFFER_LOW_POWER_SIZE = 4096;
+    SpectrumAnalyzer? spectrumAnalyzer;
+    int spectrumAnalyzerFftSize;
     float[] fftZeroResult, sampleZeroResult;
 
     // Setters
@@ -171,7 +184,7 @@ public class AudioLibWrapperService
         playerDataProvider = new StreamDataProvider(Engine, new FileStream(songPath, FileMode.Open, FileAccess.Read), new ReadOptions { ReadTags = false });
         sampleReaderDataProvider?.Dispose();
         sampleReaderDataProvider = new StreamDataProvider(Engine, new FileStream(songPath, FileMode.Open, FileAccess.Read), new ReadOptions { ReadTags = false });
-        spectrumAnalyzer = new SpectrumAnalyzer(GetCurrentAudioFormat(), FFT_BUFFER_32BIT_FLOAT_SIZE);
+        EnsureSpectrumAnalyzer(forceRecreate: true);
 
         if (soundPlayer != null)
         {
@@ -317,26 +330,61 @@ public class AudioLibWrapperService
             throw new InvalidOperationException($"Unknown {nameof(SampleReadingStrategy)}: {currentSampleReadingStrategy}");
         }
     }
+    /// <summary>
+    /// FFT size the frequency analysis runs at. In low power mode the analysis resolution drops to
+    /// <see cref="FFT_BUFFER_LOW_POWER_SIZE"/>, otherwise the full <see cref="FFT_BUFFER_32BIT_FLOAT_SIZE"/>
+    /// resolution is kept.
+    /// </summary>
+    int GetCurrentFftAnalysisSize() => Config.Data.LowPowerMode ? FFT_BUFFER_LOW_POWER_SIZE : FFT_BUFFER_32BIT_FLOAT_SIZE;
+
+    /// <summary>
+    /// Returns the <see cref="SpectrumAnalyzer"/> used by the FFT visualization. It is (re)created when
+    /// the song's audio format changed (new song) or when the analysis resolution changed (low power
+    /// mode toggled), so the analyzer always matches the current audio format and FFT size.
+    /// </summary>
+    SpectrumAnalyzer EnsureSpectrumAnalyzer(bool forceRecreate = false)
+    {
+        int requiredFftSize = GetCurrentFftAnalysisSize();
+        if (forceRecreate || spectrumAnalyzer == null || spectrumAnalyzerFftSize != requiredFftSize)
+        {
+            spectrumAnalyzer = new SpectrumAnalyzer(GetCurrentAudioFormat(), requiredFftSize);
+            spectrumAnalyzerFftSize = requiredFftSize;
+        }
+        return spectrumAnalyzer;
+    }
+
     public async Task<float[]> GetCurrentFftSpectrumData(float[]? factorArray = null)
     {
         ReadOnlyMemory<float> sampleBufferMemory = await GetCurrentlyPlayingSampleData();
 
+        // Low power mode lowers the FFT analysis resolution: the analyzer runs at a smaller FFT size
+        // on a centred slice of the read window. The read window itself (GetCurrentlyPlayingSampleData)
+        // keeps its full size, so the time span shown around the currently playing sample stays exactly
+        // the same - only the frequency resolution of the analysis shrinks.
+        SpectrumAnalyzer spectrumAnalyzer = EnsureSpectrumAnalyzer();
+        int fftSize = spectrumAnalyzerFftSize;
+        int channels = playerDataProvider?.FormatInfo?.ChannelCount ?? 2;
+        int windowStart = Math.Max(0, (sampleBufferMemory.Length - fftSize) / 2);
+        int windowLength = Math.Min(fftSize, sampleBufferMemory.Length - windowStart);
+
         if (factorArray == null)
         {
-            spectrumAnalyzer.Process(sampleBufferMemory.Span, playerDataProvider?.FormatInfo?.ChannelCount ?? 2);
+            spectrumAnalyzer.Process(sampleBufferMemory.Span.Slice(windowStart, windowLength), channels);
         }
         else
         {
-            float[] workingArray = arrayPool.Rent(FFT_BUFFER_32BIT_FLOAT_SIZE);
-            Span<float> workingSpan = workingArray;
-            sampleBufferMemory.Span.CopyTo(workingSpan);
+            float[] workingArray = arrayPool.Rent(windowLength);
+            Span<float> workingSpan = workingArray.AsSpan(0, windowLength);
+            sampleBufferMemory.Span.Slice(windowStart, windowLength).CopyTo(workingSpan);
 
-            for (int i = 0; i < FFT_BUFFER_32BIT_FLOAT_SIZE; i++)
+            for (int i = 0; i < windowLength; i++)
             {
-                workingSpan[i] *= factorArray[i];
+                // A factor array sized like the read window is aligned to the same centred slice;
+                // a factor array sized like the analysis window itself applies index by index.
+                workingSpan[i] *= factorArray.Length == sampleBufferMemory.Length ? factorArray[windowStart + i] : factorArray[i];
             }
 
-            spectrumAnalyzer.Process(workingSpan, playerDataProvider?.FormatInfo?.ChannelCount ?? 2);
+            spectrumAnalyzer.Process(workingSpan, channels);
             arrayPool.Return(workingArray);
         }
 

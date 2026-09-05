@@ -13,6 +13,13 @@
         <conv:EitherOrConverter x:Key="EitherOrConverter" />
     </UserControl.Resources>
     <WrapPanel Margin="5">
+        <GroupBox Header="General" Margin="3">
+            <StackPanel Spacing="8">
+                <CheckBox Content="Low Power Mode" IsChecked="{Binding LowPowerMode, Mode=TwoWay}" />
+                <TextBlock Foreground="#80FFFFFF" TextWrapping="Wrap" MaxWidth="260"
+                           Text="Reduces the CPU usage of the visualizations (lower diagram frame rate and FFT analysis resolution). Handy on laptops and other battery powered devices." />
+            </StackPanel>
+        </GroupBox>
         <GroupBox Header="Sync Server Connection" Margin="3">
             <StackPanel Spacing="8">
                 <StackPanel Orientation="Horizontal">

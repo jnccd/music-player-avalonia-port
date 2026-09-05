@@ -42,8 +42,19 @@ public class CustomRenderControl_Diagram : Control
 
     object lockject = new();
 
+    /// <summary>
+    /// Throttles the self-perpetuating redraw loop to a lower frame rate while low power mode is active
+    /// (see <see cref="LowPowerFrameScheduler"/>).
+    /// </summary>
+    readonly LowPowerFrameScheduler frameScheduler;
+
     public CustomRenderControl_Diagram() : base()
     {
+        frameScheduler = new LowPowerFrameScheduler(
+            () => Dispatcher.UIThread.Post(InvalidateVisual, DispatcherPriority.Background),
+            () => audioLibWrapper.PlayState == SoundFlow.Enums.PlaybackState.Playing,
+            Dispatcher.UIThread);
+
         this.Loaded += (s, e) =>
         {
             PrimaryColorBrush = view!.FindResource("PrimaryColor") as SolidColorBrush;
@@ -101,7 +112,7 @@ public class CustomRenderControl_Diagram : Control
         {
             base.Render(context);
             if (audioLibWrapper.PlayState == SoundFlow.Enums.PlaybackState.Playing)
-                Dispatcher.UIThread.Post(InvalidateVisual, DispatcherPriority.Background);
+                frameScheduler.ScheduleNextFrame();
 
             Update().Wait();
             Draw(context);

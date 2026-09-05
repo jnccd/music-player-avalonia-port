@@ -20,8 +20,19 @@ public class CustomRenderControl_PlayProgress : Control
     SolidColorBrush? WhiteBrush = new(Colors.White);
     double PixelScale;
 
+    /// <summary>
+    /// Throttles the self-perpetuating redraw loop to a lower frame rate while low power mode is active
+    /// (see <see cref="LowPowerFrameScheduler"/>).
+    /// </summary>
+    readonly LowPowerFrameScheduler frameScheduler;
+
     public CustomRenderControl_PlayProgress() : base()
     {
+        frameScheduler = new LowPowerFrameScheduler(
+            () => Dispatcher.UIThread.InvokeAsync(InvalidateVisual, DispatcherPriority.Background),
+            () => audioLibWrapper.PlayState == SoundFlow.Enums.PlaybackState.Playing,
+            Dispatcher.UIThread);
+
         this.Loaded += (s, e) =>
         {
             Debug.WriteLine("CustomRenderControl_PlayProgress loaded!");
@@ -38,7 +49,7 @@ public class CustomRenderControl_PlayProgress : Control
         {
             base.Render(context);
             if (audioLibWrapper.PlayState == SoundFlow.Enums.PlaybackState.Playing)
-                Dispatcher.UIThread.InvokeAsync(InvalidateVisual, DispatcherPriority.Background);
+                frameScheduler.ScheduleNextFrame();
 
             Update();
             Draw(context);
