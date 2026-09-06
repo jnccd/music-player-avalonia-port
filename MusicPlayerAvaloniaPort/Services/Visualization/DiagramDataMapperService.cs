@@ -35,9 +35,27 @@ public class DiagramDataMapperService
 
     void OnVolumeDataChanged() => Interlocked.Increment(ref volumeCacheInvalidationVersion);
 
-    private const double FFT_WINDOW_PERCENT_CHOPPED_BEGINNING = 0.001;
-    private const double FFT_WINDOW_PERCENT_CHOPPED_END = 0.6;
-    private const float FFT_WINDOW_VALUE_DIVISOR = 9001;
+    // Fraction of the FFT bin axis skipped at the low-frequency start: ReadStart = binCount * this - 1.
+    // 0 made the log curve ramp from the near-DC bins, which put a long, near-zero "dead shelf" at the
+    // far left (the old client's first column sits at ~bin 2). The value below trims that shelf so the
+    // low edge starts around bin 4 (~10 Hz) like the DXMG client; keep it as a knob for A/B.
+    private const double FFT_WINDOW_PERCENT_CHOPPED_BEGINNING = 0.0006;
+    private const double FFT_WINDOW_PERCENT_CHOPPED_END = 0.66;
+    // Global scale applied to every FFT bin (with the per-bin sqrt(i+1) pre-emphasis) before the
+    // per-column max is taken and the per-song volume divisor is applied. RAISED from 9001 because
+    // the max-aggregation (DXMG-style) plus the new cutoff made the Avalonia bars read taller than
+    // the old client; it is the primary overall-height knob.
+    private const float FFT_WINDOW_VALUE_DIVISOR = 14000;
+    // Accentuation of the human-voice / "talking" band on the log-frequency axis. A sigmoid-shaped
+    // warp is applied to the EXPONENT of the log mapping (not to the bin value - see EnsureColumnBinRanges)
+    // so the band around CENTER gets a wider share of the columns at the expense of the extremes.
+    // STRENGTH = 0 disables it. WIDTH = the half-width of the accentuated band, CENTER = its position
+    // as a fraction of the axis (0 = left/low, 1 = right/high). ~0.72 is the middle of the 300-3000 Hz
+    // talking range.
+    private const double FFT_WINDOW_ACCENT_CENTER = 0.68;
+    private const double FFT_WINDOW_ACCENT_WIDTH = 0.55;
+    private const double FFT_WINDOW_ACCENT_STRENGTH = 0.4;
+
     private const double FFT_SAMPLES_HAMMING_WINDOW_DOWNWARD_EXPONENT = 2;
 
     private float[]? smoothedData;
@@ -104,11 +122,14 @@ public class DiagramDataMapperService
         }
 
         // Logarithmically scale the x-axis of the FFT data and chop off a slice. The per-column bin
-        // ranges are precomputed, the averaging itself still runs per frame.
+        // ranges are precomputed, the per-column peak itself still runs per frame. Each column takes
+        // the MAXIMUM bin of its range (like the old DXMG client): the wide high-frequency columns
+        // then stay at their peaks instead of being averaged down, so the few-bin low-frequency
+        // columns no longer read oversized relative to the rest of the spectrum.
         EnsureColumnBinRanges(binCount, targetArraySize);
         for (int i = 0; i < targetArraySize; i++)
         {
-            mappedData[i] = GetAvgHeight(fftData, columnBinRangeFrom![i], columnBinRangeTo![i]) / volumeDivisor;
+            mappedData[i] = GetMaxHeight(fftData, columnBinRangeFrom![i], columnBinRangeTo![i]) / volumeDivisor;
         }
 
         return mappedData;
@@ -170,10 +191,28 @@ public class DiagramDataMapperService
         int[] tos = columnBinRangeTo!;
         double ReadEnd = binCount - (binCount * FFT_WINDOW_PERCENT_CHOPPED_END);
         double ReadStart = (binCount * FFT_WINDOW_PERCENT_CHOPPED_BEGINNING) - 1;
+
+        // Warp the log position so the accent band gets more columns. Endpoints map to 0 and 1, so the
+        // overall frequency range is preserved; the warp is monotonic for STRENGTH small enough (see
+        // SigmoidAccent). Precompute the endpoint sigmoid values once.
+        double accCenter = FFT_WINDOW_ACCENT_CENTER;
+        double accWidth = FFT_WINDOW_ACCENT_WIDTH;
+        double accStrength = FFT_WINDOW_ACCENT_STRENGTH;
+        double sigma0 = SigmoidAccent(0, accCenter, accWidth);
+        double sigma1 = SigmoidAccent(1, accCenter, accWidth);
+
         for (int i = 0; i < columnCount; i++)
         {
-            double lastindex = ReadStart + Math.Pow(ReadEnd - ReadStart, (i - 1) / (double)columnCount);
-            double index = ReadStart + Math.Pow(ReadEnd - ReadStart, i / (double)columnCount);
+            double lastT = (i - 1) / (double)columnCount;
+            double t = i / (double)columnCount;
+
+            double lastSigma = SigmoidAccent(lastT, accCenter, accWidth);
+            double sigma = SigmoidAccent(t, accCenter, accWidth);
+            double lastExponent = lastT - accStrength * (lastSigma - sigma0 - (sigma1 - sigma0) * lastT);
+            double exponent = t - accStrength * (sigma - sigma0 - (sigma1 - sigma0) * t);
+
+            double lastindex = ReadStart + Math.Pow(ReadEnd - ReadStart, lastExponent);
+            double index = ReadStart + Math.Pow(ReadEnd - ReadStart, exponent);
             froms[i] = (int)lastindex;
             tos[i] = (int)index;
         }
@@ -181,6 +220,13 @@ public class DiagramDataMapperService
         columnBinRangeBinCount = binCount;
         columnBinRangeColumnCount = columnCount;
     }
+
+    /// <summary>
+    /// Logistic sigmoid of a normalized log position around the accent center. Used by
+    /// <see cref="EnsureColumnBinRanges"/> to bend the log mapping.
+    /// </summary>
+    private static double SigmoidAccent(double t, double center, double width)
+        => 1.0 / (1.0 + Math.Exp(-(t - center) / width));
 
     private static float GetMaxHeight(float[] array, int from, int to)
     {
@@ -199,25 +245,6 @@ public class DiagramDataMapperService
                 max = array[i];
 
         return max;
-    }
-
-    private static float GetAvgHeight(float[] array, int from, int to)
-    {
-        if (from < 0)
-            from = 0;
-
-        if (from >= to)
-            to = from + 1;
-
-        if (to > array.Length)
-            to = array.Length;
-
-        float sum = 0;
-        for (int i = from; i < to; i++)
-            sum += array[i];
-        var avg = sum / (to - from);
-
-        return avg;
     }
 
     public async Task<float[]> SmoothenFftData(float[] rawData, int targetArraySize, float maxHeight)
