@@ -31,6 +31,10 @@
               pkgs.pulseaudio
               pkgs.yt-dlp
             ];
+            extraShellHook = ''
+              export LD_LIBRARY_PATH="${pkgs.pulseaudio}/lib/:$LD_LIBRARY_PATH"
+              export PULSE_SERVER=unix:/run/user/$(id -u)/pulse/native
+            '';
 
             workloadsHash = workloadsHashX86_64Linux;
           };
