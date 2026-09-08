@@ -27,7 +27,10 @@
             dotnetVersion = "10.0";
             includeAndroidSdk = false;
 
-            additionalPackages = [ pkgs.yt-dlp ];
+            additionalPackages = [
+              pkgs.pulseaudio
+              pkgs.yt-dlp
+            ];
 
             workloadsHash = workloadsHashX86_64Linux;
           };
