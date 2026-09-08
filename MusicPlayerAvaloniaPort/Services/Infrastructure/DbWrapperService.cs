@@ -308,37 +308,40 @@ public class DbWrapperService
 
             foreach (var group in tagCompletenessGroups)
             {
-                var taggedRows = group.Where(s => !SongFileMatching.HasNoAlbumOrArtist(s.Artist, s.Album)).ToArray();
-                var tagSignatures = taggedRows.Select(s => (s.Artist, s.Album)).Distinct().ToArray();
-                if (tagSignatures.Length != 1)
-                    continue; // Several differently tagged songs share the file name: a metadata-less row is ambiguous
-                (string fileArtist, string fileAlbum) = tagSignatures[0];
+                // Rows of one song may differ by EMPTY tag fields (e.g. an artist pruned on one client);
+                // only CONTRADICTING non-empty values (different artist or album on the same name) mean
+                // genuinely different songs.
+                if (!SongFileMatching.TryGetCombinedTags(group, out string combinedArtist, out string combinedAlbum))
+                    continue; // Conflicting tags on the same file name: genuinely different songs
 
                 // When a song library is available, only merge when its files agree: every file of that
-                // name in the library must carry these tags, otherwise the metadata-less rows could belong
-                // to a different same-named file. Without a library the single-signature rule decides.
+                // name must not contradict the combined tags, otherwise the metadata-less rows could
+                // belong to a different same-named file. Without a library the combined-tags rule alone
+                // decides, like on the server.
                 if (libraryAvailable
                     && libraryFilesByName!.TryGetValue(group.Key.Name, out var files)
                     && files.Count > 0
-                    && files.Any(file => !SongSyncService.SongFileMatchesTags(file, fileArtist, fileAlbum)))
+                    && files.Any(file => !parent.SongFileTagsAgreeWithCombined(file, combinedArtist, combinedAlbum)))
                     continue;
 
                 // The canonical row is the one carrying the song data (score/history) - see
-                // SongFileMatching.ChooseCanonicalEntry. If that row is the metadata-less one, its
-                // metadata is adopted AFTER the tagged loser row was removed (so the adoption can never
-                // collide with the loser's identity).
-                var (keep, remove) = SongFileMatching.MergeSameSongEntries(group, fileAlbum, fileArtist);
+                // SongFileMatching.ChooseCanonicalEntry. If that row is missing tag fields (e.g. it is
+                // metadata-less or has a pruned artist), they are filled from the combined metadata
+                // AFTER the other rows were removed (so the fill can never collide with their identity).
+                var (keep, remove) = SongFileMatching.MergeSameSongEntries(group, combinedAlbum, combinedArtist);
                 if (RemoveUpvotedSongRows(keep, remove) == 0)
                     continue;
                 mergedAway += remove.Length;
                 SongDbContext.SaveChanges(); // Drop the loser row(s) first (their identity is still taken)
 
-                if (SongFileMatching.TryGetTagsToAdoptOnto(keep, group, fileAlbum, fileArtist, out string adoptAlbum, out string adoptArtists))
+                if (SongFileMatching.TryFillMissingTags(keep, combinedAlbum, combinedArtist, out string? artistToSet, out string? albumToSet))
                 {
-                    keep.Artist = adoptArtists;
-                    keep.Album = adoptAlbum;
+                    if (artistToSet != null)
+                        keep.Artist = artistToSet;
+                    if (albumToSet != null)
+                        keep.Album = albumToSet;
                     SongDbContext.SaveChanges();
-                    Console.WriteLine($"Adopted metadata of \"{keep.Name}\" (artist: {keep.Artist}, album: {keep.Album}) onto data-carrying row {keep.SongId}.");
+                    Console.WriteLine($"Filled metadata of \"{keep.Name}\" (artist: {keep.Artist}, album: {keep.Album}) onto data-carrying row {keep.SongId}.");
                 }
                 Console.WriteLine($"Merged {remove.Length} metadata-less duplicate(s) of \"{keep.Name}\" into {keep.SongId}.");
             }
@@ -508,6 +511,31 @@ public class DbWrapperService
         public void Dispose()
         {
             SongDbContext.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// True when the tags of the given song file do not CONTRADICT the combined tags of a duplicate
+    /// group: every non-empty field of the combined tags must equal the file's tag (empty combined
+    /// fields are ignored, so a partially recorded row still agrees with a fully tagged file). Files
+    /// whose tags cannot be read never agree (they could belong to a different same-named song).
+    /// </summary>
+    public bool SongFileTagsAgreeWithCombined(string filePath, string combinedArtist, string combinedAlbum)
+    {
+        try
+        {
+            var (album, artists) = HelperFuncs.GetAlbumAndArtistsFromSong(filePath);
+            string fileArtist = artists ?? "";
+            string fileAlbum = album ?? "";
+            if (combinedArtist.Length > 0 && !string.Equals(combinedArtist, fileArtist, StringComparison.Ordinal))
+                return false;
+            if (combinedAlbum.Length > 0 && !string.Equals(combinedAlbum, fileAlbum, StringComparison.Ordinal))
+                return false;
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 
