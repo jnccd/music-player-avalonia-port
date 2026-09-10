@@ -46,15 +46,20 @@ public class DiagramDataMapperService
     // the max-aggregation (DXMG-style) plus the new cutoff made the Avalonia bars read taller than
     // the old client; it is the primary overall-height knob.
     private const float FFT_WINDOW_VALUE_DIVISOR = 14000;
-    // Accentuation of the human-voice / "talking" band on the log-frequency axis. A sigmoid-shaped
-    // warp is applied to the EXPONENT of the log mapping (not to the bin value - see EnsureColumnBinRanges)
-    // so the band around CENTER gets a wider share of the columns at the expense of the extremes.
-    // STRENGTH = 0 disables it. WIDTH = the half-width of the accentuated band, CENTER = its position
-    // as a fraction of the axis (0 = left/low, 1 = right/high). ~0.72 is the middle of the 300-3000 Hz
-    // talking range.
-    private const double FFT_WINDOW_ACCENT_CENTER = 0.68;
-    private const double FFT_WINDOW_ACCENT_WIDTH = 0.55;
-    private const double FFT_WINDOW_ACCENT_STRENGTH = 0.4;
+    // Accentuation of the human-voice / "talking" band on the log-frequency axis. The band between the
+    // two centers keeps the plain log mapping; the space for it is taken from the sides, which are
+    // configured independently (center = where that side's ramp starts/ends, width = how soft the ramp
+    // is, strength = how hard that side is squeezed). A strength above 0 squeezes its side into fewer
+    // columns, so that side's bars get thinner - LOW_STRENGTH > HIGH_STRENGTH presses the low-frequency
+    // bars thinner than the high ones. Both strengths at 0 disable the accent entirely (the mapping is
+    // then identical to a plain log mapping).
+    // ~0.59 / ~0.88 are where 300 Hz / 3000 Hz sit on the axis, i.e. the talking range.
+    private const double FFT_WINDOW_ACCENT_LOW_CENTER = 0.59;
+    private const double FFT_WINDOW_ACCENT_LOW_WIDTH = 0.05;
+    private const double FFT_WINDOW_ACCENT_LOW_STRENGTH = 1.0;
+    private const double FFT_WINDOW_ACCENT_HIGH_CENTER = 0.88;
+    private const double FFT_WINDOW_ACCENT_HIGH_WIDTH = 0.05;
+    private const double FFT_WINDOW_ACCENT_HIGH_STRENGTH = 0.5;
 
     private const double FFT_SAMPLES_HAMMING_WINDOW_DOWNWARD_EXPONENT = 2;
 
@@ -90,13 +95,20 @@ public class DiagramDataMapperService
         .ToArray();
 
     /// <summary>
-    /// 1/2^j decay factors for the smoothing pass. Was rebuilt inside <see cref="SmoothenFftData"/> on
-    /// every call before, which allocated and recomputed it once per frame.
+    /// Reach of the smoothing kernel as a fraction of the diagram width. The smoothing is deliberately
+    /// sized relative to the width instead of in absolute columns, exactly like the old DXMG client:
+    /// there the window (430 * UiScaling.scaleMult columns) and the kernel (6 * UiScaling.scaleMult
+    /// samples, decaying with 2^(-j / scaleMult)) both scale together, so the kernel always covers
+    /// 6/430 of the width. Avalonia's columns are device-independent pixels, so a fixed sample count
+    /// would shrink relative to the diagram on wider windows or higher display scaling; deriving it
+    /// from the width keeps the smoothing identical in every case.
     /// </summary>
-    private static readonly float[] SMOOTHING_POW2S = Enumerable
-        .Range(0, 7) // maxSamples (6) + 1
-        .Select(j => (float)Math.Pow(2, -j))
-        .ToArray();
+    private const double SMOOTHING_KERNEL_REACH_FRACTION = 6.0 / 430.0;
+
+    // Decay factors 2^(-j / decayUnit) of the smoothing kernel, rebuilt only when the diagram width
+    // changes (the reach and the decay unit are both derived from it) instead of per frame.
+    float[]? smoothingKernelFactors;
+    int smoothingKernelWidth = -1;
 
     public async Task<float[]> GetScaledAndSlicedFftData(int targetArraySize)
     {
@@ -192,29 +204,28 @@ public class DiagramDataMapperService
         double ReadEnd = binCount - (binCount * FFT_WINDOW_PERCENT_CHOPPED_END);
         double ReadStart = (binCount * FFT_WINDOW_PERCENT_CHOPPED_BEGINNING) - 1;
 
-        // Warp the log position so the accent band gets more columns. Endpoints map to 0 and 1, so the
-        // overall frequency range is preserved; the warp is monotonic for STRENGTH small enough (see
-        // SigmoidAccent). Precompute the endpoint sigmoid values once.
-        double accCenter = FFT_WINDOW_ACCENT_CENTER;
-        double accWidth = FFT_WINDOW_ACCENT_WIDTH;
-        double accStrength = FFT_WINDOW_ACCENT_STRENGTH;
-        double sigma0 = SigmoidAccent(0, accCenter, accWidth);
-        double sigma1 = SigmoidAccent(1, accCenter, accWidth);
+        // Accent warp: walk the log position along the columns using the local column density (see
+        // ColumnDensity) instead of stepping a constant 1 / columnCount. The densities are normalized so
+        // the accumulated exponents still run from 0 (first column) to exactly 1 (last column), which
+        // keeps the overall frequency range and the column count identical to the un-accented mapping.
+        double Range = ReadEnd - ReadStart;
+        double invColumns = 1.0 / columnCount;
+        double densitySum = 0;
+        for (int i = 0; i < columnCount; i++)
+            densitySum += ColumnDensity(i * invColumns);
+        double densityScale = densitySum > 0 ? columnCount / densitySum : 1.0;
 
+        // froms[i] / tos[i] use the column boundary before / at column i, matching the (i - 1) / columnCount
+        // and i / columnCount of the plain mapping.
+        double previousExponent = -ColumnDensity(0) * densityScale * invColumns;
+        double exponent = 0;
         for (int i = 0; i < columnCount; i++)
         {
-            double lastT = (i - 1) / (double)columnCount;
-            double t = i / (double)columnCount;
+            froms[i] = (int)(ReadStart + Math.Pow(Range, previousExponent));
+            tos[i] = (int)(ReadStart + Math.Pow(Range, exponent));
 
-            double lastSigma = SigmoidAccent(lastT, accCenter, accWidth);
-            double sigma = SigmoidAccent(t, accCenter, accWidth);
-            double lastExponent = lastT - accStrength * (lastSigma - sigma0 - (sigma1 - sigma0) * lastT);
-            double exponent = t - accStrength * (sigma - sigma0 - (sigma1 - sigma0) * t);
-
-            double lastindex = ReadStart + Math.Pow(ReadEnd - ReadStart, lastExponent);
-            double index = ReadStart + Math.Pow(ReadEnd - ReadStart, exponent);
-            froms[i] = (int)lastindex;
-            tos[i] = (int)index;
+            previousExponent = exponent;
+            exponent += ColumnDensity(i * invColumns) * densityScale * invColumns;
         }
 
         columnBinRangeBinCount = binCount;
@@ -222,11 +233,25 @@ public class DiagramDataMapperService
     }
 
     /// <summary>
-    /// Logistic sigmoid of a normalized log position around the accent center. Used by
-    /// <see cref="EnsureColumnBinRanges"/> to bend the log mapping.
+    /// Logistic sigmoid of a normalized log position, ramping from 0 to 1 around <paramref name="center"/>
+    /// over roughly <paramref name="width"/>. Used to build <see cref="ColumnDensity"/>.
     /// </summary>
     private static double SigmoidAccent(double t, double center, double width)
         => 1.0 / (1.0 + Math.Exp(-(t - center) / width));
+
+    /// <summary>
+    /// Local "column density" of the accent warp: how many log-frequency positions one column advances
+    /// at the normalized axis position <paramref name="t"/> (0 = first column, 1 = last column).
+    /// A density of 1 is the plain log mapping, above 1 squeezes that range into fewer columns (thinner
+    /// bars) and below 1 spreads it over more columns. The low and the high side ramp their own density
+    /// with their own center, width and strength, so the axis space for the band in between can be taken
+    /// from whichever side bothers the eye less. Both strengths at 0 give a density of exactly 1
+    /// everywhere, which reproduces the mapping without any accent.
+    /// </summary>
+    private static double ColumnDensity(double t)
+        => 1.0
+           + FFT_WINDOW_ACCENT_LOW_STRENGTH * (1.0 - SigmoidAccent(t, FFT_WINDOW_ACCENT_LOW_CENTER, FFT_WINDOW_ACCENT_LOW_WIDTH))
+           + FFT_WINDOW_ACCENT_HIGH_STRENGTH * SigmoidAccent(t, FFT_WINDOW_ACCENT_HIGH_CENTER, FFT_WINDOW_ACCENT_HIGH_WIDTH);
 
     private static float GetMaxHeight(float[] array, int from, int to)
     {
@@ -281,14 +306,16 @@ public class DiagramDataMapperService
             if (smoothedData[i] > maxHeight)
                 smoothedData[i] = maxHeight;
 
-        // Smoothen
-        int maxSamples = 6;
+        // Smoothen. Both the reach and the decay unit scale with the diagram width (see
+        // SMOOTHING_KERNEL_REACH_FRACTION), so this is the DXMG kernel: 6*scaleMult samples decaying
+        // with 2^(-j/scaleMult), just expressed as a fraction of the width.
+        float[] kernelFactors = EnsureSmoothingKernelFactors(smoothedData.Length);
 
         for (int i = 0; i < smoothedData.Length; i++)
         {
-            for (int j = 0; j < maxSamples; j++)
+            for (int j = 0; j < kernelFactors.Length; j++)
             {
-                var mult = SMOOTHING_POW2S[j];
+                var mult = kernelFactors[j];
 
                 if (i > j)
                     smoothedData[i] += (smoothedData[i - 1 - j] - smoothedData[i]) * mult;
@@ -298,5 +325,31 @@ public class DiagramDataMapperService
         }
 
         return smoothedData;
+    }
+
+    /// <summary>
+    /// Returns the decay factors of the smoothing kernel for a diagram of <paramref name="width"/>
+    /// columns: the samples count 2^(-j / decayUnit) with the reach (width * 6/430) and the decay unit
+    /// (width/430, i.e. one DXMG scaleMult step) both derived from the width. Cached per width, so the
+    /// per-frame smoothing neither allocates nor recomputes them.
+    /// </summary>
+    float[] EnsureSmoothingKernelFactors(int width)
+    {
+        if (smoothingKernelFactors != null && smoothingKernelWidth == width)
+            return smoothingKernelFactors;
+
+        int sampleCount = (int)(width * SMOOTHING_KERNEL_REACH_FRACTION);
+        if (sampleCount < 1)
+            sampleCount = 1;
+
+        if (smoothingKernelFactors == null || smoothingKernelFactors.Length != sampleCount)
+            smoothingKernelFactors = new float[sampleCount];
+
+        double decayUnit = width * SMOOTHING_KERNEL_REACH_FRACTION / 6.0;
+        for (int j = 0; j < sampleCount; j++)
+            smoothingKernelFactors[j] = (float)Math.Pow(2.0, -j / decayUnit);
+
+        smoothingKernelWidth = width;
+        return smoothingKernelFactors;
     }
 }
