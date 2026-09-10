@@ -181,9 +181,20 @@ public class DiagramDataMapperService
         if (binScaleFactors != null && binScaleFactorCount == binCount)
             return;
 
+        // The analysis FFT size follows the bin count (the analyzer exposes fftSize / 2 bins), and low
+        // power mode lowers it from 16384 to 4096 samples. Two things change with it and both shrink the
+        // displayed values: an unnormalized FFT magnitude grows with the FFT size (roughly proportionally
+        // for the tonal peaks that the per-column max picks out), and the sqrt(i + 1) pre-emphasis is
+        // tied to the bin index, so the same frequency lands on a lower bin (and thus a smaller factor)
+        // when there are fewer bins. Low power mode therefore came out about (16384/4096)^1.5 = 8x too
+        // short. Multiplying that ratio back out keeps the diagram height independent of the analysis
+        // resolution; at the full size the factor is exactly 1, so nothing changes there.
+        double fftSize = binCount * 2.0;
+        double sizeCorrection = Math.Pow(AudioLibWrapperService.FFT_BUFFER_32BIT_FLOAT_SIZE / fftSize, 1.5);
+
         binScaleFactors = new float[binCount];
         for (int i = 0; i < binCount; i++)
-            binScaleFactors[i] = (float)Math.Sqrt(i + 1) / FFT_WINDOW_VALUE_DIVISOR;
+            binScaleFactors[i] = (float)(Math.Sqrt(i + 1) * sizeCorrection / FFT_WINDOW_VALUE_DIVISOR);
         binScaleFactorCount = binCount;
     }
 
