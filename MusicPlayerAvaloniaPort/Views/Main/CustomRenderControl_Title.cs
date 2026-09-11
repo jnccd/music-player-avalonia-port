@@ -34,6 +34,18 @@ public class CustomRenderControl_Title : Control
     // Text
     string? rawTitleText;
     FormattedText? formattedTitleText;
+    const double TitleFontSize = 35;
+
+    /// <summary>
+    /// Distance from the top of a text layout to its baseline for an ASCII-only string in the title font.
+    /// Glyphs the title font does not contain (CJK and other scripts) are drawn with a fallback font whose
+    /// taller ascent raises the layout's own <see cref="FormattedText.Baseline"/>, which used to render
+    /// those titles visibly lower than ASCII-only ones. Drawing every title so that its baseline lands at
+    /// this offset keeps titles of any script on the same line, and leaves ASCII-only titles unchanged.
+    /// </summary>
+    double titleAsciiBaseline = -1;
+
+    Typeface TitleTypeface => new((view!.FindResource("BigNoodleTitling") as FontFamily)!, FontStyle.Normal, FontWeight.Normal);
 
     // Fade out/in
     LinearGradientBrush? titleInitialOpacityMask = null;
@@ -68,6 +80,11 @@ public class CustomRenderControl_Title : Control
             titleInitialOpacityMask = this.OpacityMask as LinearGradientBrush;
 
             this.OpacityMask = null;
+
+            // Baseline of the primary font alone - the reference every title is aligned to (see Draw).
+            titleAsciiBaseline = new FormattedText("Ag", CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+                TitleTypeface, TitleFontSize, new SolidColorBrush(Colors.White)).Baseline;
+
             UpdateTitleText("Loading...", initial1X: 0, initial2X: -9999);
         };
     }
@@ -135,6 +152,10 @@ public class CustomRenderControl_Title : Control
         double title1X = titleText1X ?? 0;
         double title2X = titleText2X ?? 0;
 
+        // Align to the ASCII baseline: a layout that needed a fallback font reports a larger Baseline
+        // (taller ascent), which would otherwise drag the glyphs down out of line with ASCII-only titles.
+        double titleY = titleAsciiBaseline >= 0 ? titleAsciiBaseline - formattedTitleText!.Baseline : 0;
+
         // The fade has to be anchored to this control's own rectangle. Assigning Control.OpacityMask let
         // the gradient resolve against the bounds of the drawn content instead, so as soon as the
         // leftmost glyph was away from the control's left edge (initial gap, or scrolled far left) the
@@ -145,21 +166,21 @@ public class CustomRenderControl_Title : Control
         {
             using (context.PushOpacityMask(titleInitialOpacityMask, new Rect(this.Bounds.Size)))
             {
-                context.DrawText(formattedTitleText!, new Point(title1X, 0));
-                context.DrawText(formattedTitleText!, new Point(title2X, 0));
+                context.DrawText(formattedTitleText!, new Point(title1X, titleY));
+                context.DrawText(formattedTitleText!, new Point(title2X, titleY));
             }
         }
         else
         {
-            context.DrawText(formattedTitleText!, new Point(title1X, 0));
-            context.DrawText(formattedTitleText!, new Point(title2X, 0));
+            context.DrawText(formattedTitleText!, new Point(title1X, titleY));
+            context.DrawText(formattedTitleText!, new Point(title2X, titleY));
         }
     }
 
     public void UpdateTitleText(string newTitle, int? initial1X = null, int? initial2X = null)
     {
         rawTitleText = newTitle;
-        formattedTitleText = new FormattedText(rawTitleText, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, new Typeface((view!.FindResource("BigNoodleTitling") as FontFamily)!, FontStyle.Normal, FontWeight.Normal), 35, new SolidColorBrush(Colors.White));
+        formattedTitleText = new FormattedText(rawTitleText, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, TitleTypeface, TitleFontSize, new SolidColorBrush(Colors.White));
 
         titleTextWidth = formattedTitleText.Width;
 
