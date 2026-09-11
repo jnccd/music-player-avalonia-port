@@ -742,28 +742,76 @@ public class SongSyncService
         }
     }
 
+    /// <summary>
+    /// Records the vote locally and uploads it to the sync server in the background.
+    /// <para>
+    /// The caller must never wait for the server: votes are triggered from the UI thread (upvote button,
+    /// next song via mouse wheel or hotkey) and while the playback history lock is held (the automatic
+    /// up/downvote when a song ends), so a slow sync server used to stall the whole app on every skip and
+    /// every score change - and an unreachable one stalled it for the complete HTTP timeout.
+    /// </para>
+    /// <para>
+    /// The vote is queued durably FIRST (one cheap local insert) and that queue entry is removed once the
+    /// server accepted it, so a failed or interrupted upload keeps its marker and is retried by
+    /// <see cref="Init"/> (startup/login) - exactly how a failed POST behaved before.
+    /// </para>
+    /// </summary>
     public void Vote(SongHistoryEntry newEntry)
     {
         var endpoint = $"{ROUTE_VERSION_PREFIX}/sync/vote";
         // See UploadNewSongEntry: the queue stores the endpoint without the version prefix.
         var queuedEndpoint = "/sync/vote";
         var newEntryJson = JsonSerializer.Serialize(newEntry, jsonOptions);
-        using var dbContext = DbWrapper.GetContext();
+
+        Guid queuedVoteId;
+        using (var dbContext = DbWrapper.GetContext())
+            queuedVoteId = dbContext.AddNewNotYetSyncedDataEntry(newEntryJson, queuedEndpoint, null, newEntry.SongId).Id;
+
+        Task.Run(() => UploadQueuedVote(queuedVoteId, newEntryJson, endpoint));
+    }
+
+    /// <summary>
+    /// Uploads one queued vote and clears its queue entry when the server accepted it (a 409 counts as
+    /// accepted: the same vote is already stored there). On any other outcome the marker is kept with the
+    /// error, so the regular retry path picks the vote up again.
+    /// </summary>
+    void UploadQueuedVote(Guid queuedVoteId, string newEntryJson, string endpoint)
+    {
+        bool accepted = false;
+        string? error = null;
         try
         {
             var newEntryContent = new StringContent(newEntryJson, Encoding.UTF8, "application/json");
             var res = client!.PostAsync($"{Config.Data.SyncServerHost}{endpoint}", newEntryContent).Result;
 
-            if (!res.IsSuccessStatusCode && res.StatusCode != System.Net.HttpStatusCode.Conflict)
-                dbContext.AddNewNotYetSyncedDataEntry(newEntryJson, queuedEndpoint, $"{res.IsSuccessStatusCode} {res.Content.ReadAsStringAsync().Result}", newEntry.SongId);
+            accepted = res.IsSuccessStatusCode || res.StatusCode == System.Net.HttpStatusCode.Conflict;
+            if (!accepted)
+                error = $"{res.IsSuccessStatusCode} {res.Content.ReadAsStringAsync().Result}";
 
             State = $"Vote {res.StatusCode} {res.Content.ReadAsStringAsync().Result}";
         }
         catch (Exception ex)
         {
+            error = ex.Message;
             State = $"Vote failed: {ex.Message}";
+        }
 
-            dbContext.AddNewNotYetSyncedDataEntry(newEntryJson, queuedEndpoint, ex.Message, newEntry.SongId);
+        try
+        {
+            using var dbContext = DbWrapper.GetContext();
+            // Fetched through this context so the entity is tracked and removing/updating it persists.
+            var queuedVote = dbContext.GetNotYetSyncedDataEntries().FirstOrDefault(x => x.Id == queuedVoteId);
+            if (queuedVote == null)
+                return; // Already gone - e.g. the startup retry uploaded and removed it in the meantime
+
+            if (accepted)
+                dbContext.RemoveNotYetSyncedDataEntries(queuedVote);
+            else
+                dbContext.UpdateNotYetSyncedDataEntry(queuedVote, null, error);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Could not update the queue entry {queuedVoteId} of an uploaded vote: {ex.Message}");
         }
     }
 

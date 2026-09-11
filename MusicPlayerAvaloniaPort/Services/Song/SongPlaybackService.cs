@@ -46,6 +46,15 @@ public class SongPlaybackService
 
     public event EventHandler<AvailableSong>? NewSongStarted;
     public event EventHandler<bool>? UpvoteLockedInChanged;
+    /// <summary>
+    /// Raised right before a song is (re)started and, as <see cref="SongChangeFinished"/>, when that start
+    /// is over - successfully or not. Starting a song opens its file (and two decoder streams) on the song
+    /// library, which can be a NAS that has to spin up first, so the UI uses the pair to show its loading
+    /// indicator only when the switch takes longer than a blink. Both events are raised on the thread that
+    /// triggered the switch.
+    /// </summary>
+    public event EventHandler<EventArgs>? SongChangeStarted;
+    public event EventHandler<EventArgs>? SongChangeFinished;
 
     public SongPlaybackService(AudioLibWrapperService AudioLibWrapper, SongVotingService UpvotedSongManager, SongChoosingService SongChoosingService, DbWrapperService DbWrapper, SongSyncService SyncService)
     {
@@ -377,8 +386,8 @@ public class SongPlaybackService
             RuntimePlayHistoryIndex = RuntimePlayHistory.Count - 1;
 
             // Invoke Events
-            AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"), GetSampleReadingStrategyForSong(CurrentlyPlaying));
-            NewSongStarted?.Invoke(this, CurrentlyPlaying);
+            var startedSong = StartPlayingCurrentSong();
+            NewSongStarted?.Invoke(this, startedSong);
 
             if (secondToStartAt != null)
                 AudioLibWrapper.PlayProgress = secondToStartAt / AudioLibWrapper.SongDurationSeconds;
@@ -414,8 +423,8 @@ public class SongPlaybackService
             }
 
             // Invoke Events
-            AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"), GetSampleReadingStrategyForSong(CurrentlyPlaying));
-            NewSongStarted?.Invoke(this, CurrentlyPlaying);
+            var startedSong = StartPlayingCurrentSong();
+            NewSongStarted?.Invoke(this, startedSong);
         }
     }
     public void GetPreviousSong()
@@ -441,8 +450,8 @@ public class SongPlaybackService
             }
 
             // Invoke Events
-            AudioLibWrapper.PlaySong(CurrentlyPlaying?.FilePath ?? throw new InvalidDataException("No song to play"), GetSampleReadingStrategyForSong(CurrentlyPlaying));
-            NewSongStarted?.Invoke(this, CurrentlyPlaying);
+            var startedSong = StartPlayingCurrentSong();
+            NewSongStarted?.Invoke(this, startedSong);
         }
     }
 
@@ -450,6 +459,29 @@ public class SongPlaybackService
     {
         var newSong = SongChoosingService.ChooseSongWithWeightedChances(CurrentlyPlaying);
         return newSong;
+    }
+
+    /// <summary>
+    /// Starts the currently selected song and brackets the (potentially slow) start with
+    /// <see cref="SongChangeStarted"/> / <see cref="SongChangeFinished"/>, so the UI can show a loading
+    /// indicator when starting the song takes longer than a blink - the song file has to be opened on the
+    /// song library, which may be a NAS that is spun down. Returns the song that was started.
+    /// </summary>
+    AvailableSong StartPlayingCurrentSong()
+    {
+        var song = CurrentlyPlaying ?? throw new InvalidDataException("No song to play");
+
+        SongChangeStarted?.Invoke(this, EventArgs.Empty);
+        try
+        {
+            AudioLibWrapper.PlaySong(song.FilePath, GetSampleReadingStrategyForSong(song));
+        }
+        finally
+        {
+            SongChangeFinished?.Invoke(this, EventArgs.Empty);
+        }
+
+        return song;
     }
     SampleReadingStrategy GetSampleReadingStrategyForSong(AvailableSong song)
     {

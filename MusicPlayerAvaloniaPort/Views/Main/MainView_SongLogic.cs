@@ -137,14 +137,15 @@ public partial class MainView : UserControl
         {
             Debug.WriteLine($"Scrollwheel event! {e.Delta.Y}");
             lastPointerWheelChangedEvent = DateTime.Now;
+            // Run the switch off the UI thread: starting a song opens its file (and two decoder streams) on
+            // the song library, which can be a NAS that has to spin up first. Blocking the UI thread there
+            // froze the window and made it impossible to even show the loading indicator (see
+            // MainView.OnSongChangeStarted). GetNextSong/GetPreviousSong serialize on the runtime play
+            // history lock, so concurrent switches stay ordered exactly like the sequential UI calls did.
             if (e.Delta.Y > 0)
-            {
-                songPlaybackService.GetNextSong();
-            }
+                Task.Run(() => Program.WrapInTry(songPlaybackService.GetNextSong));
             else if (e.Delta.Y < 0)
-            {
-                songPlaybackService.GetPreviousSong();
-            }
+                Task.Run(() => Program.WrapInTry(songPlaybackService.GetPreviousSong));
         }
     }
 

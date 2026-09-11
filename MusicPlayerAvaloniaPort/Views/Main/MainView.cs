@@ -42,6 +42,24 @@ public partial class MainView : UserControl
 
     const double MAX_VOLUME = 1;
 
+    /// <summary>
+    /// Startup progress bar timer (see <see cref="SetupUi"/>); kept in a field so it can be stopped once the
+    /// startup finished instead of polling progress forever.
+    /// </summary>
+    DispatcherTimer? startupProgressTimer;
+    /// <summary>True once the song library is set up, i.e. the startup bar is gone and playback may start.</summary>
+    bool startupLibraryReady;
+
+    /// <summary>
+    /// Delay before the loading indicator of a song change is shown. Starting a song opens its file on the
+    /// song library, which can be a NAS that has to spin up first, so a switch can take noticeably long; on
+    /// a local library it finishes in a few milliseconds and the indicator never appears (so the UI does not
+    /// flicker on every skip).
+    /// </summary>
+    static readonly TimeSpan SongChangeLoadingIndicatorDelay = TimeSpan.FromMilliseconds(250);
+    DispatcherTimer? songChangeLoadingIndicatorTimer;
+    bool songChangeLoadingIndicatorShown;
+
     CustomRenderControl_Diagram CustomRenderControl_Diagram_Getter => this.GetLogicalDescendants().OfType<CustomRenderControl_Diagram>().FirstOrDefault()!;
     CustomRenderControl_PlayProgress CustomRenderControl_PlayProgress_Getter => this.GetLogicalDescendants().OfType<CustomRenderControl_PlayProgress>().FirstOrDefault()!;
     CustomRenderControl_Title CustomRenderControl_Title_Getter => this.GetLogicalDescendants().OfType<CustomRenderControl_Title>().FirstOrDefault()!;
@@ -69,11 +87,11 @@ public partial class MainView : UserControl
     void SetupUi()
     {
         // Song Setup Thread (so it doesnt block the UI)
-        var timer = new DispatcherTimer(
+        startupProgressTimer = new DispatcherTimer(
             TimeSpan.FromMilliseconds(1000 / 45),
             DispatcherPriority.Background,
             Dispatcher.UIThread);
-        timer.Tick += (s, e) =>
+        startupProgressTimer.Tick += (s, e) =>
         {
             // Bar composition over the whole startup: the startup sync pull (SongSyncService.SyncProgress,
             // 0..1 coarse milestones) gets the first quarter of the bar; the song library setup - the
@@ -84,7 +102,7 @@ public partial class MainView : UserControl
                 + songChoosingService.CreateSongChoosingDataStructureProgress * 33) * (75f / 133f);
             ProgressBarInit_Getter.Value = syncPart + libraryPart;
         };
-        timer.Start();
+        startupProgressTimer.Start();
         Task.Run((Action)(() =>
         {
             Thread.CurrentThread.Name = "SongSetupThread";
@@ -115,6 +133,10 @@ public partial class MainView : UserControl
             {
                 ProgressBarInit_Getter.Value = 100;
                 ProgressBarInit_Getter.IsVisible = false;
+                // The startup bar is done: stop polling it and let the song-change loading indicator (see
+                // OnSongChangeStarted) take over the same control from here on.
+                startupProgressTimer?.Stop();
+                startupLibraryReady = true;
             }));
         }));
 
@@ -122,6 +144,8 @@ public partial class MainView : UserControl
         Window?.Closing += MainView_Closing;
         Window?.ScalingChanged += MainView_ScalingChanged;
         songPlaybackService.NewSongStarted += (s, song) => UpdateUiForNewSong(song);
+        songPlaybackService.SongChangeStarted += (s, e) => Dispatcher.UIThread.Post(OnSongChangeStarted);
+        songPlaybackService.SongChangeFinished += (s, e) => Dispatcher.UIThread.Post(OnSongChangeFinished);
         songPlaybackService.UpvoteLockedInChanged += (s, lockedIn) => UpdateUiForNewUpvoteLockedInState(lockedIn);
         this.AddHandler(
             InputElement.KeyDownEvent,
@@ -172,6 +196,51 @@ public partial class MainView : UserControl
         {
             cosmeticBorder!.BorderThickness = new Avalonia.Thickness(1 / CurrentRenderScaling());
         }
+    }
+
+    /// <summary>
+    /// Shows the loading indicator for the song change that just started - but only when it is still running
+    /// after <see cref="SongChangeLoadingIndicatorDelay"/>. Reuses the startup progress bar (hidden by then)
+    /// in its indeterminate look, since the length of the wait is unknown. Nothing is shown for a fast
+    /// switch, so the UI does not flicker on every skip.
+    /// </summary>
+    void OnSongChangeStarted()
+    {
+        if (!startupLibraryReady || songChangeLoadingIndicatorShown)
+            return;
+
+        if (songChangeLoadingIndicatorTimer == null)
+        {
+            songChangeLoadingIndicatorTimer = new DispatcherTimer(SongChangeLoadingIndicatorDelay, DispatcherPriority.Background, Dispatcher.UIThread);
+            songChangeLoadingIndicatorTimer.Tick += (s, e) =>
+            {
+                songChangeLoadingIndicatorTimer!.Stop();
+                var progressBar = ProgressBarInit_Getter;
+                progressBar.IsIndeterminate = true;
+                progressBar.IsVisible = true;
+                songChangeLoadingIndicatorShown = true;
+            };
+        }
+
+        // Restart the delay for this switch (the previous one may still be pending).
+        songChangeLoadingIndicatorTimer.Stop();
+        songChangeLoadingIndicatorTimer.Start();
+    }
+
+    /// <summary>
+    /// Hides the loading indicator of a finished song change - or cancels it entirely when the switch was
+    /// quicker than <see cref="SongChangeLoadingIndicatorDelay"/>.
+    /// </summary>
+    void OnSongChangeFinished()
+    {
+        songChangeLoadingIndicatorTimer?.Stop();
+        if (!songChangeLoadingIndicatorShown)
+            return;
+
+        songChangeLoadingIndicatorShown = false;
+        var progressBar = ProgressBarInit_Getter;
+        progressBar.IsVisible = false;
+        progressBar.IsIndeterminate = false; // Restore the determinate startup look of the shared bar
     }
 
     void RefreshCustomControls()

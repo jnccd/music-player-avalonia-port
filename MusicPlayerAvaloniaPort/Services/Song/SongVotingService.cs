@@ -111,11 +111,12 @@ public class SongVotingService(AudioLibWrapperService AudioLibWrapper, SongSyncS
         upvotedSong.Score += scoreChange;
         upvotedSong.TotalLikes++;
 
-        // Persist the changed row (score/streak/votes), otherwise only the history entry is saved and the
-        // statistics view keeps showing the old values until a server pull happens.
-        dbContext.SaveChanges();
-
-        SaveScoreChange(upvotedSong, scoreChange);
+        // Persist the changed row (score/streak/votes) TOGETHER with its history entry, in one context and
+        // one SaveChanges - the score row used to be saved in a first transaction and the history entry in a
+        // second one. The upload of the vote happens in the background (see SongSyncService.Vote), so the
+        // caller only pays for this local write.
+        var historyEntry = dbContext.AddNewSongHistoryEntry(upvotedSong.SongId, scoreChange);
+        SyncService.Vote(historyEntry);
 
         SongChoosingService.UpdateSongChoosingDataStructure(songToUpvote, AvailableSongs);
 
@@ -143,23 +144,14 @@ public class SongVotingService(AudioLibWrapperService AudioLibWrapper, SongSyncS
         upvotedSong.Score += scoreChange;
         upvotedSong.TotalDislikes++;
 
-        // Persist the changed row (score/streak/votes), otherwise only the history entry is saved and the
-        // statistics view keeps showing the old values until a server pull happens.
-        dbContext.SaveChanges();
-
-        SaveScoreChange(upvotedSong, scoreChange);
+        // See UpvoteSong: row + history entry are written in one transaction, the upload runs in the
+        // background so a skip never waits for the sync server.
+        var historyEntry = dbContext.AddNewSongHistoryEntry(upvotedSong.SongId, scoreChange);
+        SyncService.Vote(historyEntry);
 
         SongChoosingService.UpdateSongChoosingDataStructure(songToDownvote, AvailableSongs);
 
         SongGotDownvoted?.Invoke(this, false);
-    }
-
-    void SaveScoreChange(UpvotedSong upvotedSong, float scoreChange)
-    {
-        using var dbContext = DbWrapper.GetContext();
-        var newEntry = dbContext.AddNewSongHistoryEntry(upvotedSong.SongId, scoreChange);
-
-        SyncService.Vote(newEntry);
     }
 
     float GetUpvoteWeight(float SongScore)
