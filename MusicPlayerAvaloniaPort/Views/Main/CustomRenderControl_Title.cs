@@ -37,6 +37,13 @@ public class CustomRenderControl_Title : Control
 
     // Fade out/in
     LinearGradientBrush? titleInitialOpacityMask = null;
+    /// <summary>
+    /// Whether the fade mask is applied to the current frame. This used to be an assignment of
+    /// <see cref="Control.OpacityMask"/>, but that mask is resolved against the bounds of the drawn
+    /// content instead of the control's own rectangle, so the fade is now pushed explicitly around the
+    /// text (see <see cref="Draw"/>).
+    /// </summary>
+    bool fadeEnabled;
     double opacityMaskStartX => (titleInitialOpacityMask?.GradientStops.Skip(1).FirstOrDefault()?.Offset ?? 0.2) / 2;
 
     /// <summary>
@@ -93,7 +100,7 @@ public class CustomRenderControl_Title : Control
 
         if (this.Bounds.Width > titleTextWidth)
         {
-            Dispatcher.UIThread.InvokeAsync(() => this.OpacityMask = null, DispatcherPriority.Background);
+            fadeEnabled = false;
 
             titleText1X = 0;
             titleText2X = -9999;
@@ -110,7 +117,7 @@ public class CustomRenderControl_Title : Control
                 titleText2X = titleText1X + titleTextWidth + titleGap;
             }
 
-            Dispatcher.UIThread.InvokeAsync(() => this.OpacityMask = titleInitialOpacityMask, DispatcherPriority.Background);
+            fadeEnabled = true;
             var timeSinceLastPlainTitle = frameCounter - titleLastPlainTitleTime;
             if (timeSinceLastPlainTitle < 300)
             {
@@ -125,8 +132,28 @@ public class CustomRenderControl_Title : Control
 
     private void Draw(DrawingContext context)
     {
-        context.DrawText(formattedTitleText!, new Point(titleText1X ?? 0, 0));
-        context.DrawText(formattedTitleText!, new Point(titleText2X ?? 0, 0));
+        double title1X = titleText1X ?? 0;
+        double title2X = titleText2X ?? 0;
+
+        // The fade has to be anchored to this control's own rectangle. Assigning Control.OpacityMask let
+        // the gradient resolve against the bounds of the drawn content instead, so as soon as the
+        // leftmost glyph was away from the control's left edge (initial gap, or scrolled far left) the
+        // whole fade travelled with the text and started at the glyph rather than at the border. Pushing
+        // the mask with an explicit rectangle pins its 0% / 100% to the control's edges, which is what
+        // the XAML-declared mask (0% left, 100% right) is meant to describe.
+        if (fadeEnabled && titleInitialOpacityMask != null)
+        {
+            using (context.PushOpacityMask(titleInitialOpacityMask, new Rect(this.Bounds.Size)))
+            {
+                context.DrawText(formattedTitleText!, new Point(title1X, 0));
+                context.DrawText(formattedTitleText!, new Point(title2X, 0));
+            }
+        }
+        else
+        {
+            context.DrawText(formattedTitleText!, new Point(title1X, 0));
+            context.DrawText(formattedTitleText!, new Point(title2X, 0));
+        }
     }
 
     public void UpdateTitleText(string newTitle, int? initial1X = null, int? initial2X = null)
