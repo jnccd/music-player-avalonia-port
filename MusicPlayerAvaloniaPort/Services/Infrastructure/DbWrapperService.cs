@@ -4,6 +4,7 @@ using MusicPlayerAvaloniaPort.Persistence.Database;
 using MusicPlayerSyncInterface;
 using MusicPlayerSyncInterface.DTOs;
 using MusicPlayerSyncInterface.DTOs.Composites;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -25,11 +26,46 @@ public class DbWrapperService
     /// </summary>
     public const string PendingTagReadError = "Lazy registration: waiting for tag read + upload.";
 
+    readonly object databaseSetupLock = new();
+    bool databaseUpToDate;
+
+    /// <summary>
+    /// Creates the database if it does not exist yet and applies all pending EF Core migrations - the
+    /// runtime replacement for the "dotnet ef database update" step the launcher used to run: the database
+    /// now lives in the user's data directory (see PersistenceLocations), which the launcher knows nothing
+    /// about, and the migrations are compiled into this assembly anyway. Idempotent (an already migrated
+    /// database only costs a lookup in its migration history table) and thread safe; the app calls it once
+    /// during startup, and <see cref="GetContext"/> uses it as a safety net for every other code path.
+    /// </summary>
+    public void EnsureDatabaseUpToDate()
+    {
+        lock (databaseSetupLock)
+        {
+            if (databaseUpToDate)
+                return;
+
+            using var songDbContext = new SongDbContext();
+            songDbContext.Database.Migrate();
+            databaseUpToDate = true;
+
+            Console.WriteLine($"Database up to date. {songDbContext.DbStatus}");
+        }
+    }
+
     public Context GetContext() => new(this);
 
     public class Context(DbWrapperService parent) : IDisposable
     {
-        SongDbContext SongDbContext { get; } = new SongDbContext();
+        // Safety net: no context (and with it no query) may exist before the schema is up to date. The
+        // startup path calls EnsureDatabaseUpToDate() explicitly, this only covers all other call sites
+        // (and future ones) - after the first call it is a single boolean check.
+        SongDbContext SongDbContext { get; } = CreateContext(parent);
+
+        static SongDbContext CreateContext(DbWrapperService parent)
+        {
+            parent.EnsureDatabaseUpToDate();
+            return new SongDbContext();
+        }
 
         public void SaveChanges()
         {

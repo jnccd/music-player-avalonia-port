@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
@@ -27,7 +26,7 @@ public partial class App : Application
         }
         else
         {
-            File.AppendAllText("error.log", $"ApplicationLifetime {ApplicationLifetime.GetType().Name} start failed!\n");
+            Program.WriteErrorLog($"ApplicationLifetime {ApplicationLifetime.GetType().Name} start failed!\n");
             throw new NotSupportedException($"ApplicationLifetime {ApplicationLifetime.GetType().Name} start failed!");
         }
 

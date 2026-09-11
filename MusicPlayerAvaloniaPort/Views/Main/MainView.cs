@@ -89,6 +89,12 @@ public partial class MainView : UserControl
         {
             Thread.CurrentThread.Name = "SongSetupThread";
 
+            // Schema first: the database lives in the user's data directory now (see PersistenceLocations)
+            // and does not exist yet on a fresh machine/user, so the app creates and migrates it itself
+            // before anything reads it - the sync service resolved right below already queries it in its
+            // constructor. This replaces the "dotnet ef database update" step of start_desktop_app.sh.
+            ServiceContainer.GetService<DbWrapperService>().EnsureDatabaseUpToDate();
+
             // Resolve the sync service on this background thread (its constructor does a network init):
             // the progress bar above polls its SyncProgress while the StartupSync pull below runs.
             songSyncService = ServiceContainer.GetService<SongSyncService>();

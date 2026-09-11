@@ -1,4 +1,3 @@
-﻿using MusicPlayerAvaloniaPort.Helpers;
 using System;
 using System.Collections;
 using System.IO;
@@ -10,11 +9,10 @@ namespace MusicPlayerAvaloniaPort.Persistence.Configuration;
 public static class Config
 {
     static readonly object lockject = new object();
-    static readonly string personalPath = Globals.IsDesktop ?
-            Path.GetDirectoryName(Assembly.GetEntryAssembly()!.Location) + Path.DirectorySeparatorChar + "Persistence" + Path.DirectorySeparatorChar :
-            Path.GetDirectoryName(Environment.GetFolderPath(Environment.SpecialFolder.Personal)) + Path.DirectorySeparatorChar;
-    static readonly string configPath = personalPath + "config.json";
-    static readonly string configBackupPath = personalPath + "config_backup.json";
+    // Both files live in the app's data directory now (on Linux below $XDG_DATA_HOME instead of next to
+    // the executable, see PersistenceLocations).
+    static readonly string configPath = PersistenceLocations.ConfigPath;
+    static readonly string configBackupPath = PersistenceLocations.ConfigBackupPath;
     public static bool UnsavedChanges = false;
     public static ConfigData Data
     {
@@ -62,6 +60,9 @@ public static class Config
     {
         lock (lockject)
         {
+            // The data directory is user territory now and may have been cleaned up while the app runs.
+            Directory.CreateDirectory(PersistenceLocations.DataDirectory);
+
             if (File.Exists(configPath))
                 File.Copy(configPath, configBackupPath, true);
             var cereal = JsonSerializer.Serialize(Data, jsonOptionsSerialize);

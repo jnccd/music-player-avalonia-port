@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using EzAuth.Interfaces;
 using EzAuth.Keycloak;
 using MusicPlayerAvaloniaPort.Helpers;
+using MusicPlayerAvaloniaPort.Persistence;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Services.Song;
 using MusicPlayerSyncInterface.DTOs;
@@ -27,7 +28,9 @@ public class SongDownloadRequestProcessorService(SongPlaybackService songPlaybac
 {
     FileSystemWatcher DownloadFolderWatcher = new();
     readonly List<DownloadRequest> DownloadQueue = [];
-    readonly string? TempDownloadFolder = $"{Globals.CurrentExecutablePath}{Path.DirectorySeparatorChar}tmpDownloads";
+    // Downloads are staged inside the app's data directory (see PersistenceLocations) instead of next to
+    // the executable - on Linux that is the XDG data dir, not the build output folder.
+    readonly string TempDownloadFolder = PersistenceLocations.TempDownloadDirectory;
 
     Task? SongDownloadRequestQueueProcessorLoopThread = null;
     bool SongDownloadRequestQueueProcessorLoopThreadAborted = false;
@@ -150,7 +153,8 @@ public class SongDownloadRequestProcessorService(SongPlaybackService songPlaybac
     {
         try
         {
-            string downloadTargetFolder = TempDownloadFolder!;
+            string downloadTargetFolder = TempDownloadFolder;
+            Directory.CreateDirectory(downloadTargetFolder); // yt-dlp would create it too, but it is user territory now
             string download = songRequest.DownloadUrl;
             if (!download.StartsWith("https://"))
                 download = $"\"ytsearch: {songRequest.DownloadUrl}\"";

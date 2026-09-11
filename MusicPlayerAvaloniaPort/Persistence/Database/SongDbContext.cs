@@ -1,6 +1,4 @@
 using System;
-using System.IO;
-using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using MusicPlayerSyncInterface.DTOs;
 
@@ -28,9 +26,9 @@ public class SongDbContext : DbContext
         }
         else if (Environment.GetEnvironmentVariable("DB_PROVIDER") == "sqlite" || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DB_PROVIDER")))
         {
-            var exePath = $"{Path.GetDirectoryName(Assembly.GetEntryAssembly()?.Location ?? "~")}";
-            var sqlitePath = $"{Environment.GetEnvironmentVariable("MUSIC_PLAYER_SQLITE_DB_PATH") ?? exePath}{Path.DirectorySeparatorChar}Persistence{Path.DirectorySeparatorChar}song.db";
-            Directory.CreateDirectory(Path.GetDirectoryName(sqlitePath)!);
+            // One data directory for everything the client persists (deleted/cleaned by the user, not by
+            // the build): the database used to sit in the build output folder next to the executable.
+            var sqlitePath = PersistenceLocations.DatabasePath;
 
             options.UseSqlite($"Data Source={sqlitePath}")
                 .AddInterceptors(new SqlitePragmasInterceptor()); // WAL mode, synchronous=NORMAL, busy timeout
