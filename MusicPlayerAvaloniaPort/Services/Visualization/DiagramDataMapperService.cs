@@ -108,6 +108,8 @@ public class DiagramDataMapperService
     // Decay factors 2^(-j / decayUnit) of the smoothing kernel, rebuilt only when the diagram width
     // changes (the reach and the decay unit are both derived from it) instead of per frame.
     float[]? smoothingKernelFactors;
+    // The same factors for the right-hand taps: mult / (mult + 1), precomputed (see SmoothenFftData).
+    float[]? smoothingKernelRightFactors;
     int smoothingKernelWidth = -1;
 
     public async Task<float[]> GetScaledAndSlicedFftData(int targetArraySize)
@@ -321,18 +323,45 @@ public class DiagramDataMapperService
         // SMOOTHING_KERNEL_REACH_FRACTION), so this is the DXMG kernel: 6*scaleMult samples decaying
         // with 2^(-j/scaleMult), just expressed as a fraction of the width.
         float[] kernelFactors = EnsureSmoothingKernelFactors(smoothedData.Length);
+        float[] kernelRightFactors = EnsureSmoothingKernelRightFactors(smoothedData.Length);
 
-        for (int i = 0; i < smoothedData.Length; i++)
+        // The tap loop below applies exactly the same operations in exactly the same order as
+        // "for j: if (i > j) left-tap; if (i < length-1-j) right-tap", it just splits the tile ends into
+        // their own ranges so the two range checks and the per-tap division are gone: with the
+        // width-scaled kernel this pass is the most expensive part of a diagram frame (a wide window
+        // gives it ~50 taps per column). The accumulated value is kept in a local and written back once
+        // - reading and writing the same float slot gives the same bits, so only the precomputed
+        // right-hand multiplier (mult/(mult+1) instead of mult/(mult+1) per tap) changes the result, by
+        // about 1e-7 of a bar height.
+        int length = smoothedData.Length;
+        int tapCount = kernelFactors.Length;
+        for (int i = 0; i < length; i++)
         {
-            for (int j = 0; j < kernelFactors.Length; j++)
-            {
-                var mult = kernelFactors[j];
+            float current = smoothedData[i];
 
-                if (i > j)
-                    smoothedData[i] += (smoothedData[i - 1 - j] - smoothedData[i]) * mult;
-                if (i < smoothedData.Length - 1 - j)
-                    smoothedData[i] += (smoothedData[i + 1 + j] - smoothedData[i]) * mult / (mult + 1);
+            // Taps whose left AND right neighbour both exist.
+            int bothEnd = Math.Min(tapCount, Math.Min(i, length - 1 - i));
+            for (int j = 0; j < bothEnd; j++)
+            {
+                current += (smoothedData[i - 1 - j] - current) * kernelFactors[j];
+                current += (smoothedData[i + 1 + j] - current) * kernelRightFactors[j];
             }
+
+            // Then the taps of the side that still has room in that direction.
+            if (i <= length - 1 - i)
+            {
+                int rightEnd = Math.Min(tapCount, length - 1 - i);
+                for (int j = bothEnd; j < rightEnd; j++)
+                    current += (smoothedData[i + 1 + j] - current) * kernelRightFactors[j];
+            }
+            else
+            {
+                int leftEnd = Math.Min(tapCount, i);
+                for (int j = bothEnd; j < leftEnd; j++)
+                    current += (smoothedData[i - 1 - j] - current) * kernelFactors[j];
+            }
+
+            smoothedData[i] = current;
         }
 
         return smoothedData;
@@ -360,7 +389,25 @@ public class DiagramDataMapperService
         for (int j = 0; j < sampleCount; j++)
             smoothingKernelFactors[j] = (float)Math.Pow(2.0, -j / decayUnit);
 
+        // The right-hand taps of the smoothing pass use mult / (mult + 1); precomputing it removes a
+        // division per tap per column (the pass runs width * taps times, so this is thousands of
+        // divisions per frame). Same value within one float rounding step.
+        if (smoothingKernelRightFactors == null || smoothingKernelRightFactors.Length != sampleCount)
+            smoothingKernelRightFactors = new float[sampleCount];
+        for (int j = 0; j < sampleCount; j++)
+            smoothingKernelRightFactors[j] = smoothingKernelFactors[j] / (smoothingKernelFactors[j] + 1f);
+
         smoothingKernelWidth = width;
         return smoothingKernelFactors;
+    }
+
+    /// <summary>
+    /// The right-hand multipliers of the smoothing kernel (see
+    /// <see cref="EnsureSmoothingKernelFactors"/>), cached for the same width.
+    /// </summary>
+    float[] EnsureSmoothingKernelRightFactors(int width)
+    {
+        EnsureSmoothingKernelFactors(width);
+        return smoothingKernelRightFactors!;
     }
 }
