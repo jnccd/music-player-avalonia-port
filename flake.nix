@@ -19,8 +19,20 @@
       let
         pkgs = import nixpkgs { inherit system; };
         workloadsHashX86_64Linux = "sha256-AcfemNC9S9Lk9AeW+EokaKYJpf3aDGywMTsi821Mo9M=";
+        packages = import ./nix/packages.nix {
+          inherit pkgs;
+          lib = nixpkgs.lib;
+        };
       in
       {
+        # `nix build` -> the desktop app. Needs the submodules, which nix's git
+        # fetcher omits by default:
+        #   nix build 'git+file:///path/to/repo?submodules=1'
+        packages = {
+          default = packages.desktop;
+          inherit (packages) desktop;
+        };
+
         devShells = rec {
           desktop = inputs.jnccd-utils.lib.mkDotnetWithWorkloadsShell {
             inherit system nixpkgs;
