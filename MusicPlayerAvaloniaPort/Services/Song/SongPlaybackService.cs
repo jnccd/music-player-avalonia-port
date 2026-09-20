@@ -1,4 +1,3 @@
-using Avalonia.Diagnostics;
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
@@ -6,7 +5,6 @@ using MusicPlayerSyncInterface;
 using MusicPlayerSyncInterface.DTOs;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;

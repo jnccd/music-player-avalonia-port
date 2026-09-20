@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Avalonia;
 using Avalonia.Media;
 
 namespace MusicPlayerAvaloniaPort.Persistence.Configuration;

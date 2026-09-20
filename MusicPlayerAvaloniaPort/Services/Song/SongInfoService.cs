@@ -1,9 +1,4 @@
-using MusicPlayerAvaloniaPort.Helpers;
-using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 
 namespace MusicPlayerAvaloniaPort.Services.Song;
 
