@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Media;
 using Avalonia.Threading;
+using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
 
 namespace MusicPlayerAvaloniaPort.Views.Main;
@@ -13,7 +14,6 @@ public class CustomRenderControl_PlayProgress : Control
 {
     readonly AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
     Window? window => TopLevel.GetTopLevel(this) as Window;
-    UserControl? view => window?.Content as UserControl;
 
     SolidColorBrush? PrimaryColorBrush;
     SolidColorBrush? AntiAliasRectBrush;
@@ -36,11 +36,21 @@ public class CustomRenderControl_PlayProgress : Control
         this.Loaded += (s, e) =>
         {
             Debug.WriteLine("CustomRenderControl_PlayProgress loaded!");
-            PrimaryColorBrush = view!.FindResource("PrimaryColor") as SolidColorBrush;
-            AntiAliasRectBrush = new SolidColorBrush(PrimaryColorBrush!.Color, PrimaryColorBrush.Opacity);
+            RefreshPrimaryColor();
 
             PixelScale = 1 / window!.RenderScaling;
         };
+
+        // A color picked in the options window replaces the accent brushes, so the cached ones (and the
+        // anti-aliasing copy derived from them) have to be re-read.
+        ThemeColors.PrimaryColorChanged += RefreshPrimaryColor;
+    }
+
+    void RefreshPrimaryColor()
+    {
+        PrimaryColorBrush = ThemeColors.PrimaryBrush;
+        AntiAliasRectBrush = new SolidColorBrush(PrimaryColorBrush.Color);
+        InvalidateVisual();
     }
 
     public override void Render(DrawingContext context)

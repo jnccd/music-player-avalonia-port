@@ -12,6 +12,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Threading;
+using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using MusicPlayerAvaloniaPort.Services.Song;
@@ -177,6 +178,8 @@ public partial class MainView : UserControl
                 CustomRenderControl_Notification_Getter.ShowDownvoteNotif();
             });
         };
+        // Repaint the upvote button when its accent color is changed while it is locked in.
+        ThemeColors.PrimaryColorChanged += UpdateButtonUpvoteColor;
 
         // Inits
         MainView_ScalingChanged(null, EventArgs.Empty);

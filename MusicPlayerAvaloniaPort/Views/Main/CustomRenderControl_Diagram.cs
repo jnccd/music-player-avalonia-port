@@ -7,6 +7,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
+using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using MusicPlayerAvaloniaPort.Services.Visualization;
 using Path = Avalonia.Controls.Shapes.Path;
@@ -19,8 +20,6 @@ public class CustomRenderControl_Diagram : Control
 {
     AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
     DiagramDataMapperService diagramDataMapper = ServiceContainer.GetService<DiagramDataMapperService>();
-    Window? window => TopLevel.GetTopLevel(this) as Window;
-    UserControl? view => window?.Content as UserControl;
 
     VisMode currentVisMode = VisMode.SmoothFFT;
     SolidColorBrush? PrimaryColorBrush;
@@ -79,8 +78,7 @@ public class CustomRenderControl_Diagram : Control
 
         this.Loaded += (s, e) =>
         {
-            PrimaryColorBrush = view!.FindResource("PrimaryColor") as SolidColorBrush;
-            PrimaryColorPen = new Pen(PrimaryColorBrush, 1);
+            RefreshPrimaryColor();
 
             var controlWidth = this.Bounds.Width;
             var controlHeight = this.Bounds.Height;
@@ -126,6 +124,17 @@ public class CustomRenderControl_Diagram : Control
 
             currentGeometry = smoothFftDiagramGeometry;
         };
+
+        // A color picked in the options window replaces the accent brushes, so the cached brush and the pen
+        // built from it have to be re-read.
+        ThemeColors.PrimaryColorChanged += RefreshPrimaryColor;
+    }
+
+    void RefreshPrimaryColor()
+    {
+        PrimaryColorBrush = ThemeColors.PrimaryBrush;
+        PrimaryColorPen = new Pen(PrimaryColorBrush, 1);
+        InvalidateVisual();
     }
 
     public override void Render(DrawingContext context)

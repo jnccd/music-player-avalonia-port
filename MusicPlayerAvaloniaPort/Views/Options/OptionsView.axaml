@@ -5,6 +5,7 @@
     xmlns:conv="clr-namespace:MusicPlayerAvaloniaPort.Converters;assembly=MusicPlayerAvaloniaPort"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:options="using:MusicPlayerAvaloniaPort.Views.Options"
     xmlns:sys="clr-namespace:System;assembly=mscorlib"
     xmlns:vm="using:MusicPlayerAvaloniaPort.ViewModels"
     x:DataType="vm:OptionsViewModel">
@@ -18,6 +19,18 @@
                 <CheckBox Content="Low Power Mode" IsChecked="{Binding LowPowerMode, Mode=TwoWay}" />
                 <TextBlock Foreground="#80FFFFFF" TextWrapping="Wrap" MaxWidth="260"
                            Text="Reduces the CPU usage of the visualizations (lower diagram frame rate and FFT analysis resolution). Handy on laptops and other battery powered devices." />
+                <Label Padding="0" Content="Primary Color" Target="primaryColorHexTextBox" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Border x:Name="primaryColorPreview" Width="48" Height="28" VerticalAlignment="Center"
+                            BorderBrush="#40FFFFFF" BorderThickness="1" CornerRadius="4" />
+                    <TextBox x:Name="primaryColorHexTextBox" Width="90" VerticalAlignment="Center"
+                             TextChanged="PrimaryColorHexTextBox_TextChanged" />
+                    <Button x:Name="resetPrimaryColorButton" VerticalAlignment="Center"
+                            Click="ResetPrimaryColorButton_Click">Reset</Button>
+                </StackPanel>
+                <options:ColorPickerControl x:Name="primaryColorPicker" Width="260" />
+                <TextBlock Foreground="#80FFFFFF" TextWrapping="Wrap" MaxWidth="260"
+                           Text="The accent color of the progress bar, the volume bars, the visualizations and the other highlights. The color is applied immediately." />
             </StackPanel>
         </GroupBox>
         <GroupBox Header="Sync Server Connection" Margin="3">

@@ -162,7 +162,7 @@ public partial class MainView : UserControl
     {
         var upvoteButton = this.GetLogicalDescendants().OfType<Button>().FirstOrDefault(x => x.Name == "ButtonUpvote");
         var path = upvoteButton?.GetLogicalChildren().FirstOrDefault() as Avalonia.Controls.Shapes.Path;
-        path?.Fill = ViewModel?.UpvoteLockedIn == true ? this.FindResource("PrimaryColor") as SolidColorBrush : Brushes.White;
+        path?.Fill = ViewModel?.UpvoteLockedIn == true ? ThemeColors.PrimaryBrush : Brushes.White;
     }
 
     private void DurationBarStackPanel_PointerPressed(object? sender, PointerPressedEventArgs e)

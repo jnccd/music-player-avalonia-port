@@ -33,11 +33,14 @@ public static class Config
     private static ConfigData data = new ConfigData();
     static JsonSerializerOptions jsonOptionsSerialize = new()
     {
-        WriteIndented = true
+        WriteIndented = true,
+        // The persisted colors (the primary color) are written as "#RRGGBB" strings (see ColorJsonConverter).
+        Converters = { new ColorJsonConverter() }
     };
     static JsonSerializerOptions jsonOptionsDeserialize = new()
     {
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+        Converters = { new ColorJsonConverter() }
     };
 
     static Config()

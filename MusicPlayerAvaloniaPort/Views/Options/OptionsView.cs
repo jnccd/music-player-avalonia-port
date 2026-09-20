@@ -12,6 +12,7 @@ using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using MusicPlayerAvaloniaPort.Services.Song;
 using Avalonia.Threading;
 using Avalonia.Platform.Storage;
+using Avalonia.Media;
 
 namespace MusicPlayerAvaloniaPort.Views.Options;
 
@@ -22,6 +23,18 @@ public partial class OptionsView : UserControl
     readonly SongSyncService syncService = ServiceContainer.GetService<SongSyncService>();
     readonly SongDownloadRequestProcessorService songDownloadRequestProcessorService = ServiceContainer.GetService<SongDownloadRequestProcessorService>();
     readonly SongPlaybackService songPlaybackService = ServiceContainer.GetService<SongPlaybackService>();
+
+    // Primary color picker (see the General group); resolved when the view is loaded. Deliberately not
+    // named like the controls in the axaml: the Avalonia name generator already declares fields for those,
+    // but they are only filled by the generated InitializeComponent, which this view does not call.
+    Border? colorPreviewBorder;
+    TextBox? colorHexTextBox;
+    ColorPickerControl? colorPickerControl;
+    /// <summary>
+    /// True while <see cref="UpdatePrimaryColorUi"/> writes the controls, so the text box' TextChanged
+    /// handler does not mistake the programmatic text for something the user typed.
+    /// </summary>
+    bool updatingPrimaryColorUi;
 
     public OptionsView()
     {
@@ -62,6 +75,73 @@ public partial class OptionsView : UserControl
         downloadShellLogLabel?.Text = songDownloadRequestProcessorService.ShellLog.Combine();
         songDownloadRequestProcessorService.ShellAdded = () => Dispatcher.Invoke(() =>
             downloadShellLogLabel?.Text = songDownloadRequestProcessorService.ShellLog.Combine());
+
+        InitPrimaryColorPicker();
+    }
+
+    // ---------- Primary color (the color picker of the General group) ----------
+
+    void InitPrimaryColorPicker()
+    {
+        colorPreviewBorder = this.GetNestedControl<Border>("primaryColorPreview");
+        colorHexTextBox = this.GetNestedControl<TextBox>("primaryColorHexTextBox");
+        colorPickerControl = this.GetNestedControl<ColorPickerControl>("primaryColorPicker");
+
+        colorPickerControl.SetColor(ThemeColors.PrimaryColor);
+        UpdatePrimaryColorUi(ThemeColors.PrimaryColor);
+
+        colorPickerControl.ColorChanged += color =>
+        {
+            // Live feedback: the main window repaints while dragging, but the config is only written once
+            // the drag ended (ColorChangeFinished), so a drag does not hammer the disk.
+            ThemeColors.SetPrimaryColor(color, save: false);
+            UpdatePrimaryColorUi(color);
+        };
+        colorPickerControl.ColorChangeFinished += () => Config.Save();
+    }
+
+    /// <summary>Applies a color the user entered as hex text (and mirrors it back into the picker).</summary>
+    void ApplyPickedPrimaryColor(Color color)
+    {
+        ThemeColors.SetPrimaryColor(color);
+        colorPickerControl?.SetColor(color);
+        UpdatePrimaryColorUi(color);
+    }
+
+    void UpdatePrimaryColorUi(Color color)
+    {
+        updatingPrimaryColorUi = true;
+        try
+        {
+            if (colorPreviewBorder != null)
+                colorPreviewBorder.Background = new SolidColorBrush(color);
+            if (colorHexTextBox != null)
+                colorHexTextBox.Text = ThemeColors.ToHex(color);
+        }
+        finally
+        {
+            updatingPrimaryColorUi = false;
+        }
+    }
+
+    private void PrimaryColorHexTextBox_TextChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (updatingPrimaryColorUi)
+            return;
+
+        // Half-typed values ("#00", "#007B8", ...) do not parse and are simply left alone until the text
+        // is a complete color.
+        if (colorHexTextBox == null || !Color.TryParse(colorHexTextBox.Text, out Color color))
+            return;
+
+        ApplyPickedPrimaryColor(color);
+    }
+
+    private void ResetPrimaryColorButton_Click(object? sender, RoutedEventArgs e)
+    {
+        ThemeColors.ResetToDefault();
+        colorPickerControl?.SetColor(ThemeColors.PrimaryColor);
+        UpdatePrimaryColorUi(ThemeColors.PrimaryColor);
     }
 
     private void DownloadFolderSaveButton_Click(object? sender, RoutedEventArgs e)
