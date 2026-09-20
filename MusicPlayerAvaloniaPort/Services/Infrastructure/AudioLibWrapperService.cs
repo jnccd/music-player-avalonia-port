@@ -19,14 +19,13 @@ using System.Threading.Tasks;
 
 namespace MusicPlayerAvaloniaPort.Services.Infrastructure;
 
-public enum SampleReadingStrategy
-{
-    GlobalArray,
-    DirectRead
-}
-
+/// <summary>
+/// Desktop audio backend: SoundFlow/MiniAudio playback plus the FFT/sample-reading machinery the diagram
+/// and samples visualizations are built on (which is exactly why this stays in the desktop project - the
+/// mobile client implements <see cref="IAudioPlaybackService"/> with a much leaner player).
+/// </summary>
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(AudioLibWrapperService))]
-public class AudioLibWrapperService
+public class AudioLibWrapperService : IAudioPlaybackService
 {
     private static readonly AudioEngine Engine = new MiniAudioEngine();
 
@@ -52,7 +51,12 @@ public class AudioLibWrapperService
     Task? SampleReaderThread = null;
     bool CancelReading = false;
     const int SAMPLE_OUTPUT_BUFFER_32BIT_FLOAT_SIZE = 16384;
-    SampleReadingStrategy currentSampleReadingStrategy = SampleReadingStrategy.GlobalArray;
+    /// <summary>
+    /// True while the current song is read completely into <see cref="globalSampleArray"/> (the pre-read
+    /// strategy, needed to measure the song's loudness for volume normalization); false uses the cheap
+    /// direct-read strategy, which only decodes the window around the playback position on demand.
+    /// </summary>
+    bool preReadWholeSong = true;
     /// <summary>
     /// Decoded chunks the DirectRead sample strategy keeps across frames so the overlapping part of
     /// the read window is not decoded again. <see cref="frameData"/> is a pooled buffer holding
@@ -119,6 +123,22 @@ public class AudioLibWrapperService
     /// Forward seeking results in positive numbers and backwards seeking in negative.
     /// </summary>
     public float SeekedPlayProgress { get; private set; } = 0;
+
+    /// <summary>
+    /// Loudness (root mean square of the decoded samples) of the song that was last read completely, or
+    /// null while no measurement is available. Measured once at the end of the whole-song read the
+    /// pre-read strategy performs for songs whose volume is not known yet, and consumed by
+    /// <see cref="Song.SongVolumeService"/> to store the normalization multiplier of the song.
+    /// </summary>
+    public float? CurrentSongRootMeanSquare { get; private set; }
+
+    /// <summary>
+    /// The song file <see cref="CurrentSongRootMeanSquare"/> was measured from (see
+    /// <see cref="IAudioPlaybackService.MeasuredSongPath"/> - the full read can finish after the user
+    /// already switched songs, and the volume of one song must never be written onto another).
+    /// </summary>
+    public string? MeasuredSongPath { get; private set; }
+
     public PlaybackState? PlayState
     {
         get => soundPlayer?.State;
@@ -197,7 +217,15 @@ public class AudioLibWrapperService
         });
     }
 
-    public void PlaySong(string songPath, SampleReadingStrategy sampleReadingStrategy = SampleReadingStrategy.GlobalArray)
+    /// <summary>
+    /// Starts playback of the given song file, see <see cref="IAudioPlaybackService.PlaySong"/>. When the
+    /// song's loudness is not known yet (measureWholeSongForVolumeNormalization) the whole file is decoded
+    /// in the background into a flat sample array, at whose end <see cref="CurrentSongRootMeanSquare"/>
+    /// becomes available and <see cref="FinishedReading"/> is raised - the FFT diagram and the samples
+    /// visualization read their window from that same array. Songs that were measured already use the
+    /// cheaper direct-read strategy, which decodes only the window around the playback position.
+    /// </summary>
+    public void PlaySong(string songPath, bool measureWholeSongForVolumeNormalization = true)
     {
         playerDataProvider?.Dispose();
         playerDataProvider = new StreamDataProvider(Engine, new FileStream(songPath, FileMode.Open, FileAccess.Read), new ReadOptions { ReadTags = false });
@@ -212,7 +240,9 @@ public class AudioLibWrapperService
             playbackDevice.Dispose();
         }
 
-        currentSampleReadingStrategy = sampleReadingStrategy;
+        preReadWholeSong = measureWholeSongForVolumeNormalization;
+        CurrentSongRootMeanSquare = null; // Belongs to the previous song
+        MeasuredSongPath = null;
 
         playbackDevice = Engine.InitializePlaybackDevice(playbackDeviceInfo, GetCurrentAudioFormat(), new MiniAudioDeviceConfig
         {
@@ -234,12 +264,12 @@ public class AudioLibWrapperService
         }
         CancelReading = false;
         Debug.WriteLine($"{DateTime.Now:HH:mm:ss.ffff} Starting Reading!");
-        if (currentSampleReadingStrategy == SampleReadingStrategy.DirectRead)
+        if (!preReadWholeSong)
         {
             globalSampleArray = null;
             ReleaseDirectReadBuffers();
         }
-        if (currentSampleReadingStrategy == SampleReadingStrategy.GlobalArray)
+        if (preReadWholeSong)
             SampleReaderThread = Task.Run(() =>
             {
                 globalSampleArrayWriteHead = 0;
@@ -264,6 +294,17 @@ public class AudioLibWrapperService
                 }
 
                 Debug.WriteLine($"{DateTime.Now:HH:mm:ss.ffff} Done Reading!");
+
+                // The loudness is only meaningful when the whole file really was decoded (a song switch
+                // cancels the read, and the trailing part of the array stays zero when the song was
+                // shorter than the estimate). The same completeness condition guards
+                // GetCurrentSongEntireSampleData for the volume service.
+                if (!CancelReading && globalSampleArrayWriteHead >= globalSampleArray.Length - SAMPLE_READER_BUFFER_32BIT_FLOAT_SIZE)
+                {
+                    MeasuredSongPath = songPath;
+                    CurrentSongRootMeanSquare = ComputeRootMeanSquare(globalSampleArray);
+                }
+
                 Task.Run(() =>
                 {
                     FinishedReading?.Invoke(this, EventArgs.Empty);
@@ -278,15 +319,28 @@ public class AudioLibWrapperService
         });
     }
 
+    /// <summary>Root mean square of the given samples - the loudness measure the volume normalization uses.</summary>
+    static float ComputeRootMeanSquare(float[] samples)
+    {
+        if (samples.Length == 0)
+            return 0;
+
+        double sumOfSquares = 0;
+        foreach (float sample in samples)
+            sumOfSquares += (double)sample * sample;
+
+        return (float)Math.Sqrt(sumOfSquares / samples.Length);
+    }
+
     /// <summary>
     /// Returns the decoded window around the currently playing sample (16384 floats, centred on the
     /// playback position). The window itself stays the same size in every mode - it is what the
     /// samples visualization shows, and changing its length would change the shown time span.
     /// <para>
-    /// The <see cref="SampleReadingStrategy.GlobalArray"/> variant returns a slice over the fully
-    /// pre-read song array; the <see cref="SampleReadingStrategy.DirectRead"/> variant assembles the
-    /// window in a reused scratch buffer that is only valid until the NEXT call of this method. All
-    /// callers (FFT analysis and the samples visualization) consume the returned memory synchronously.
+    /// The pre-read strategy (see <see cref="PlaySong"/>) returns a slice over the fully decoded song
+    /// array; the direct-read strategy assembles the window in a reused scratch buffer that is only valid
+    /// until the NEXT call of this method. All callers (FFT analysis and the samples visualization)
+    /// consume the returned memory synchronously.
     /// </para>
     /// </summary>
     public async Task<ReadOnlyMemory<float>> GetCurrentlyPlayingSampleData()
@@ -303,7 +357,7 @@ public class AudioLibWrapperService
         if (currentlyPlayingFrameStart <= 0)
             return sampleZeroResult;
 
-        if (currentSampleReadingStrategy == SampleReadingStrategy.GlobalArray)
+        if (preReadWholeSong)
         {
             // Not enough data read yet
             if (globalSampleArrayWriteHead <= currentlyPlayingFrameEnd + 1)
@@ -312,7 +366,7 @@ public class AudioLibWrapperService
             Memory<float> memorySlice = globalSampleArray.AsMemory(currentlyPlayingFrameStart, FFT_BUFFER_32BIT_FLOAT_SIZE);
             return memorySlice;
         }
-        else if (currentSampleReadingStrategy == SampleReadingStrategy.DirectRead)
+        else
         {
             var sampleReader = sampleReaderDataProvider!;
 
@@ -384,14 +438,10 @@ public class AudioLibWrapperService
 
             return window;
         }
-        else
-        {
-            throw new InvalidOperationException($"Unknown {nameof(SampleReadingStrategy)}: {currentSampleReadingStrategy}");
-        }
     }
 
     /// <summary>
-    /// Returns all pooled DirectRead chunk buffers to the pool (song or strategy switch).
+    /// Returns all pooled direct-read chunk buffers to the pool (song or strategy switch).
     /// </summary>
     void ReleaseDirectReadBuffers()
     {

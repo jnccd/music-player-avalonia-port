@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Matches the dark background the Avalonia view paints, so the window does not flash white while the
+       runtime starts up. -->
+  <color name="app_background">#FF0B0B12</color>
+
+  <!--
+    Background of the adaptive launcher icon (see mipmap-anydpi-v26/ic_launcher.xml).
+
+    This has to be a real colour, not @android:color/transparent: a launcher always draws a shape behind an
+    app icon, and it fills it with whatever the icon declares as its background. Declaring "transparent"
+    therefore does not produce a background-less icon on launchers that do not let the wallpaper show
+    through - MIUI painted it black - while a launcher that DOES honour transparency would show the mark
+    floating on the wallpaper. A declared colour makes the icon look the same everywhere, and matching the
+    app's own background keeps it consistent with the UI.
+  -->
+  <color name="ic_launcher_background">#FF0B0B12</color>
+</resources>

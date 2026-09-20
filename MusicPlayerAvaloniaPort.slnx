@@ -6,6 +6,8 @@
   </Configurations>
   
   <Project Path="MusicPlayerAvaloniaPort/MusicPlayerAvaloniaPort.csproj" />
+  <Project Path="MusicPlayerClientCore/MusicPlayerClientCore.csproj" />
+  <Project Path="MusicPlayerAvaloniaPortMobile/MusicPlayerAvaloniaPortMobile.csproj" />
   
   <Project Path="MusicPlayerSyncInterface/MusicPlayerSyncInterface.csproj" />
   <Folder Name="/Tmds.DBus/" />

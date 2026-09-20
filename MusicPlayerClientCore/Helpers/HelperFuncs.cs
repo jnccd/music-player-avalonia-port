@@ -1,15 +1,16 @@
-using Avalonia.Media;
-using SkiaSharp;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace MusicPlayerAvaloniaPort.Helpers;
 
+/// <summary>
+/// Platform independent helpers shared by the desktop and the mobile client: walking a song library,
+/// reading the identity tags of a song file and the string distances the "play a song quickly" matching
+/// uses. Platform specific helpers (SkiaSharp bitmap tinting, launching yt-dlp) live in the desktop
+/// project as <c>DesktopHelperFuncs</c>.
+/// </summary>
 public static class HelperFuncs
 {
     /// <summary>
@@ -21,6 +22,7 @@ public static class HelperFuncs
     {
         return FindAllMp3FilesInDir(StartDir, null);
     }
+
     /// <summary>
     /// Recursively finds all mp3 files in a directory and its subdirectories, reporting progress while
     /// the walk is still running.
@@ -56,6 +58,7 @@ public static class HelperFuncs
             mp3FileFound?.Invoke(filesFound);
         return re;
     }
+
     public static bool DirOrSubDirsContainMp3(string StartDir)
     {
         foreach (string s in Directory.GetFiles(StartDir))
@@ -68,6 +71,11 @@ public static class HelperFuncs
         return false;
     }
 
+    /// <summary>
+    /// Reads the album and the (" + "-joined) album artists of a song file, the identity convention the
+    /// whole codebase uses (see <see cref="MusicPlayerSyncInterface.SongFileMatching"/>). Empty strings
+    /// mean the file carries no such metadata.
+    /// </summary>
     public static (string Album, string Artists) GetAlbumAndArtistsFromSong(string songPath)
     {
         // Dispose the TagLib file (and with it the underlying file stream): reading the tags of every
@@ -88,105 +96,6 @@ public static class HelperFuncs
             return "";
         else
             return strings.Aggregate((x, y) => $"{x}{combinator}{y}");
-    }
-
-    public static Stream ModifyRGBChannelsAndKeepAlpha(SKBitmap bitmap, Color col)
-    {
-        // Lock the pixels
-        IntPtr pixels = bitmap.GetPixels(out var pixelInfo);
-        int width = bitmap.Width;
-        int height = bitmap.Height;
-
-        unsafe
-        {
-            // Cast the pixel buffer to a byte pointer
-            byte* pixelPtr = (byte*)pixels.ToPointer();
-
-            // Iterate over each pixel row
-            for (int y = 0; y < height; y++)
-            {
-                // Get the start of the row
-                byte* rowPtr = pixelPtr + (y * bitmap.RowBytes);
-
-                // Iterate over each pixel in the row
-                for (int x = 0; x < width; x++)
-                {
-                    // Calculate the offset for the current pixel (assuming 32-bit RGBA)
-                    byte* pixel = rowPtr + (x * 4);
-
-                    // Access and modify the pixel channels (RGBA order)
-                    // byte r = pixel[2];
-                    // byte g = pixel[1];
-                    // byte b = pixel[0];
-                    byte a = pixel[3];
-
-                    // Example: Apply a red tint
-                    pixel[2] = col.R;
-                    pixel[1] = col.G;
-                    pixel[0] = col.B;
-                    pixel[3] = a;
-                }
-            }
-        }
-
-        // Save the modified image
-        using var image = SKImage.FromBitmap(bitmap);
-        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-        return data.AsStream();
-    }
-
-    static int RunAsConsoleCommandThreadIndex = 0;
-    public static void RunAsConsoleCommand(this string command, int TimeLimitInSeconds, Action TimeoutEvent, Action<string, string> ExecutedEvent,
-            Action<StreamWriter>? RunEvent = null)
-    {
-        bool exited = false;
-        string[] split = command.Split(' ');
-
-        if (split.Length == 0)
-            return;
-
-        Process compiler = new Process();
-        compiler.StartInfo.FileName = split.First();
-        compiler.StartInfo.Arguments = split.Skip(1).Aggregate("", (x, y) => x + " " + y);
-        compiler.StartInfo.CreateNoWindow = true;
-        compiler.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
-        compiler.StartInfo.UseShellExecute = false;
-        compiler.StartInfo.RedirectStandardInput = true;
-        compiler.StartInfo.RedirectStandardOutput = true;
-        compiler.StartInfo.RedirectStandardError = true;
-        compiler.Start();
-
-        Task.Factory.StartNew(() => { RunEvent?.Invoke(compiler.StandardInput); });
-
-        DateTime start = DateTime.Now;
-
-        Task.Factory.StartNew(() =>
-        {
-            Thread.CurrentThread.Name = $"RunAsConsoleCommand Thread {RunAsConsoleCommandThreadIndex++}";
-            compiler.WaitForExit();
-
-            string o = "";
-            string e = "";
-
-            try { o = compiler.StandardOutput.ReadToEnd(); } catch { }
-            try { e = compiler.StandardError.ReadToEnd(); } catch { }
-
-            ExecutedEvent(o, e);
-            exited = true;
-        });
-
-        while (!exited && (DateTime.Now - start).TotalSeconds < TimeLimitInSeconds)
-            Thread.Sleep(100);
-        if (!exited)
-        {
-            exited = true;
-            try
-            {
-                compiler.Close();
-            }
-            catch { }
-            TimeoutEvent();
-        }
     }
 
     // String Distances
@@ -225,6 +134,7 @@ public static class HelperFuncs
         }
         return d[n, m];
     }
+
     public static float LevenshteinDistanceWrapper(string Input, string SongName)
     {
         if (Input == null || Input == "" || SongName == "" || SongName == null)

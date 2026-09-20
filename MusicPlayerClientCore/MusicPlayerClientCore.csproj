@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Platform independent client core shared by the desktop client (MusicPlayerAvaloniaPort) and the
+    Android client (MusicPlayerAvaloniaPortMobile).
+
+    Everything that does not depend on a concrete windowing/audio backend lives here: the local song
+    database (UpvotedSongs + history + queued sync requests), the sync client (pull/vote/upload/song
+    library migrations), the weighted song choosing algorithm, voting, volume normalization and the
+    runtime play history.
+
+    The namespaces deliberately stay "MusicPlayerAvaloniaPort.*" so both UI projects can keep using the
+    exact same usings they used before this project existed - the split is a build detail, not an API
+    break.
+
+    Audio playback is the one thing that differs per platform, so it is abstracted behind
+    IAudioPlaybackService: the desktop implementation keeps the FFT/visualization machinery while the
+    mobile one is a lean player without the (mobile pointless and expensive) spectrum analysis.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <RootNamespace>MusicPlayerAvaloniaPort</RootNamespace>
+    <AssemblyName>MusicPlayerClientCore</AssemblyName>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ConfigData persists the primary color as Avalonia.Media.Color (see ColorJsonConverter). -->
+    <PackageReference Include="Avalonia" Version="12.1.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
+    <PackageReference Include="taglib-sharp-netstandard2.0" Version="2.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MusicPlayerSyncInterface\MusicPlayerSyncInterface.csproj" />
+    <ProjectReference Include="..\EzAuth\EzAuth.csproj" />
+  </ItemGroup>
+
+</Project>

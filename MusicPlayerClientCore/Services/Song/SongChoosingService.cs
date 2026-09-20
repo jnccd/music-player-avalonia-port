@@ -76,7 +76,7 @@ public class SongChoosingService(DbWrapperService DbWrapper)
         }
     }
 
-    public void UpdateSongChoosingDataStructure(AvailableSong songToUpdateListFor, List<AvailableSong> AvailableSongs)
+    public void UpdateSongChoosingDataStructure(AvailableSong songToUpdateListFor, IReadOnlyList<AvailableSong> AvailableSongs)
     {
         lock (SongChoosingList)
         {
@@ -160,7 +160,7 @@ public class SongChoosingService(DbWrapperService DbWrapper)
         return chances;
     }
 
-    float GetTargetSongChoosingAmount(UpvotedSong curSong, List<AvailableSong> AvailableSongs)
+    float GetTargetSongChoosingAmount(UpvotedSong curSong, IReadOnlyList<AvailableSong> AvailableSongs)
     {
         float amount = 1;
         float ChanceIncreasePerUpvote = 1000f / AvailableSongs.Count;
@@ -193,7 +193,7 @@ public class SongChoosingService(DbWrapperService DbWrapper)
         return amount;
     }
 
-    void TestChoosingListIntegrity(List<AvailableSong> AvailableSongs)
+    void TestChoosingListIntegrity(IReadOnlyList<AvailableSong> AvailableSongs)
     {
         // Both sides are computed in one pass each instead of per song:
         // - the entry count of every song comes from a single counting pass over the choosing list,

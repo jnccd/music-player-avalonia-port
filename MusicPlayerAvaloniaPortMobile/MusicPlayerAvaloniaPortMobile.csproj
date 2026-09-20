@@ -1,0 +1,104 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Android client of the multi repo music player ("MusicPlayerAvaloniaPortMobile").
+
+    It is deliberately a separate head next to the desktop client instead of a shared UI: a phone player is
+    a different product. It therefore has no FFT diagram (which is the desktop client's most expensive
+    feature and meaningless on a phone), no statistics/export windows and no console oriented flows - but
+    it shares ALL of the behaviour that makes the player what it is through MusicPlayerClientCore:
+
+      * the local UpvotedSongs database (rows, history, queued sync requests) with the same EF schema and
+        migrations as the desktop client,
+      * the sync client (SongSyncService): pull (including incremental history and song library migrations),
+        votes, new song uploads, the lazy tag/upload worker,
+      * the weighted SongChoosing algorithm (play chance per song) and the runtime play history,
+      * voting (score/streak/likes/dislikes) exactly like the desktop client,
+      * volume normalization (RMS measurement stored per song, applied as a volume multiplier).
+
+    Only two things are platform specific and live here: the playback backend (a lean SoundFlow player
+    without spectrum analysis, see MobileAudioPlayerService) and the Android plumbing (data directory,
+    media permissions, music folder discovery).
+
+    Building requires the Android workload plus a JDK 17+ and an Android SDK - see README.md.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <SupportedOSPlatformVersion>24</SupportedOSPlatformVersion>
+    <AndroidCompileSdkVersion>35</AndroidCompileSdkVersion>
+    <AndroidTargetSdkVersion>35</AndroidTargetSdkVersion>
+    <Nullable>enable</Nullable>
+    <RootNamespace>MusicPlayerAvaloniaPortMobile</RootNamespace>
+    <AssemblyName>MusicPlayerAvaloniaPortMobile</AssemblyName>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+
+    <ApplicationId>com.jnccd.musicplayermobile</ApplicationId>
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+  </PropertyGroup>
+
+  <!--
+    Release: trimming + profile-guided AOT.  Debug: neither (fast builds, debuggable, no linker).
+
+    TrimMode is pinned to "partial" on purpose - it is the load bearing detail of this whole setup.
+    Partial trimming only trims assemblies marked IsTrimmable, which our own projects are not, so
+    MusicPlayerClientCore, this app and MusicPlayerSyncInterface keep every type and ServiceContainer's
+    Assembly.GetTypes() scan keeps working (verified: the linked MusicPlayerClientCore.dll is byte identical
+    to the untrimmed one). "full" would trim them as well, and then the reflection based registration would
+    silently resolve fewer services, EF Core would lose the properties it maps and TagLib the types it
+    resolves files through. Making "full" safe is precisely what a source generated registration would buy.
+
+    AOT is profile-guided (AndroidEnableProfiledAot + the SDK's dotnet.aotprofile) instead of full, because
+    compiling *everything* costs more space than the IL it replaces. Measured APK sizes (arm64 + x64):
+
+      untrimmed, no AOT ............ 90 MB
+      trimmed, no AOT .............. 52 MB
+      trimmed + profiled AOT ....... 63 MB   <- startup paths native, still 30% below the baseline
+      trimmed + full AOT .......... 107 MB
+  -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
+    <RunAOTCompilation>true</RunAOTCompilation>
+    <AndroidEnableProfiledAot>true</AndroidEnableProfiledAot>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' != 'Release'">
+    <PublishTrimmed>false</PublishTrimmed>
+    <RunAOTCompilation>false</RunAOTCompilation>
+    <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Android" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.1" />
+    <PackageReference Include="taglib-sharp-netstandard2.0" Version="2.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MusicPlayerClientCore\MusicPlayerClientCore.csproj" />
+    <ProjectReference Include="..\SoundFlow\Src\SoundFlow.csproj" />
+  </ItemGroup>
+
+  <!--
+    SoundFlow ships its MiniAudio native library per platform under runtimes/<rid>/native. A plain
+    project reference copies those files into the output folder, which is NOT where Android looks for
+    native libraries: they have to be packaged as lib/<abi>/lib<name>.so inside the APK, which is what
+    AndroidNativeLibrary items do. Without this, playback would fail at runtime with a
+    "libminiaudio" DllNotFoundException while everything still compiles.
+  -->
+  <ItemGroup>
+    <AndroidNativeLibrary Include="..\SoundFlow\Src\Backends\MiniAudio\runtimes\android-arm64\native\libminiaudio.so">
+      <Abi>arm64-v8a</Abi>
+    </AndroidNativeLibrary>
+    <AndroidNativeLibrary Include="..\SoundFlow\Src\Backends\MiniAudio\runtimes\android-arm\native\libminiaudio.so">
+      <Abi>armeabi-v7a</Abi>
+    </AndroidNativeLibrary>
+    <AndroidNativeLibrary Include="..\SoundFlow\Src\Backends\MiniAudio\runtimes\android-x64\native\libminiaudio.so">
+      <Abi>x86_64</Abi>
+    </AndroidNativeLibrary>
+  </ItemGroup>
+
+</Project>

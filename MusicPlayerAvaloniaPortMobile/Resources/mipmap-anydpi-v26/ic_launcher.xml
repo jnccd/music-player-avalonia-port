@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive launcher icon (Android 8+). The launcher composes background + foreground and applies its own
+  mask, so the foreground (see mipmap-*/ic_launcher_foreground.png) keeps the mark inside the central 66dp
+  safe zone and the background is a plain colour - see values/colors.xml for why it is not "transparent".
+  The full-bleed mipmap-*/ic_launcher.png bitmaps remain for older releases.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+  <background android:drawable="@color/ic_launcher_background" />
+  <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>

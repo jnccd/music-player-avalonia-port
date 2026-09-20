@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          package="com.jnccd.musicplayermobile"
+          android:installLocation="auto">
+
+  <!-- Talking to the sync server. -->
+  <uses-permission android:name="android.permission.INTERNET" />
+
+  <!--
+    Reading the song library from shared storage. Android 13 (API 33) replaced the blanket storage
+    permission with the per media type one; the old permission is still needed on anything below that
+    (hence maxSdkVersion), and it is requested at runtime by MainActivity - see MobilePlatform.
+  -->
+  <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+
+  <application android:label="Music Player"
+               android:icon="@mipmap/ic_launcher"
+               android:usesCleartextTraffic="true" />
+</manifest>

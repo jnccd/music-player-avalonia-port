@@ -1,0 +1,14 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="MusicPlayerAvaloniaPortMobile.MobileApp"
+             RequestedThemeVariant="Dark">
+
+  <!--
+    A dark theme is the natural default for a phone music player (and the only one this client ships with),
+    so the player view can be built on it without a light/dark switch.
+  -->
+  <Application.Styles>
+    <FluentTheme />
+  </Application.Styles>
+
+</Application>

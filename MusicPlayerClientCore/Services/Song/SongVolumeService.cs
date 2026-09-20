@@ -10,7 +10,7 @@ namespace MusicPlayerAvaloniaPort.Services.Song;
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(SongVolumeService))]
 public class SongVolumeService
 {
-    AudioLibWrapperService audioLibWrapperService;
+    IAudioPlaybackService audioLibWrapperService;
     SongPlaybackService songPlaybackService;
     DbWrapperService dbWrapperService;
 
@@ -37,7 +37,7 @@ public class SongVolumeService
 
     void RaiseVolumeDataChanged() => VolumeDataChanged?.Invoke();
 
-    public SongVolumeService(AudioLibWrapperService audioLibWrapperService, SongPlaybackService songPlaybackService, DbWrapperService dbWrapperService)
+    public SongVolumeService(IAudioPlaybackService audioLibWrapperService, SongPlaybackService songPlaybackService, DbWrapperService dbWrapperService)
     {
         this.audioLibWrapperService = audioLibWrapperService;
         this.songPlaybackService = songPlaybackService;
@@ -109,30 +109,23 @@ public class SongVolumeService
         if (currentUpvotedSong.Volume > 0) // Not necessary
             return;
 
-        var samples = audioLibWrapperService.GetCurrentSongEntireSampleData();
+        // The backend reports the loudness of the song once it finished reading it (the desktop backend
+        // pre-reads the file for this, the mobile one decodes it in the background) - null means no
+        // measurement is available (yet), so it is simply tried again on the next play.
+        var rms = audioLibWrapperService.CurrentSongRootMeanSquare;
 
-        if (samples == null) // Not possible
+        if (rms == null)
             return;
 
-        var rms = ComputeRootMeanSquare(samples);
+        // Reading a whole song takes long enough that the user may have skipped on already: storing the
+        // loudness of the skipped song on its successor would normalize the wrong track forever.
+        if (!string.Equals(audioLibWrapperService.MeasuredSongPath, currentSong.FilePath, StringComparison.Ordinal))
+            return;
 
-        currentUpvotedSong.Volume = rms;
+        currentUpvotedSong.Volume = rms.Value;
         dbContext.SaveChanges();
         RaiseVolumeDataChanged();
 
         UpdateAudioLibVolume();
-    }
-
-    private float ComputeRootMeanSquare(IEnumerable<float> samples)
-    {
-        float n = 0;
-
-        foreach (float sample in samples)
-            n += sample * sample;
-        n /= samples.Count();
-
-        float sn = (float)Math.Sqrt(n);
-
-        return sn;
     }
 }

@@ -8,7 +8,7 @@ using System.IO;
 namespace MusicPlayerAvaloniaPort.Services.Song;
 
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(SongVotingService))]
-public class SongVotingService(AudioLibWrapperService AudioLibWrapper, SongSyncService SyncService, SongChoosingService SongChoosingService, DbWrapperService DbWrapper)
+public class SongVotingService(IAudioPlaybackService AudioLibWrapper, SongSyncService SyncService, SongChoosingService SongChoosingService, DbWrapperService DbWrapper)
 {
     public event EventHandler<bool>? SongGotUpvoted;
     public event EventHandler<bool>? SongGotDownvoted;
@@ -89,7 +89,7 @@ public class SongVotingService(AudioLibWrapperService AudioLibWrapper, SongSyncS
         return newUpvotedSong;
     }
 
-    public void UpvoteSong(AvailableSong songToUpvote, List<AvailableSong> AvailableSongs)
+    public void UpvoteSong(AvailableSong songToUpvote, IReadOnlyList<AvailableSong> AvailableSongs)
     {
         using var dbContext = DbWrapper.GetContext();
         var upvotedSong = dbContext.GetUpvotedSongById(songToUpvote.UpvotedSongId);
@@ -122,7 +122,7 @@ public class SongVotingService(AudioLibWrapperService AudioLibWrapper, SongSyncS
 
         SongGotUpvoted?.Invoke(this, false);
     }
-    public void DownvoteSong(AvailableSong songToDownvote, List<AvailableSong> AvailableSongs)
+    public void DownvoteSong(AvailableSong songToDownvote, IReadOnlyList<AvailableSong> AvailableSongs)
     {
         using var dbContext = DbWrapper.GetContext();
         var upvotedSong = dbContext.GetUpvotedSongById(songToDownvote.UpvotedSongId);

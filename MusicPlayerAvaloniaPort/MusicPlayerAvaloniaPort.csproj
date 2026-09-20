@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
@@ -44,6 +44,7 @@
 
   <!-- References -->
   <ItemGroup>
+    <ProjectReference Include="..\MusicPlayerClientCore\MusicPlayerClientCore.csproj" />
     <ProjectReference Include="..\SoundFlow\Src\SoundFlow.csproj" />
     <ProjectReference Include="..\MusicPlayerSyncInterface\MusicPlayerSyncInterface.csproj" />
     <ProjectReference Include="..\EzAuth\EzAuth.csproj" />

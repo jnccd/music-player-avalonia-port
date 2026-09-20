@@ -15,7 +15,7 @@ namespace MusicPlayerAvaloniaPort.Services.Song;
 [RegisterImplementation(ServiceRegisterType.Singleton, typeof(SongPlaybackService))]
 public class SongPlaybackService
 {
-    readonly AudioLibWrapperService AudioLibWrapper;
+    readonly IAudioPlaybackService AudioLibWrapper;
     readonly SongVotingService SongVotingService;
     readonly SongChoosingService SongChoosingService;
     readonly DbWrapperService DbWrapper;
@@ -54,7 +54,7 @@ public class SongPlaybackService
     public event EventHandler<EventArgs>? SongChangeStarted;
     public event EventHandler<EventArgs>? SongChangeFinished;
 
-    public SongPlaybackService(AudioLibWrapperService AudioLibWrapper, SongVotingService UpvotedSongManager, SongChoosingService SongChoosingService, DbWrapperService DbWrapper, SongSyncService SyncService)
+    public SongPlaybackService(IAudioPlaybackService AudioLibWrapper, SongVotingService UpvotedSongManager, SongChoosingService SongChoosingService, DbWrapperService DbWrapper, SongSyncService SyncService)
     {
         this.AudioLibWrapper = AudioLibWrapper;
         AudioLibWrapper.PlaybackEnded += (sender, args) =>
@@ -482,7 +482,7 @@ public class SongPlaybackService
         SongChangeStarted?.Invoke(this, EventArgs.Empty);
         try
         {
-            AudioLibWrapper.PlaySong(song.FilePath, GetSampleReadingStrategyForSong(song));
+            AudioLibWrapper.PlaySong(song.FilePath, ShouldMeasureWholeSongForVolume(song));
         }
         finally
         {
@@ -491,9 +491,16 @@ public class SongPlaybackService
 
         return song;
     }
-    SampleReadingStrategy GetSampleReadingStrategyForSong(AvailableSong song)
+    /// <summary>
+    /// True when the local database has no loudness measurement for this song yet, so the playback backend
+    /// should read the whole song to measure it (see <see cref="IAudioPlaybackService.PlaySong"/>). The
+    /// desktop backend uses the hint to pick between its cheap direct-read and its full pre-read strategy;
+    /// mobile always decodes on the fly and only uses it to decide whether a background measurement is
+    /// needed.
+    /// </summary>
+    bool ShouldMeasureWholeSongForVolume(AvailableSong song)
     {
         using var dbContext = DbWrapper.GetContext();
-        return dbContext.DoesSongHaveVolume(song.UpvotedSongId) ? SampleReadingStrategy.DirectRead : SampleReadingStrategy.GlobalArray;
+        return !dbContext.DoesSongHaveVolume(song.UpvotedSongId);
     }
 }
