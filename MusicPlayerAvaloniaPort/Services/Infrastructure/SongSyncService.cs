@@ -263,12 +263,29 @@ public class SongSyncService
         SyncProgress = 0; // A previous pull (e.g. a login pull) may have left it at the end state.
         try
         {
-            var res = client!.GetStringAsync($"{Config.Data.SyncServerHost}{endpoint}").Result;
+            // Incremental history pull: tell the server what this client already holds (see
+            // ConfigData.SyncHistorySequences). Without any local history (fresh database) no parameters
+            // are sent and the server answers with the full history, like before. The songs are always
+            // complete. When the client has history but no cursor yet (the first pull after this feature
+            // was introduced), the server answers with a short verification tail and the client adopts
+            // the cursor, so the whole history is not transferred again.
+            string accountId = Config.Data.SyncServerUsername ?? "";
+            long historyCursor = GetHistoryCursor(accountId);
+            int localHistoryCount;
+            using (var countContext = DbWrapper.GetContext())
+                localHistoryCount = countContext.CountLocalHistory(accountId);
+            string historyQuery = localHistoryCount > 0
+                ? $"?historySince={historyCursor}&historyCount={localHistoryCount}"
+                : "";
+
+            var res = client!.GetStringAsync($"{Config.Data.SyncServerHost}{endpoint}{historyQuery}").Result;
             var pulledData = JsonSerializer.Deserialize<SyncPullResponse>(res, jsonOptions);
 
             if (pulledData == null)
                 throw new Exception("Pulled data was null!");
-            if (pulledData.Songs.Count() == 0 || pulledData.HistoryEntries.Count() == 0)
+            // An incremental response may legitimately contain no new history entries; only a full pull
+            // without any history (or a pull without songs) is treated as an empty/failed response.
+            if (pulledData.Songs.Length == 0 || (!pulledData.IsIncremental && pulledData.HistoryEntries.Length == 0))
                 throw new Exception("Pulled data was empty!");
 
             // The payload arrived. From here on the remaining pull work (local database rewrite,
@@ -300,7 +317,9 @@ public class SongSyncService
                 }
             }
 
-            Console.WriteLine($"Pulled {pulledData.Songs.Count()} songs and {pulledData.HistoryEntries.Count()} history entries, writing into local db...");
+            Console.WriteLine(pulledData.IsIncremental
+                ? $"Pulled {pulledData.Songs.Length} songs (incremental history: {pulledData.HistoryEntries.Length} of {pulledData.TotalHistoryCount} entries, cursor {pulledData.HistorySequence})..."
+                : $"Pulled {pulledData.Songs.Length} songs and {pulledData.HistoryEntries.Length} history entries, writing into local db...");
 
             LastPulledMigrations = pulledData.Migrations ?? [];
             LastPulledUserId = authedUserId != "" ? authedUserId : pulledData.User?.UserId;
@@ -309,15 +328,62 @@ public class SongSyncService
             // few hundred rows when the server data used to contain duplicates) can take a moment - the
             // options view mirrors State, so say what is happening instead of appearing frozen.
             State = "Merging duplicate song entries after the pull…";
-            int mergedDuplicates;
-            using (var dbContext = DbWrapper.GetContext())
+            int mergedDuplicates = 0;
+            bool incrementalApplied = false;
+            if (pulledData.IsIncremental && !pulledData.ResyncRequired && authedUserId != "")
             {
-                mergedDuplicates = dbContext.RewriteDatabase(pulledData, rewriteProgress =>
+                try
                 {
-                    // The rewrite reports its coarse write milestones, mapped onto the middle section
-                    // of the sync stage (the duplicate merge after it is not covered by the callback).
-                    SyncProgress = 0.4f + 0.4f * rewriteProgress;
-                });
+                    using var incrementalContext = DbWrapper.GetContext();
+                    var (newHistoryEntries, merged) = incrementalContext.ApplyIncrementalPull(pulledData, authedUserId);
+                    mergedDuplicates = merged;
+
+                    // Verification: when the client had no cursor yet, every entry of the response (the
+                    // verification tail) must already have been local - anything new means the client was
+                    // NOT fully synced and the bootstrap cannot be trusted. Additionally the local history
+                    // may never be MISSING entries the server has (orphans only make it larger).
+                    int localCountAfterPull = incrementalContext.CountLocalHistory(authedUserId);
+                    bool tailVerified = historyCursor > 0 || newHistoryEntries == 0;
+                    if (tailVerified && localCountAfterPull >= pulledData.TotalHistoryCount)
+                    {
+                        incrementalApplied = true;
+                        SetHistoryCursor(authedUserId, pulledData.HistorySequence);
+                        Console.WriteLine($"Incremental history pull applied: {newHistoryEntries} new entr{(newHistoryEntries == 1 ? "y" : "ies")}, cursor {pulledData.HistorySequence}, {localCountAfterPull} local entries.");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Incremental history pull could not be verified (new entries: {newHistoryEntries}, local {localCountAfterPull} vs server {pulledData.TotalHistoryCount}) - falling back to the full history.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Incremental history pull failed ({ex.Message}) - falling back to the full history.");
+                }
+            }
+
+            if (!incrementalApplied)
+            {
+                // The received response may be a delta or the short verification tail: fetch the whole
+                // history explicitly in that case (historyCount=0 disables the bootstrap server side).
+                bool responseHoldsFullHistory = !pulledData.IsIncremental
+                    && pulledData.HistoryEntries.Length >= pulledData.TotalHistoryCount;
+                if (!responseHoldsFullHistory)
+                {
+                    res = client!.GetStringAsync($"{Config.Data.SyncServerHost}{endpoint}?historySince=0&historyCount=0").Result;
+                    pulledData = JsonSerializer.Deserialize<SyncPullResponse>(res, jsonOptions)
+                        ?? throw new Exception("Pulled data was null!");
+                }
+
+                using (var dbContext = DbWrapper.GetContext())
+                {
+                    mergedDuplicates = dbContext.RewriteDatabase(pulledData, rewriteProgress =>
+                    {
+                        // The rewrite reports its coarse write milestones, mapped onto the middle section
+                        // of the sync stage (the duplicate merge after it is not covered by the callback).
+                        SyncProgress = 0.4f + 0.4f * rewriteProgress;
+                    });
+                }
+                SetHistoryCursor(authedUserId != "" ? authedUserId : accountId, pulledData.HistorySequence);
             }
             SyncProgress = 0.9f; // Database rewrite and duplicate merge done
 
@@ -351,6 +417,28 @@ public class SongSyncService
             // the caller hands the progress bar over to the next startup stage once Pull() returns.
             SyncProgress = 1;
         }
+    }
+
+    /// <summary>
+    /// The incremental history cursor (highest history sequence this client holds) of an account, 0 when
+    /// this client has no cursor for it yet (see ConfigData.SyncHistorySequences).
+    /// </summary>
+    long GetHistoryCursor(string accountId) =>
+        accountId != "" && Config.Data.SyncHistorySequences.TryGetValue(accountId, out long cursor) ? cursor : 0;
+
+    /// <summary>
+    /// Stores the incremental history cursor of an account (0 removes it, e.g. after a full pull that
+    /// could not determine one).
+    /// </summary>
+    void SetHistoryCursor(string accountId, long cursor)
+    {
+        if (accountId == "")
+            return;
+        if (cursor > 0)
+            Config.Data.SyncHistorySequences[accountId] = cursor;
+        else
+            Config.Data.SyncHistorySequences.Remove(accountId);
+        Config.Save();
     }
 
     /// <summary>

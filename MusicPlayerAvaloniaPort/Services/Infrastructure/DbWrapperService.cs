@@ -280,6 +280,105 @@ public class DbWrapperService
         }
 
         /// <summary>
+        /// Numbers of history entries this client holds for one account. Used both to tell the server how
+        /// much the client knows (incremental pull) and to verify afterwards that nothing is missing.
+        /// </summary>
+        public int CountLocalHistory(string userId) =>
+            string.IsNullOrEmpty(userId) ? 0 : SongDbContext.SongHistoryEntries.Count(h => h.UserId == userId);
+
+        /// <summary>
+        /// Applies an incremental pull (see <see cref="MusicPlayerSyncService.Pull"/>): the songs are
+        /// always the complete account list and are reconciled with the local rows (updated, added,
+        /// removed), while <c>HistoryEntries</c> is only the delta since the client's cursor and is
+        /// appended - deduplicated by the history primary key - instead of replacing the local history.
+        /// History of songs that no longer exist locally is deliberately kept (an orphan is harmless and
+        /// removing it would require knowing which entries the server deleted); it is simply not counted
+        /// against the server's total by the caller, which only fails a pull when entries are MISSING.
+        /// Returns how many entries were newly appended and how many duplicate rows were merged away.
+        /// </summary>
+        public (int NewHistoryEntries, int MergedDuplicates) ApplyIncrementalPull(SyncPullResponse pulledData, string userId)
+        {
+            if (string.IsNullOrEmpty(userId))
+                throw new ArgumentException("An incremental pull needs the account id.", nameof(userId));
+
+            UpvotedSong[] pulledSongs = pulledData.Songs ?? [];
+            SongHistoryEntry[] pulledHistory = pulledData.HistoryEntries ?? [];
+            var pulledSongIds = new HashSet<Guid>(pulledSongs.Select(song => song.SongId));
+
+            // 1. Remove the account's local rows the server no longer has (deleted songs, or the loser
+            //    rows of a duplicate merge). Local-only rows (UserId "", i.e. not synced yet) are kept.
+            var songsToRemove = SongDbContext.UpvotedSongs
+                .Where(song => song.UserId == userId)
+                .ToArray()
+                .Where(song => !pulledSongIds.Contains(song.SongId))
+                .ToArray();
+            if (songsToRemove.Length > 0)
+            {
+                SongDbContext.UpvotedSongs.RemoveRange(songsToRemove);
+                SongDbContext.SaveChanges();
+            }
+
+            // 2. Upsert the pulled songs: existing local rows are updated in place (adding a second
+            //    instance with the same key would make EF throw), missing ones are inserted.
+            var localSongsBySongId = SongDbContext.UpvotedSongs
+                .Where(song => song.UserId == userId || song.UserId == "")
+                .ToArray()
+                .GroupBy(song => song.SongId)
+                .ToDictionary(group => group.Key, group => group.First());
+            foreach (UpvotedSong pulledSong in pulledSongs)
+            {
+                if (localSongsBySongId.TryGetValue(pulledSong.SongId, out UpvotedSong? localSong))
+                {
+                    localSong.UserId = pulledSong.UserId;
+                    localSong.Name = pulledSong.Name;
+                    localSong.Artist = pulledSong.Artist;
+                    localSong.Album = pulledSong.Album;
+                    localSong.Score = pulledSong.Score;
+                    localSong.Streak = pulledSong.Streak;
+                    localSong.TotalLikes = pulledSong.TotalLikes;
+                    localSong.TotalDislikes = pulledSong.TotalDislikes;
+                    localSong.DateAdded = pulledSong.DateAdded;
+                    localSong.Volume = pulledSong.Volume;
+                    localSong.Path = pulledSong.Path;
+                }
+                else
+                {
+                    SongDbContext.UpvotedSongs.Add(pulledSong);
+                }
+            }
+            SongDbContext.SaveChanges();
+
+            // 3. Append the history delta. Entries that are already present (the cursor is inclusive and
+            //    can re-send an entry, and the verification tail overlaps what the client already has) are
+            //    skipped by their primary key (user + song + date). Entries whose song does not exist on
+            //    the server are ignored defensively (the server side has a foreign key for this).
+            var knownHistoryKeys = new HashSet<(Guid SongId, DateTimeOffset Date)>(SongDbContext.SongHistoryEntries
+                .Where(h => h.UserId == userId && h.SongId != null)
+                .ToArray()
+                .Select(h => (h.SongId!.Value, h.Date)));
+            int newHistoryEntries = 0;
+            foreach (SongHistoryEntry entry in pulledHistory)
+            {
+                if (entry.SongId == null || !pulledSongIds.Contains(entry.SongId.Value))
+                    continue;
+                entry.UserId = userId;
+                if (knownHistoryKeys.Add((entry.SongId.Value, entry.Date)))
+                {
+                    SongDbContext.SongHistoryEntries.Add(entry);
+                    newHistoryEntries++;
+                }
+            }
+            if (newHistoryEntries > 0)
+                SongDbContext.SaveChanges();
+
+            // 4. Duplicates can still arrive from a server whose data was not healed yet: merge them like
+            //    after a full pull, so statistics and song matching only see one row per song.
+            int mergedDuplicates = MergeDuplicateUpvotedSongs(Config.Data.SongLibraryPath);
+
+            return (newHistoryEntries, mergedDuplicates);
+        }
+
+        /// <summary>
         /// Merges duplicate entries of the same song in the local database (see
         /// MusicPlayerSyncInterface.SongFileMatching for the canonical rules). Two kinds of duplicates:
         /// 1. Exact duplicates (same file name AND same stored album/artist tags) - always merged.
@@ -499,7 +598,15 @@ public class DbWrapperService
         public SyncInitRequest GetSyncInitRequest()
         {
             var songs = SongDbContext.UpvotedSongs.ToArray();
-            var historyEntries = SongDbContext.SongHistoryEntries.ToArray();
+            // Only history of songs that are actually part of this upload: the local database may hold
+            // history of songs that no longer exist on the server (dead songs from delete migrations or
+            // merged-away duplicates) - those entries would violate the server's foreign key and make the
+            // whole init request fail, so they are never uploaded.
+            var songIds = songs.Select(song => song.SongId).ToHashSet();
+            var historyEntries = SongDbContext.SongHistoryEntries
+                .ToArray()
+                .Where(entry => entry.SongId != null && songIds.Contains(entry.SongId.Value))
+                .ToArray();
 
             return new SyncInitRequest(songs, historyEntries);
         }

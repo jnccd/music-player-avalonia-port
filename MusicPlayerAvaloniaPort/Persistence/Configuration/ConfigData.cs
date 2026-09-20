@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Media;
 
@@ -43,6 +44,16 @@ public class ConfigData
     /// This is assumed to be equal to the <see cref="MusicPlayerSyncInterface.DTOs.User.UserId"/> / <see cref="MusicPlayerSyncInterface.DTOs.User.UserHandle"/> field in the User DTO class
     /// </summary>
     public string? SyncServerUsername { get; set; }
+
+    /// <summary>
+    /// The incremental history pull cursor per account (<see cref="MusicPlayerSyncInterface.DTOs.User.UserId"/>):
+    /// the highest history sequence this client already holds. It is sent as <c>historySince</c> on the
+    /// next pull, so the server only sends the entries that are new. Kept out of the song library state
+    /// file on purpose - that file is shared between devices through the NAS, while the cursor describes
+    /// THIS local database. A missing entry (0) simply means "no cursor yet": the pull then bootstraps
+    /// (verifies the newest entries and adopts the cursor) or falls back to the full history.
+    /// </summary>
+    public Dictionary<string, long> SyncHistorySequences { get; set; } = new();
 
     public ConfigData()
     {
