@@ -415,14 +415,15 @@ public class DbWrapperService
                 Console.WriteLine($"Merged {remove.Length} exact duplicate(s) of \"{keep.Name}\" into {keep.SongId}.");
             }
 
-            // 2. Tag-completeness duplicates (metadata-less entries absorbed into the tagged entry).
+            // 2. Tag-completeness duplicates (a row that recorded fewer tags absorbed into the complete
+            //    one). No "fully metadata-less row" precondition: an album-only/artist-only row is just as
+            //    much a partial row - TryGetCombinedTags below decides (partial rows must share a field,
+            //    contradicting tags mean different songs).
             bool libraryAvailable = !string.IsNullOrWhiteSpace(songLibraryPath) && Directory.Exists(songLibraryPath);
             var tagCompletenessGroups = SongDbContext.UpvotedSongs
                 .ToArray() // re-read after the exact duplicates were removed above
                 .GroupBy(s => new { s.UserId, s.Name })
                 .Where(group => group.Count() > 1)
-                .Where(group => group.Any(s => SongFileMatching.HasNoAlbumOrArtist(s.Artist, s.Album))
-                             && group.Any(s => !SongFileMatching.HasNoAlbumOrArtist(s.Artist, s.Album)))
                 .ToArray();
 
             // The library is enumerated ONCE (walking a NAS recursively for every duplicate group would
