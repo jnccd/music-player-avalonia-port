@@ -30,6 +30,10 @@ public static class PersistenceLocations
     public const string ErrorLogFileName = "error.log";
     public const string ExportLogFileName = "export.log";
     public const string TempDownloadFolderName = "tmpDownloads";
+    /// <summary>Sub folder holding the "wrapped" reports and their audio analysis cache (desktop client).</summary>
+    public const string WrappedFolderName = "wrapped";
+    public const string WrappedIndexFileName = "index.json";
+    public const string WrappedAudioCacheFileName = "audio-analysis.json";
 
     /// <summary>Default folder name; the desktop client keeps it, the mobile client overrides it.</summary>
     public const string DefaultAppName = "MusicPlayerAvaloniaPort";
@@ -83,6 +87,17 @@ public static class PersistenceLocations
     /// <summary>Diagnostics of the last library export (see <see cref="MusicPlayerAvaloniaPort.Helpers.Export.ExportLog"/>).</summary>
     public static string ExportLogPath => Path.Combine(DataDirectory, ExportLogFileName);
     public static string TempDownloadDirectory => Path.Combine(DataDirectory, TempDownloadFolderName);
+
+    /// <summary>
+    /// Folder for the "wrapped" feature (the yearly/all-time listening reports and the cache of the audio
+    /// analysis they are built from). Only the desktop client uses it; it lives here so every persisted
+    /// file of the client keeps coming from this one place.
+    /// </summary>
+    public static string WrappedDirectory => Path.Combine(DataDirectory, WrappedFolderName);
+    /// <summary>Index of the computed wrapped reports (see the desktop client's <c>WrappedStore</c>).</summary>
+    public static string WrappedIndexPath => Path.Combine(WrappedDirectory, WrappedIndexFileName);
+    /// <summary>Durable per-song audio analysis cache (see the desktop client's <c>WrappedAudioCache</c>).</summary>
+    public static string WrappedAudioCachePath => Path.Combine(WrappedDirectory, WrappedAudioCacheFileName);
 
     static string ResolveDataDirectory()
     {

@@ -13,6 +13,7 @@ using MusicPlayerAvaloniaPort.Views.History;
 using MusicPlayerAvaloniaPort.Views.Main;
 using MusicPlayerAvaloniaPort.Views.Options;
 using MusicPlayerAvaloniaPort.Views.Statistics;
+using MusicPlayerAvaloniaPort.Views.Wrapped;
 
 namespace MusicPlayerAvaloniaPort;
 
@@ -92,6 +93,16 @@ public static class AvaloniaWindowManager
         MinWidth = 520,
         MinHeight = 320
     };
+    static Func<Window> WrappedWindowCreator = () => new Window
+    {
+        Content = new WrappedView(),
+        Title = "MusicPlayer Wrapped",
+        Icon = new WindowIcon("./Assets/icon.ico"),
+        Width = 1100,
+        Height = 760,
+        MinWidth = 700,
+        MinHeight = 420
+    };
 
     static readonly Dictionary<Type, (Window? window, Func<Window> createWindow)> Windows = new()
     {
@@ -114,6 +125,10 @@ public static class AvaloniaWindowManager
         {
             typeof(SongHistoryView),
             (null, SongHistoryWindowCreator)
+        },
+        {
+            typeof(WrappedView),
+            (null, WrappedWindowCreator)
         }
     };
 

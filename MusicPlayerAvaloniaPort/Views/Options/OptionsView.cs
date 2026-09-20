@@ -12,6 +12,8 @@ using MusicPlayerAvaloniaPort.Services.Song;
 using MusicPlayerAvaloniaPort.Views.ExportLibrary;
 using MusicPlayerAvaloniaPort.Views.History;
 using MusicPlayerAvaloniaPort.Views.Statistics;
+using MusicPlayerAvaloniaPort.Views.Wrapped;
+using MusicPlayerAvaloniaPort.Services.Wrapped;
 using Avalonia.Threading;
 using Avalonia.Platform.Storage;
 using Avalonia.Media;
@@ -26,6 +28,7 @@ public partial class OptionsView : UserControl
     readonly SongDownloadRequestProcessorService songDownloadRequestProcessorService = ServiceContainer.GetService<SongDownloadRequestProcessorService>();
     readonly SongPlaybackService songPlaybackService = ServiceContainer.GetService<SongPlaybackService>();
     readonly SystemAudioCaptureService systemAudioCaptureService = ServiceContainer.GetService<SystemAudioCaptureService>();
+    readonly WrappedService wrappedService = ServiceContainer.GetService<WrappedService>();
 
     // Primary color picker (see the General group); resolved when the view is loaded. Deliberately not
     // named like the controls in the axaml: the Avalonia name generator already declares fields for those,
@@ -92,6 +95,34 @@ public partial class OptionsView : UserControl
 
         InitPrimaryColorPicker();
         InitSystemAudioCapture();
+        UpdateWrappedState();
+    }
+
+    /// <summary>
+    /// Mirrors what the wrapped feature currently has: how many reports exist and how much of the library
+    /// is already measured. The wrapped window owns the actual work; this is the at-a-glance state next to
+    /// the button that opens it.
+    /// </summary>
+    void UpdateWrappedState()
+    {
+        var wrappedStateLabel = this.GetNestedControl<TextBlock>("wrappedStateLabel");
+        if (wrappedStateLabel == null)
+            return;
+
+        try
+        {
+            int reportCount = wrappedService.ListReports().Count;
+            int cached = wrappedService.CachedAnalyses;
+            int years = wrappedService.GetAvailableYears().Count;
+
+            wrappedStateLabel.Text = years == 0
+                ? "No play history recorded yet."
+                : $"{reportCount} report(s) saved, history for {years} year(s), audio measured for {cached} file(s).";
+        }
+        catch (Exception ex)
+        {
+            wrappedStateLabel.Text = $"Wrapped state unavailable: {ex.Message}";
+        }
     }
 
     // ---------- Extra windows (the "Windows" group) ----------
@@ -104,6 +135,9 @@ public partial class OptionsView : UserControl
 
     private void SongHistoryWindowButton_Click(object? sender, RoutedEventArgs e) =>
         AvaloniaWindowManager.ShowWindow(typeof(SongHistoryView));
+
+    private void WrappedWindowButton_Click(object? sender, RoutedEventArgs e) =>
+        AvaloniaWindowManager.ShowWindow(typeof(WrappedView));
 
     // ---------- Primary color (the color picker of the General group) ----------
 

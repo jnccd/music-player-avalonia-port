@@ -14,6 +14,13 @@ class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        // Debug-only command line hook for the wrapped audio analysis self test (see WrappedSelfTest);
+        // in a normal run it does nothing at all.
+#if DEBUG
+        if (Services.Wrapped.WrappedSelfTest.RunIfRequested())
+            return;
+#endif
+
         WrapInTry(() =>
         {
             BuildAvaloniaApp()

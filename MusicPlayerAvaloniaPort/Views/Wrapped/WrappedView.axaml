@@ -1,0 +1,91 @@
+<UserControl
+    x:Class="MusicPlayerAvaloniaPort.Views.Wrapped.WrappedView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+    <Grid RowDefinitions="Auto,Auto,Auto,*">
+
+        <!-- Report picker -->
+        <Grid
+            Grid.Row="0"
+            Margin="12,12,12,6"
+            ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto"
+            ColumnSpacing="8">
+            <ComboBox
+                Name="reportSelector"
+                MinWidth="220"
+                VerticalAlignment="Center"
+                SelectionChanged="ReportSelector_SelectionChanged" />
+            <Button
+                Name="refreshReportsButton"
+                Grid.Column="1"
+                Content="Refresh list"
+                Click="RefreshReportsButton_Click" />
+            <Button
+                Name="deleteReportButton"
+                Grid.Column="2"
+                Content="Delete"
+                Click="DeleteReportButton_Click" />
+            <Button
+                Name="openFolderButton"
+                Grid.Column="4"
+                Content="Open data folder"
+                Click="OpenFolderButton_Click" />
+            <Button
+                Name="exportButton"
+                Grid.Column="5"
+                Content="Export as text…"
+                Click="ExportButton_Click" />
+        </Grid>
+
+        <!-- Run controls -->
+        <Border
+            Grid.Row="1"
+            Margin="12,0,12,6"
+            Padding="10"
+            Background="#14000000"
+            CornerRadius="6">
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <CheckBox Name="audioCheckBox" Content="Measure the audio (tempo, timbre, key, loudness)" IsChecked="True" />
+                    <CheckBox Name="onlineCheckBox" Content="Look up release years online (MusicBrainz, slow)" />
+                </StackPanel>
+                <TextBlock
+                    Name="libraryStateLabel"
+                    Foreground="#99FFFFFF"
+                    TextWrapping="Wrap"
+                    Text="" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="Years:" VerticalAlignment="Center" />
+                    <ItemsControl Name="yearsPanel" VerticalAlignment="Center">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                    <Button Name="selectAllYearsButton" Content="All" Click="SelectAllYearsButton_Click" />
+                    <Button Name="selectRecentYearsButton" Content="Last 3" Click="SelectRecentYearsButton_Click" />
+                    <Button Name="computeButton" Content="Compute wrapped" Click="ComputeButton_Click" />
+                    <Button Name="cancelButton" Content="Cancel" IsEnabled="False" Click="CancelButton_Click" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Progress -->
+        <StackPanel Grid.Row="2" Margin="12,0,12,6" Spacing="4">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <ProgressBar Name="progressBar" Width="320" Height="14" Minimum="0" Maximum="1" Value="0" />
+                <TextBlock Name="progressPercentLabel" VerticalAlignment="Center" Text="" />
+            </StackPanel>
+            <TextBlock Name="progressLabel" TextWrapping="Wrap" Text="" />
+        </StackPanel>
+
+        <!-- The report itself -->
+        <ScrollViewer Grid.Row="3" Margin="12,0,12,12" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Name="contentPanel" Spacing="10" />
+        </ScrollViewer>
+    </Grid>
+</UserControl>

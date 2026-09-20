@@ -102,6 +102,17 @@
                 </StackPanel>
             </StackPanel>
         </GroupBox>
+        <GroupBox Header="Wrapped" Margin="3">
+            <StackPanel Spacing="8">
+                <TextBlock Foreground="#80FFFFFF" TextWrapping="Wrap" MaxWidth="260"
+                           Text="A summary of what you actually listened to: your most played songs and artists, listening habits, and - measured from the song files themselves - how your music sounds. Each calendar year gets its own wrapped, plus one over everything." />
+                <TextBlock Foreground="#80FFFFFF" TextWrapping="Wrap" MaxWidth="260"
+                           Text="Measuring the audio decodes every song file once, which takes a while on a library on a NAS. It runs in the background and can be cancelled; the results are cached per file, so later runs are quick." />
+                <Button Name="wrappedWindowButton" Click="WrappedWindowButton_Click">Open Wrapped…</Button>
+                <TextBlock Name="wrappedStateLabel" Foreground="#80FFFFFF" TextWrapping="Wrap"
+                           MaxWidth="260" Text="" />
+            </StackPanel>
+        </GroupBox>
         <GroupBox Header="Windows" Margin="3">
             <StackPanel Spacing="8">
                 <TextBlock Foreground="#80FFFFFF" TextWrapping="Wrap" MaxWidth="260"
