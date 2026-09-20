@@ -10,6 +10,9 @@ using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using MusicPlayerAvaloniaPort.Services.Song;
+using MusicPlayerAvaloniaPort.Views.ExportLibrary;
+using MusicPlayerAvaloniaPort.Views.History;
+using MusicPlayerAvaloniaPort.Views.Statistics;
 using Avalonia.Threading;
 using Avalonia.Platform.Storage;
 using Avalonia.Media;
@@ -78,6 +81,17 @@ public partial class OptionsView : UserControl
 
         InitPrimaryColorPicker();
     }
+
+    // ---------- Extra windows (the "Windows" group) ----------
+
+    private void StatisticsWindowButton_Click(object? sender, RoutedEventArgs e) =>
+        AvaloniaWindowManager.ShowWindow(typeof(StatisticsView));
+
+    private void ExportLibraryWindowButton_Click(object? sender, RoutedEventArgs e) =>
+        AvaloniaWindowManager.ShowWindow(typeof(ExportLibraryView));
+
+    private void SongHistoryWindowButton_Click(object? sender, RoutedEventArgs e) =>
+        AvaloniaWindowManager.ShowWindow(typeof(SongHistoryView));
 
     // ---------- Primary color (the color picker of the General group) ----------
 

@@ -242,6 +242,15 @@ public class DbWrapperService
         public UpvotedSong[] DumpUpvotedSongs() =>
             [.. SongDbContext.UpvotedSongs.Where(x => x.UserId == "" || x.UserId == Config.Data.SyncServerUsername)];
 
+        /// <summary>
+        /// All history entries of this client's account (the account's own and the local-only ones), for
+        /// the song history view. Entries of songs that no longer exist locally are included on purpose -
+        /// they are kept in the database when a song disappears (see <see cref="ApplyIncrementalPull"/>),
+        /// and the view shows them without a song name instead of hiding the votes that happened.
+        /// </summary>
+        public SongHistoryEntry[] DumpSongHistory() =>
+            [.. SongDbContext.SongHistoryEntries.Where(x => x.UserId == "" || x.UserId == Config.Data.SyncServerUsername)];
+
         // Sync
         /// <summary>
         /// Replaces the whole local database with the pulled data, then merges duplicate entries of the

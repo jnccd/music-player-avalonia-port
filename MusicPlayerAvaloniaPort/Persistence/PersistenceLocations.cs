@@ -23,6 +23,7 @@ public static class PersistenceLocations
     public const string ConfigFileName = "config.json";
     public const string ConfigBackupFileName = "config_backup.json";
     public const string ErrorLogFileName = "error.log";
+    public const string ExportLogFileName = "export.log";
     public const string TempDownloadFolderName = "tmpDownloads";
 
     static readonly Lazy<string> lazyDataDirectory = new(ResolveDataDirectory);
@@ -33,6 +34,8 @@ public static class PersistenceLocations
     public static string ConfigPath => Path.Combine(DataDirectory, ConfigFileName);
     public static string ConfigBackupPath => Path.Combine(DataDirectory, ConfigBackupFileName);
     public static string ErrorLogPath => Path.Combine(DataDirectory, ErrorLogFileName);
+    /// <summary>Diagnostics of the last library export (see <see cref="MusicPlayerAvaloniaPort.Helpers.Export.ExportLog"/>).</summary>
+    public static string ExportLogPath => Path.Combine(DataDirectory, ExportLogFileName);
     public static string TempDownloadDirectory => Path.Combine(DataDirectory, TempDownloadFolderName);
 
     static string ResolveDataDirectory()

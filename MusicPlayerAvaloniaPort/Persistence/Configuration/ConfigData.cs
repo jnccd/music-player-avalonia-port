@@ -37,6 +37,21 @@ public class ConfigData
 
     public string? DownloadFolderPath { get; set; }
 
+    // Export settings (see the export library view). The thresholds are stored because exporting a
+    // library for a device is a repeating task: the same selection is exported again whenever the
+    // library grew. A missing (null) value means "not configured yet" - the view then shows the
+    // unfiltered range of the database.
+    /// <summary>Folder the library is exported into (a normal path, or a shell folder of a phone that is
+    /// connected over USB, see <see cref="MusicPlayerAvaloniaPort.Helpers.Export.WindowsShellFolder"/>).</summary>
+    public string? ExportDestinationPath { get; set; }
+    public float? ExportMinScore { get; set; }
+    public int? ExportMinStreak { get; set; }
+    public float? ExportMinVoteRatio { get; set; }
+    public float? ExportMinPlayChancePercent { get; set; }
+    /// <summary>Optional limit for the exported library size in MB (0/null = no limit). The best songs
+    /// that still fit are exported - handy for devices with little storage space.</summary>
+    public double? ExportMaxSizeMb { get; set; }
+
     // Sync settings
     public string? AuthBackendRefreshToken { get; set; }
     public string? SyncServerHost { get; set; }

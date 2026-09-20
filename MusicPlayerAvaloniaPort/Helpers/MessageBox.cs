@@ -169,12 +169,17 @@ public class MessageBox(Action<Exception>? OnError, Window? OriginWindow, Contro
     {
         var tcs = new TaskCompletionSource<bool>();
 
-        var textBlock = new TextBlock
+        // Like the message popup a read-only TextBox, so a long message (the sync/ login errors are dozens
+        // of lines) can be selected and copied.
+        var textBox = new TextBox
         {
             Text = message,
+            IsReadOnly = true,
+            AcceptsReturn = true,
             TextWrapping = Avalonia.Media.TextWrapping.Wrap,
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch,
+            VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center
         };
         var yesButton = new Button
         {
@@ -207,7 +212,7 @@ public class MessageBox(Action<Exception>? OnError, Window? OriginWindow, Contro
                 new RowDefinition { Height = new GridLength(40) },
             }
         };
-        grid.Children.Add(message.Length > 1000 ? new ScrollViewer { Content = textBlock, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch } : textBlock);
+        grid.Children.Add(textBox);
         grid.Children.Add(buttonStack);
         Grid.SetRow(grid.Children[0], 0);
         Grid.SetRow(grid.Children[1], 1);
@@ -262,12 +267,18 @@ public class MessageBox(Action<Exception>? OnError, Window? OriginWindow, Contro
             Width = 120,
             Height = 30
         };
-        var textBlock = new TextBlock
+        // A read-only TextBox instead of a TextBlock: the text of an error popup is exactly what the user
+        // has to hand over (bug report, support), and only a text box can be selected and copied. It scrolls
+        // itself, so it also replaces the ScrollViewer the long messages used to need.
+        var textBox = new TextBox
         {
             Text = message,
+            IsReadOnly = true,
+            AcceptsReturn = true,
             TextWrapping = Avalonia.Media.TextWrapping.Wrap,
-            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+            VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch
         };
         var grid = new Grid
         {
@@ -278,7 +289,7 @@ public class MessageBox(Action<Exception>? OnError, Window? OriginWindow, Contro
                 new RowDefinition { Height = new GridLength(40) },
             }
         };
-        grid.Children.Add(message.Length > 1000 ? new ScrollViewer { Content = textBlock, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch } : textBlock);
+        grid.Children.Add(textBox);
         grid.Children.Add(button);
         Grid.SetRow(grid.Children[0], 0);
         Grid.SetRow(grid.Children[1], 1);

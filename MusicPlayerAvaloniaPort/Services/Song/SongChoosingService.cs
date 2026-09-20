@@ -131,6 +131,35 @@ public class SongChoosingService(DbWrapperService DbWrapper)
         }
     }
 
+    /// <summary>
+    /// The play chance (0..1) of every song of the choosing data structure, keyed by song id. Unlike
+    /// <see cref="GetSongChoosingChance"/> - which scans the choosing list once per call, which is fine
+    /// for the statistics grid because it only asks for the rows it is about to draw - this counts all
+    /// songs in ONE pass over the list. Views that need the chance of every song (the export library
+    /// view's "minimal play chance" threshold) would otherwise do a quadratic scan over a list of ~76k
+    /// entries and freeze for seconds.
+    /// </summary>
+    public Dictionary<Guid, float> GetSongChoosingChances()
+    {
+        var chances = new Dictionary<Guid, float>();
+        lock (SongChoosingList)
+        {
+            if (SongChoosingList.Count == 0)
+                return chances;
+
+            foreach (var song in SongChoosingList)
+                if (song.UpvotedSongId is Guid songId)
+                    chances[songId] = chances.TryGetValue(songId, out float entries) ? entries + 1 : 1;
+
+            // The list holds one entry per chance unit, so a song's share of the list is its chance.
+            float totalEntries = SongChoosingList.Count;
+            foreach (var songId in chances.Keys.ToArray())
+                chances[songId] /= totalEntries;
+        }
+
+        return chances;
+    }
+
     float GetTargetSongChoosingAmount(UpvotedSong curSong, List<AvailableSong> AvailableSongs)
     {
         float amount = 1;

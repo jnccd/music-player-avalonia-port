@@ -1,0 +1,73 @@
+<UserControl
+    x:Class="MusicPlayerAvaloniaPort.Views.History.SongHistoryView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:MusicPlayerAvaloniaPort.ViewModels"
+    x:DataType="vm:SongHistoryViewModel"
+    mc:Ignorable="d">
+    <Grid RowDefinitions="Auto,*">
+        <!-- Toolbar, like the history window of the DxMGP port (Refresh) plus a search box: a history of a
+        well used library has tens of thousands of entries. -->
+        <Grid
+            Grid.Row="0"
+            Margin="12,12,12,10"
+            ColumnDefinitions="Auto,*,Auto,Auto"
+            ColumnSpacing="8">
+            <Button
+                Name="refreshButton"
+                Content="Refresh"
+                Click="RefreshButton_Click" />
+            <TextBox
+                Name="searchTextBox"
+                Grid.Column="1"
+                PlaceholderText="Search song..."
+                KeyDown="SearchTextBox_KeyDown"
+                VerticalContentAlignment="Center" />
+            <Button
+                Name="searchButton"
+                Grid.Column="2"
+                Content="Search"
+                Click="SearchButton_Click" />
+            <TextBlock
+                Name="entryCountText"
+                Grid.Column="3"
+                VerticalAlignment="Center"
+                Foreground="#80FFFFFF" />
+        </Grid>
+
+        <!-- Like the statistics grid this has to sit in a star-sized row: only a bounded height keeps the
+        row virtualization working. -->
+        <DataGrid
+            Name="DataGrid"
+            Grid.Row="1"
+            ItemsSource="{Binding Entries}"
+            IsReadOnly="True"
+            DoubleTapped="DataGrid_DoubleTapped">
+            <DataGrid.Columns>
+                <DataGridTextColumn
+                    Width="170"
+                    Binding="{Binding DateLocal}"
+                    Header="Date" />
+                <DataGridTextColumn
+                    Width="*"
+                    Binding="{Binding NameText}"
+                    Header="Song" />
+                <DataGridTextColumn
+                    Width="110"
+                    Binding="{Binding ScoreChangeText}"
+                    SortMemberPath="ScoreChange"
+                    Header="Score Change" />
+            </DataGrid.Columns>
+            <DataGrid.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Click="Play_Click" Header="Play" />
+                    <MenuItem Click="OpenInExplorer_Click" Header="Open in Explorer" />
+                    <Separator />
+                    <MenuItem Click="CopyTitle_Click" Header="Copy Title to Clipboard" />
+                </ContextMenu>
+            </DataGrid.ContextMenu>
+        </DataGrid>
+    </Grid>
+</UserControl>

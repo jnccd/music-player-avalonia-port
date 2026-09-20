@@ -8,6 +8,8 @@ using Avalonia.Media;
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.ViewModels;
+using MusicPlayerAvaloniaPort.Views.ExportLibrary;
+using MusicPlayerAvaloniaPort.Views.History;
 using MusicPlayerAvaloniaPort.Views.Main;
 using MusicPlayerAvaloniaPort.Views.Options;
 using MusicPlayerAvaloniaPort.Views.Statistics;
@@ -64,6 +66,32 @@ public static class AvaloniaWindowManager
         Title = "MusicPlayer Statistics",
         Icon = new WindowIcon("./Assets/icon.ico")
     };
+    static Func<Window> ExportLibraryWindowCreator = () => new Window
+    {
+        Content = new ExportLibraryView
+        {
+            DataContext = new ExportLibraryViewModel()
+        },
+        Title = "MusicPlayer Export Library",
+        Icon = new WindowIcon("./Assets/icon.ico"),
+        Width = 1050,
+        Height = 700,
+        MinWidth = 720,
+        MinHeight = 420
+    };
+    static Func<Window> SongHistoryWindowCreator = () => new Window
+    {
+        Content = new SongHistoryView
+        {
+            DataContext = new SongHistoryViewModel()
+        },
+        Title = "MusicPlayer Song History",
+        Icon = new WindowIcon("./Assets/icon.ico"),
+        Width = 900,
+        Height = 640,
+        MinWidth = 520,
+        MinHeight = 320
+    };
 
     static readonly Dictionary<Type, (Window? window, Func<Window> createWindow)> Windows = new()
     {
@@ -78,6 +106,14 @@ public static class AvaloniaWindowManager
         {
             typeof(StatisticsView),
             (null, StatisticsWindowCreator)
+        },
+        {
+            typeof(ExportLibraryView),
+            (null, ExportLibraryWindowCreator)
+        },
+        {
+            typeof(SongHistoryView),
+            (null, SongHistoryWindowCreator)
         }
     };
 

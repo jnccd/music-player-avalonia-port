@@ -96,5 +96,14 @@
                 </StackPanel>
             </StackPanel>
         </GroupBox>
+        <GroupBox Header="Windows" Margin="3">
+            <StackPanel Spacing="8">
+                <TextBlock Foreground="#80FFFFFF" TextWrapping="Wrap" MaxWidth="260"
+                           Text="The extra views of the player. Each one opens in its own window, so it can stay open next to the player." />
+                <Button Name="statisticsWindowButton" Click="StatisticsWindowButton_Click">Statistics</Button>
+                <Button Name="exportLibraryWindowButton" Click="ExportLibraryWindowButton_Click">Export Library</Button>
+                <Button Name="songHistoryWindowButton" Click="SongHistoryWindowButton_Click">Song History</Button>
+            </StackPanel>
+        </GroupBox>
     </WrapPanel>
 </UserControl>

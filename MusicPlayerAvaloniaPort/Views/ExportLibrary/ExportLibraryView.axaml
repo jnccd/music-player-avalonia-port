@@ -1,0 +1,192 @@
+<UserControl
+    x:Class="MusicPlayerAvaloniaPort.Views.ExportLibrary.ExportLibraryView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:MusicPlayerAvaloniaPort.ViewModels"
+    x:DataType="vm:ExportLibraryViewModel"
+    mc:Ignorable="d">
+    <Grid
+        Margin="12"
+        RowDefinitions="Auto,Auto,*,Auto"
+        RowSpacing="10">
+
+        <!-- Destination -->
+        <Grid
+            Grid.Row="0"
+            ColumnDefinitions="Auto,*,Auto,Auto"
+            ColumnSpacing="8"
+            RowDefinitions="Auto,Auto"
+            RowSpacing="4">
+            <Label
+                Grid.Row="0"
+                Grid.Column="0"
+                Padding="0"
+                VerticalAlignment="Center"
+                Content="Destination"
+                Target="destinationTextBox" />
+            <TextBox
+                Name="destinationTextBox"
+                Grid.Row="0"
+                Grid.Column="1"
+                VerticalContentAlignment="Center"
+                PlaceholderText="Folder the selected songs are copied into" />            <Button
+                Name="browseDestinationButton"
+                Grid.Row="0"
+                Grid.Column="2"
+                Click="BrowseDestinationButton_Click"
+                Content="Browse..." />
+            <Button
+                Name="browsePhoneButton"
+                Grid.Row="0"
+                Grid.Column="3"
+                Click="BrowsePhoneButton_Click"
+                Content="Browse phone..." />
+            <TextBlock
+                Name="destinationStateText"
+                Grid.Row="1"
+                Grid.Column="1"
+                Grid.ColumnSpan="3"
+                Foreground="#80FFFFFF"
+                TextWrapping="Wrap" />
+        </Grid>
+
+        <!-- Thresholds: which songs are "the best ones" (the DxMGP export chooser's sliders) plus the
+        size limit of this port, since the storage space of the device is the actual constraint. -->
+        <Border
+            Grid.Row="1"
+            Padding="10"
+            BorderBrush="#20FFFFFF"
+            BorderThickness="1"
+            CornerRadius="4">
+            <WrapPanel Orientation="Horizontal">
+                <StackPanel Width="200" Margin="0,0,14,0">
+                    <TextBlock Name="minScoreLabel" Text="Minimal Score" />
+                    <Slider Name="minScoreSlider" />
+                </StackPanel>
+                <StackPanel Width="200" Margin="0,0,14,0">
+                    <TextBlock Name="minStreakLabel" Text="Minimal Trend" />
+                    <Slider Name="minStreakSlider" />
+                </StackPanel>
+                <StackPanel Width="200" Margin="0,0,14,0">
+                    <TextBlock Name="minRatioLabel" Text="Minimal Vote Ratio" />
+                    <Slider Name="minRatioSlider" />
+                </StackPanel>
+                <StackPanel Width="200" Margin="0,0,14,0">
+                    <TextBlock Name="minChanceLabel" Text="Minimal Play Chance" />
+                    <Slider Name="minChanceSlider" />
+                </StackPanel>
+                <StackPanel Width="150">
+                    <TextBlock Text="Max total size (MB)" />
+                    <NumericUpDown
+                        Name="maxSizeNumericUpDown"
+                        Minimum="0"
+                        Increment="500"
+                        FormatString="0" />
+                    <TextBlock Foreground="#80FFFFFF" Text="0 = no limit" />
+                </StackPanel>
+            </WrapPanel>
+        </Border>
+
+        <!-- The songs that will be exported, best first. Like the statistics grid it has to sit in a
+        star-sized row: only a bounded height keeps the row virtualization working. -->
+        <DataGrid
+            Name="DataGrid"
+            Grid.Row="2"
+            ItemsSource="{Binding SelectedSongs}"
+            IsReadOnly="True"
+            VerticalScrollBarVisibility="Visible">
+            <DataGrid.Columns>
+                <DataGridTextColumn
+                    Width="*"
+                    Binding="{Binding Name}"
+                    Header="Name" />
+                <DataGridTextColumn
+                    Width="80"
+                    Binding="{Binding ScoreText}"
+                    SortMemberPath="Score"
+                    Header="Score" />
+                <DataGridTextColumn
+                    Width="75"
+                    Binding="{Binding Streak}"
+                    Header="Trend" />
+                <DataGridTextColumn
+                    Width="95"
+                    Binding="{Binding VoteRatioText}"
+                    SortMemberPath="VoteRatio"
+                    Header="Vote Ratio" />
+                <DataGridTextColumn
+                    Width="115"
+                    Binding="{Binding PlayChanceText}"
+                    SortMemberPath="PlayChancePercent"
+                    Header="Play Chance %" />
+                <DataGridTextColumn
+                    Width="90"
+                    Binding="{Binding SizeText}"
+                    SortMemberPath="SizeBytes"
+                    Header="Size" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Result / actions -->
+        <Grid
+            Grid.Row="3"
+            ColumnDefinitions="*,Auto,Auto,Auto,Auto"
+            ColumnSpacing="8"
+            RowDefinitions="Auto,Auto,Auto"
+            RowSpacing="4">
+            <TextBlock
+                Name="selectionSummaryText"
+                Grid.Row="0"
+                Grid.Column="0"
+                VerticalAlignment="Center"
+                TextWrapping="Wrap" />
+            <Button
+                Name="refreshButton"
+                Grid.Row="0"
+                Grid.Column="1"
+                Click="RefreshButton_Click"
+                Content="Refresh" />
+            <Button
+                Name="diagnosticsButton"
+                Grid.Row="0"
+                Grid.Column="2"
+                Click="DiagnosticsButton_Click"
+                Content="Diagnostics"
+                ToolTip.Tip="Shows the log of the last export (what the shell was asked to do and what it reported)" />
+            <Button
+                Name="cancelExportButton"
+                Grid.Row="0"
+                Grid.Column="3"
+                IsVisible="False"
+                Click="CancelExportButton_Click"
+                Content="Cancel" />
+            <Button
+                Name="exportButton"
+                Grid.Row="0"
+                Grid.Column="4"
+                Click="ExportButton_Click"
+                Content="Export" />
+            <ProgressBar
+                Name="exportProgressBar"
+                Grid.Row="1"
+                Grid.Column="0"
+                Grid.ColumnSpan="5"
+                Height="16"
+                IsVisible="False" />
+            <TextBox
+                Name="exportStateText"
+                Grid.Row="2"
+                Grid.Column="0"
+                Grid.ColumnSpan="5"
+                MaxHeight="120"
+                AcceptsReturn="True"
+                Background="Transparent"
+                BorderThickness="0"
+                Foreground="#B0FFFFFF"
+                IsReadOnly="True"
+                TextWrapping="Wrap" />
+        </Grid>
+    </Grid>
+</UserControl>

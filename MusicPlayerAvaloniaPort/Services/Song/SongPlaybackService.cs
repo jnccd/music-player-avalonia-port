@@ -311,6 +311,16 @@ public class SongPlaybackService
 
         return foundSong;
     }
+
+    /// <summary>
+    /// Snapshot of the song files the last library scan found. Views that need the whole list (the export
+    /// library view) use this instead of asking for one id at a time - <see cref="FindAvailableSong(Guid)"/>
+    /// scans the list, so resolving a whole library that way costs n² comparisons. Songs the scan could not
+    /// match to a database row carry no <see cref="AvailableSong.UpvotedSongId"/>: they are not registered
+    /// yet and have no votes/scores, so they cannot be exported.
+    /// </summary>
+    public IReadOnlyList<AvailableSong> DumpAvailableSongs() => [.. AvailableSongs];
+
     public int AvailableSongsCount => AvailableSongs.Count;
 
     /// <summary>
