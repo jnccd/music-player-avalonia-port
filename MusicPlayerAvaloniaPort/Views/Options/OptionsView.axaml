@@ -13,7 +13,9 @@
         <conv:AddMultiplyConverter x:Key="AddMultiplyConverter" />
         <conv:EitherOrConverter x:Key="EitherOrConverter" />
     </UserControl.Resources>
-    <WrapPanel Margin="5">
+    <!-- SpaceFillingPanel instead of a WrapPanel: the groups keep the size their content needs and are packed
+         into columns (see the panel), so the window is no taller than its tallest group and much narrower. -->
+    <options:SpaceFillingPanel Margin="5">
         <GroupBox Header="General" Margin="3">
             <StackPanel Spacing="8">
                 <CheckBox Content="Low Power Mode" IsChecked="{Binding LowPowerMode, Mode=TwoWay}" />
@@ -122,5 +124,5 @@
                 <Button Name="songHistoryWindowButton" Click="SongHistoryWindowButton_Click">Song History</Button>
             </StackPanel>
         </GroupBox>
-    </WrapPanel>
+    </options:SpaceFillingPanel>
 </UserControl>
