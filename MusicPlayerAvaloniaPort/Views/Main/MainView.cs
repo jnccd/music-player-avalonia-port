@@ -32,6 +32,7 @@ public partial class MainView : UserControl
     readonly SongVotingService songVotingService = ServiceContainer.GetService<SongVotingService>();
     readonly SongVolumeService songVolumeService = ServiceContainer.GetService<SongVolumeService>();
     readonly AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
+    readonly SystemAudioCaptureService systemAudioCaptureService = ServiceContainer.GetService<SystemAudioCaptureService>();
     readonly MprisService? mprisService = ServiceContainer.TryGetService<MprisService>();
     /// <summary>
     /// Resolved by the background song-setup thread (see <see cref="SetupUi"/>) instead of at view
@@ -114,6 +115,11 @@ public partial class MainView : UserControl
             // constructor. This replaces the "dotnet ef database update" step of start_desktop_app.sh.
             ServiceContainer.GetService<DbWrapperService>().EnsureDatabaseUpToDate();
 
+            // Resume the system audio capture if the user left the option enabled (see the options view):
+            // the diagram then visualizes the OS output instead of the song. Independent of the sync, so it
+            // runs before the (potentially slow) library setup below.
+            systemAudioCaptureService.ApplyConfiguredSetting();
+
             // Resolve the sync service on this background thread (its constructor does a network init):
             // the progress bar above polls its SyncProgress while the StartupSync pull below runs.
             songSyncService = ServiceContainer.GetService<SongSyncService>();
@@ -163,6 +169,13 @@ public partial class MainView : UserControl
         audioLibWrapper.PlaybackStateChanged += (e, s) =>
         {
             RefreshCustomControls();
+        };
+        // Toggling the system audio visualization (options view) changes what the diagram shows and
+        // whether it animates at all - it keeps redrawing while the OS audio is captured, even with no
+        // song playing - so the custom controls have to be repainted on every capture state change.
+        systemAudioCaptureService.StateChanged += () =>
+        {
+            Dispatcher.UIThread.Post(RefreshCustomControls);
         };
         songVotingService.SongGotUpvoted += (s, e) =>
         {

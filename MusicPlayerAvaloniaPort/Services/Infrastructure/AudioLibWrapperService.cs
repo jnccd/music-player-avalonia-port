@@ -29,6 +29,14 @@ public enum SampleReadingStrategy
 public class AudioLibWrapperService
 {
     private static readonly AudioEngine Engine = new MiniAudioEngine();
+
+    /// <summary>
+    /// The engine every device of this service lives on, exposed so other audio services (the system
+    /// audio capture, see <see cref="SystemAudioCaptureService"/>) create their devices on the same
+    /// engine/context as playback instead of spinning up a second audio context.
+    /// </summary>
+    public AudioEngine AudioEngine => Engine;
+
     DeviceInfo playbackDeviceInfo;
     AudioPlaybackDevice playbackDevice;
     SoundPlayer? soundPlayer = null;
@@ -399,6 +407,14 @@ public class AudioLibWrapperService
     int GetCurrentFftAnalysisSize() => Config.Data.LowPowerMode ? FFT_BUFFER_LOW_POWER_SIZE : FFT_BUFFER_32BIT_FLOAT_SIZE;
 
     /// <summary>
+    /// Number of interleaved samples the frequency analysis currently runs on (the same value
+    /// <see cref="GetFftSpectrumData"/> slices its input down to). Callers that analyse their own
+    /// samples - the system audio capture, see <see cref="SystemAudioCaptureService"/> - ask for this
+    /// many samples so the analysed window is always the newest audio, regardless of the low power mode.
+    /// </summary>
+    public int CurrentFftAnalysisSize => GetCurrentFftAnalysisSize();
+
+    /// <summary>
     /// Returns the <see cref="SpectrumAnalyzer"/> used by the FFT visualization. It is (re)created when
     /// the song's audio format changed (new song) or when the analysis resolution changed (low power
     /// mode toggled), so the analyzer always matches the current audio format and FFT size.
@@ -415,46 +431,53 @@ public class AudioLibWrapperService
     }
 
     /// <summary>
-    /// Runs the spectrum analysis for the current song and returns the resulting spectrum bins.
-    /// The analysis resolution depends on the current mode (see <see cref="GetCurrentFftAnalysisSize"/>):
-    /// in low power mode a smaller, centred slice of the read window is analyzed, so the frequency
-    /// resolution drops while the read window itself (and with it the time span the samples
-    /// visualization shows around the playback position) stays unchanged.
+    /// Runs the spectrum analysis for the current song and returns the resulting spectrum bins (see
+    /// <see cref="GetFftSpectrumData"/>).
+    /// </summary>
+    public async Task<float[]> GetCurrentFftSpectrumData(float[]? factorArray = null)
+    {
+        ReadOnlyMemory<float> sampleBufferMemory = await GetCurrentlyPlayingSampleData();
+        return GetFftSpectrumData(sampleBufferMemory.Span, factorArray);
+    }
+
+    /// <summary>
+    /// Runs the spectrum analysis over the given interleaved sample window and returns the resulting
+    /// spectrum bins. The analysis resolution depends on the current mode (see
+    /// <see cref="GetCurrentFftAnalysisSize"/>): when the window is longer than the analysis size (the
+    /// song's read window always is), a centred slice of it is analyzed, so in low power mode the
+    /// frequency resolution drops while the read window itself - and with it the time span the samples
+    /// visualization shows around the playback position - stays unchanged. A caller that hands in exactly
+    /// <see cref="CurrentFftAnalysisSize"/> samples (the system audio capture) therefore analyses all of
+    /// them.
     /// <para>
     /// The returned array is the analyzer's internal, reused spectrum buffer: the next analysis
     /// overwrites it. Callers must consume it synchronously and must not retain or mutate it in a way
     /// that is expected to survive the next analysis call.
     /// </para>
     /// </summary>
-    public async Task<float[]> GetCurrentFftSpectrumData(float[]? factorArray = null)
+    public float[] GetFftSpectrumData(ReadOnlySpan<float> sampleWindow, float[]? factorArray = null)
     {
-        ReadOnlyMemory<float> sampleBufferMemory = await GetCurrentlyPlayingSampleData();
-
-        // Low power mode lowers the FFT analysis resolution: the analyzer runs at a smaller FFT size
-        // on a centred slice of the read window. The read window itself (GetCurrentlyPlayingSampleData)
-        // keeps its full size, so the time span shown around the currently playing sample stays exactly
-        // the same - only the frequency resolution of the analysis shrinks.
         SpectrumAnalyzer spectrumAnalyzer = EnsureSpectrumAnalyzer();
         int fftSize = spectrumAnalyzerFftSize;
         int channels = playerDataProvider?.FormatInfo?.ChannelCount ?? 2;
-        int windowStart = Math.Max(0, (sampleBufferMemory.Length - fftSize) / 2);
-        int windowLength = Math.Min(fftSize, sampleBufferMemory.Length - windowStart);
+        int windowStart = Math.Max(0, (sampleWindow.Length - fftSize) / 2);
+        int windowLength = Math.Max(0, Math.Min(fftSize, sampleWindow.Length - windowStart));
 
         if (factorArray == null)
         {
-            spectrumAnalyzer.Process(sampleBufferMemory.Span.Slice(windowStart, windowLength), channels);
+            spectrumAnalyzer.Process(sampleWindow.Slice(windowStart, windowLength), channels);
         }
         else
         {
             float[] workingArray = arrayPool.Rent(windowLength);
             Span<float> workingSpan = workingArray.AsSpan(0, windowLength);
-            sampleBufferMemory.Span.Slice(windowStart, windowLength).CopyTo(workingSpan);
+            sampleWindow.Slice(windowStart, windowLength).CopyTo(workingSpan);
 
             for (int i = 0; i < windowLength; i++)
             {
                 // A factor array sized like the read window is aligned to the same centred slice;
                 // a factor array sized like the analysis window itself applies index by index.
-                workingSpan[i] *= factorArray.Length == sampleBufferMemory.Length ? factorArray[windowStart + i] : factorArray[i];
+                workingSpan[i] *= factorArray.Length == sampleWindow.Length ? factorArray[windowStart + i] : factorArray[i];
             }
 
             spectrumAnalyzer.Process(workingSpan, channels);

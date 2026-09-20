@@ -26,6 +26,7 @@ public partial class OptionsView : UserControl
     readonly SongSyncService syncService = ServiceContainer.GetService<SongSyncService>();
     readonly SongDownloadRequestProcessorService songDownloadRequestProcessorService = ServiceContainer.GetService<SongDownloadRequestProcessorService>();
     readonly SongPlaybackService songPlaybackService = ServiceContainer.GetService<SongPlaybackService>();
+    readonly SystemAudioCaptureService systemAudioCaptureService = ServiceContainer.GetService<SystemAudioCaptureService>();
 
     // Primary color picker (see the General group); resolved when the view is loaded. Deliberately not
     // named like the controls in the axaml: the Avalonia name generator already declares fields for those,
@@ -38,6 +39,17 @@ public partial class OptionsView : UserControl
     /// handler does not mistake the programmatic text for something the user typed.
     /// </summary>
     bool updatingPrimaryColorUi;
+
+    // System audio visualization toggle (see the General group); resolved when the view is loaded, for the
+    // same reason as the color controls above.
+    CheckBox? systemAudioCaptureToggle;
+    TextBlock? systemAudioCaptureStateText;
+    /// <summary>
+    /// True while <see cref="UpdateSystemAudioCaptureUi"/> writes the toggle, so its IsCheckedChanged
+    /// handler does not mistake the programmatic state for a user click.
+    /// </summary>
+    bool updatingSystemAudioCaptureUi;
+    bool subscribedToSystemAudioCaptureState;
 
     public OptionsView()
     {
@@ -80,6 +92,7 @@ public partial class OptionsView : UserControl
             downloadShellLogLabel?.Text = songDownloadRequestProcessorService.ShellLog.Combine());
 
         InitPrimaryColorPicker();
+        InitSystemAudioCapture();
     }
 
     // ---------- Extra windows (the "Windows" group) ----------
@@ -156,6 +169,55 @@ public partial class OptionsView : UserControl
         ThemeColors.ResetToDefault();
         colorPickerControl?.SetColor(ThemeColors.PrimaryColor);
         UpdatePrimaryColorUi(ThemeColors.PrimaryColor);
+    }
+
+    // ---------- System audio visualization (the toggle of the General group) ----------
+
+    void InitSystemAudioCapture()
+    {
+        systemAudioCaptureToggle = this.GetNestedControl<CheckBox>("systemAudioCaptureCheckBox");
+        systemAudioCaptureStateText = this.GetNestedControl<TextBlock>("systemAudioCaptureStateLabel");
+
+        UpdateSystemAudioCaptureUi();
+
+        // The service can change its state without this view (the persisted option is applied at startup,
+        // and a start can fail), so the toggle and the state label mirror it whenever that happens. The
+        // window is cached and can be shown again, hence the one-time guard.
+        if (!subscribedToSystemAudioCaptureState)
+        {
+            subscribedToSystemAudioCaptureState = true;
+            systemAudioCaptureService.StateChanged += () => Dispatcher.UIThread.Post(UpdateSystemAudioCaptureUi);
+        }
+    }
+
+    void UpdateSystemAudioCaptureUi()
+    {
+        if (systemAudioCaptureToggle == null)
+            return;
+
+        updatingSystemAudioCaptureUi = true;
+        try
+        {
+            systemAudioCaptureToggle.IsChecked = systemAudioCaptureService.IsEnabled;
+            if (systemAudioCaptureStateText != null)
+                systemAudioCaptureStateText.Text = systemAudioCaptureService.State;
+        }
+        finally
+        {
+            updatingSystemAudioCaptureUi = false;
+        }
+    }
+
+    private void SystemAudioCaptureCheckBox_IsCheckedChanged(object? sender, RoutedEventArgs e)
+    {
+        if (updatingSystemAudioCaptureUi)
+            return;
+
+        // Starting the capture can fail (unsupported platform, no loopback/monitor device, device in use):
+        // the service then keeps the option off, and mirroring the state back below unchecks the box again
+        // while the state label explains what happened.
+        systemAudioCaptureService.SetEnabled(systemAudioCaptureToggle?.IsChecked == true);
+        UpdateSystemAudioCaptureUi();
     }
 
     private void DownloadFolderSaveButton_Click(object? sender, RoutedEventArgs e)

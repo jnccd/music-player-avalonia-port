@@ -18,6 +18,13 @@ public class ConfigData
     /// rate and the FFT analysis runs at a lower resolution. Playback is not affected.
     /// </summary>
     public bool LowPowerMode { get; set; }
+    /// <summary>
+    /// When enabled, the FFT diagram visualizes what the whole operating system outputs (every
+    /// application, not just this player) instead of the currently playing song file. The capture
+    /// device is managed by <see cref="Services.Infrastructure.SystemAudioCaptureService"/>, which also
+    /// clears the flag again when the platform cannot provide a loopback/monitor source.
+    /// </summary>
+    public bool CaptureSystemAudio { get; set; }
 
     public string? SongLibraryPath { get; set; }
     /// <summary>

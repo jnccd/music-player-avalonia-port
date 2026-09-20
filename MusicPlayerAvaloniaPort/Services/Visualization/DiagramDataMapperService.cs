@@ -18,14 +18,16 @@ public class DiagramDataMapperService
     readonly SongPlaybackService songPlaybackService;
     readonly DbWrapperService dbWrapperService;
     readonly SongVolumeService songVolumeService;
+    readonly SystemAudioCaptureService systemAudioCaptureService;
 
     public DiagramDataMapperService(AudioLibWrapperService audioLibWrapperService, SongPlaybackService songPlaybackService,
-        DbWrapperService dbWrapperService, SongVolumeService songVolumeService)
+        DbWrapperService dbWrapperService, SongVolumeService songVolumeService, SystemAudioCaptureService systemAudioCaptureService)
     {
         this.audioLibWrapperService = audioLibWrapperService;
         this.songPlaybackService = songPlaybackService;
         this.dbWrapperService = dbWrapperService;
         this.songVolumeService = songVolumeService;
+        this.systemAudioCaptureService = systemAudioCaptureService;
 
         // A song that was first played without a stored volume (GlobalArray read) gets its volume
         // measured and stored while it is still playing (see SongVolumeService). The cached divisor
@@ -65,6 +67,12 @@ public class DiagramDataMapperService
 
     private float[]? smoothedData;
     private float[]? mappedData;
+
+    // Analysis window of the system audio capture and the window the samples visualization draws while it
+    // is active. Both are only valid until the next call of the method that filled them (same contract as
+    // AudioLibWrapperService.GetCurrentlyPlayingSampleData), and they are reused so a frame allocates nothing.
+    float[]? systemAudioAnalysisWindow;
+    float[]? systemAudioSamplesWindow;
 
     // Reusable per-frame caches: the frequency bins of a fixed-length FFT and the fixed (bin count,
     // column count) pairing only change when the FFT resolution or the control width changes, so the
@@ -120,10 +128,25 @@ public class DiagramDataMapperService
             mappedData = new float[targetArraySize];
         }
 
-        var currentSong = songPlaybackService.CurrentlyPlaying;
-        float volumeDivisor = GetVolumeDivisor(currentSong);
-
-        var fftData = await audioLibWrapperService.GetCurrentFftSpectrumData();
+        // While the system audio capture is active (see the options view) the diagram shows what the
+        // operating system outputs - every application, not the song. The song's stored volume is then
+        // irrelevant; the capture brings its own divisor, which is the smoothed RMS of the stream and
+        // therefore the exact counterpart of the per-song RMS the other branch divides by (see
+        // SystemAudioCaptureService.VolumeDivisor).
+        bool capturingSystemAudio = systemAudioCaptureService.IsCapturing;
+        float[] fftData;
+        float volumeDivisor;
+        if (capturingSystemAudio)
+        {
+            fftData = audioLibWrapperService.GetFftSpectrumData(ReadSystemAudioAnalysisWindow());
+            // Read after the window: reading it also updates the loudness estimate.
+            volumeDivisor = systemAudioCaptureService.VolumeDivisor;
+        }
+        else
+        {
+            volumeDivisor = GetVolumeDivisor(songPlaybackService.CurrentlyPlaying);
+            fftData = await audioLibWrapperService.GetCurrentFftSpectrumData();
+        }
         int binCount = fftData.Length;
         if (binCount == 0)
             return mappedData;
@@ -147,6 +170,45 @@ public class DiagramDataMapperService
         }
 
         return mappedData;
+    }
+
+    /// <summary>
+    /// Fills (and returns) the analysis window of the system audio capture with the newest captured
+    /// samples. The window is exactly <see cref="AudioLibWrapperService.CurrentFftAnalysisSize"/> samples
+    /// long, so the whole window is analyzed - "centred" makes no sense for a live stream, the interesting
+    /// audio is the audio that is playing right now. Only valid until the next call.
+    /// </summary>
+    ReadOnlySpan<float> ReadSystemAudioAnalysisWindow()
+    {
+        int analysisSize = audioLibWrapperService.CurrentFftAnalysisSize;
+        if (systemAudioAnalysisWindow == null || systemAudioAnalysisWindow.Length != analysisSize)
+            systemAudioAnalysisWindow = new float[analysisSize];
+
+        // Nothing captured yet (just enabled, or silence since the device has no data) reads as a full
+        // window of silence, so the first frames draw an empty diagram instead of stale samples.
+        systemAudioCaptureService.TryReadNewestSamples(systemAudioAnalysisWindow);
+        return systemAudioAnalysisWindow;
+    }
+
+    /// <summary>
+    /// Returns the sample window the "Samples" visualization mode draws: the newest captured system audio
+    /// while the system audio capture is active, otherwise the song's window around the playback position
+    /// (see <see cref="AudioLibWrapperService.GetCurrentlyPlayingSampleData"/>). Like there, the returned
+    /// memory is only valid until the next call.
+    /// </summary>
+    public async Task<ReadOnlyMemory<float>> GetCurrentDiagramSampleData()
+    {
+        if (systemAudioCaptureService.IsCapturing)
+        {
+            int windowSize = AudioLibWrapperService.FFT_BUFFER_32BIT_FLOAT_SIZE;
+            if (systemAudioSamplesWindow == null || systemAudioSamplesWindow.Length != windowSize)
+                systemAudioSamplesWindow = new float[windowSize];
+
+            systemAudioCaptureService.TryReadNewestSamples(systemAudioSamplesWindow);
+            return systemAudioSamplesWindow;
+        }
+
+        return await audioLibWrapperService.GetCurrentlyPlayingSampleData();
     }
 
     /// <summary>

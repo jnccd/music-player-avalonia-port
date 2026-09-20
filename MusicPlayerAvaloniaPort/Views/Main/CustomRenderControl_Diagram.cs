@@ -20,6 +20,7 @@ public class CustomRenderControl_Diagram : Control
 {
     AudioLibWrapperService audioLibWrapper = ServiceContainer.GetService<AudioLibWrapperService>();
     DiagramDataMapperService diagramDataMapper = ServiceContainer.GetService<DiagramDataMapperService>();
+    SystemAudioCaptureService systemAudioCapture = ServiceContainer.GetService<SystemAudioCaptureService>();
 
     VisMode currentVisMode = VisMode.SmoothFFT;
     SolidColorBrush? PrimaryColorBrush;
@@ -73,7 +74,7 @@ public class CustomRenderControl_Diagram : Control
     {
         frameScheduler = new LowPowerFrameScheduler(
             () => Dispatcher.UIThread.Post(InvalidateVisual, DispatcherPriority.Background),
-            () => audioLibWrapper.PlayState == SoundFlow.Enums.PlaybackState.Playing,
+            () => IsAnimationRunning,
             Dispatcher.UIThread);
 
         this.Loaded += (s, e) =>
@@ -142,7 +143,7 @@ public class CustomRenderControl_Diagram : Control
         Program.WrapInTry(() =>
         {
             base.Render(context);
-            if (audioLibWrapper.PlayState == SoundFlow.Enums.PlaybackState.Playing)
+            if (IsAnimationRunning)
                 frameScheduler.ScheduleNextFrame();
 
             RequestModelUpdate();
@@ -152,10 +153,19 @@ public class CustomRenderControl_Diagram : Control
     }
 
     /// <summary>
+    /// Whether the diagram has to keep redrawing itself: while a song plays, and also while the system
+    /// audio capture is active - the OS output can be visualized with the player paused (or without any
+    /// song loaded at all), which is the whole point of that option.
+    /// </summary>
+    bool IsAnimationRunning => audioLibWrapper.PlayState == SoundFlow.Enums.PlaybackState.Playing
+        || systemAudioCapture.IsCapturing;
+
+    /// <summary>
     /// Starts a background computation of the per-column model for the current visualization mode
-    /// (single-flight). While playback is running every rendered frame requests a fresh model, so the
-    /// model cadence follows the (low-power-aware) render cadence; when paused a model is only
-    /// requested after something actually changed (mode or size), so the UI thread stays idle.
+    /// (single-flight). While the diagram animates (playback or system audio capture) every rendered
+    /// frame requests a fresh model, so the model cadence follows the (low-power-aware) render cadence;
+    /// when paused a model is only requested after something actually changed (mode or size), so the UI
+    /// thread stays idle.
     /// </summary>
     void RequestModelUpdate()
     {
@@ -170,8 +180,8 @@ public class CustomRenderControl_Diagram : Control
         }
 
         VisMode mode = currentVisMode;
-        bool playing = audioLibWrapper.PlayState == SoundFlow.Enums.PlaybackState.Playing;
-        if (!playing && publishedModel != null && publishedModelMode == mode && publishedModelWidth == width)
+        bool animating = IsAnimationRunning;
+        if (!animating && publishedModel != null && publishedModelMode == mode && publishedModelWidth == width)
         {
             Interlocked.Exchange(ref modelComputeInFlight, 0);
             return;
@@ -209,7 +219,7 @@ public class CustomRenderControl_Diagram : Control
                     }
                     case VisMode.Samples:
                     {
-                        ReadOnlyMemory<float> sampleData = await audioLibWrapper.GetCurrentlyPlayingSampleData();
+                        ReadOnlyMemory<float> sampleData = await diagramDataMapper.GetCurrentDiagramSampleData();
                         var sampleDataSpan = sampleData.Span;
                         if (sampleDataSpan.Length == 0)
                             return;

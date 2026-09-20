@@ -31,6 +31,12 @@
                 <options:ColorPickerControl x:Name="primaryColorPicker" Width="260" />
                 <TextBlock Foreground="#80FFFFFF" TextWrapping="Wrap" MaxWidth="260"
                            Text="The accent color of the progress bar, the volume bars, the visualizations and the other highlights. The color is applied immediately." />
+                <CheckBox x:Name="systemAudioCaptureCheckBox" Content="Visualize System Audio"
+                          IsCheckedChanged="SystemAudioCaptureCheckBox_IsCheckedChanged" />
+                <TextBlock Foreground="#80FFFFFF" TextWrapping="Wrap" MaxWidth="260"
+                           Text="Draws what the whole operating system outputs (every application, not just this player) in the FFT diagram instead of the currently playing song. Windows captures the default output device directly; on Linux a monitor source of the default sink is used, on macOS a loopback driver such as BlackHole has to be installed." />
+                <TextBlock Name="systemAudioCaptureStateLabel" Foreground="#80FFFFFF" TextWrapping="Wrap"
+                           MaxWidth="260" Text="" />
             </StackPanel>
         </GroupBox>
         <GroupBox Header="Sync Server Connection" Margin="3">
