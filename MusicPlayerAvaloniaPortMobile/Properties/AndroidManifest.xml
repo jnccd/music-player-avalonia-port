@@ -14,6 +14,16 @@
   <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
 
+  <!--
+    The ongoing media notification (MobilePlaybackNotificationService). It is a foreground service, which is
+    both what makes the notification persistent and what keeps playback alive when the app is left.
+    POST_NOTIFICATIONS is requested at runtime on API 33+ - without it the service still runs, but the user
+    sees no notification.
+  -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
   <application android:label="Music Player"
                android:icon="@mipmap/ic_launcher"
                android:usesCleartextTraffic="true" />

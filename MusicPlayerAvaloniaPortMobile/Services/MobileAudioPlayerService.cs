@@ -186,6 +186,13 @@ public class MobileAudioPlayerService : IAudioPlaybackService
             if (measureWholeSongForVolumeNormalization)
                 StartMeasurement(songPath);
 
+            // A song is playing, so the ongoing media notification belongs on screen - and with it the
+            // foreground service that keeps playback alive when the app is left. Android 12+ forbids starting
+            // a foreground service from the background, so this is best effort and logs instead of throwing;
+            // the first song always starts from the UI, which is a legal moment, and later song changes only
+            // update a service that is already running.
+            MobilePlaybackNotificationService.Start(MobilePlatform.ApplicationContext);
+
             Task.Run(() => PlaybackStateChanged?.Invoke(this, PlayState ?? PlaybackState.Stopped));
         }
         catch (Exception ex)

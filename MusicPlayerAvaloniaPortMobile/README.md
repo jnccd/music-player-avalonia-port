@@ -149,6 +149,36 @@ The settings sheet additionally shows **where music was looked for and why each 
 folder can be typed in by hand — the automatic detection only knows Android's public `Music` directory, and
 music on a phone is often somewhere else.
 
+## Media notification & background playback
+
+`MobilePlaybackNotificationService` is the ongoing media notification every Android player has: cover art,
+title, artist/album and previous / play-pause / next, on the lock screen and in the shade.
+
+* **It is a foreground service** (type `mediaPlayback`), not just a notification. That is what Android
+  requires for a persistent media notification, and it is also what keeps the process — and playback — alive
+  when the user leaves the app. Background playback therefore works.
+* **It drives the same shared services the UI drives.** The buttons call
+  `SongPlaybackService.GetNextSong`/`GetPreviousSong` and `MobileAudioPlayerService.TogglePlayPause`, so
+  skipping from the notification runs the identical vote logic as skipping in the app (there is no second
+  player state to drift).
+* **Platform APIs only** — `Notification.MediaStyle` + `MediaSession`, no AndroidX Media dependency, so
+  nothing new enters the trimming/AOT analysis.
+* `POST_NOTIFICATIONS` is requested at runtime on API 33+ (denying it does not break playback; the service
+  runs and simply shows nothing). `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_MEDIA_PLAYBACK` are declared.
+* The `MediaSession` also serves the lock screen, bluetooth and headset transport buttons, and carries the
+  `MediaMetadata`.
+
+Two things worth knowing if you touch it:
+
+* The **progress row reads the duration from `MediaMetadata`, not from the playback state.** Publishing only
+  `PlaybackState` gives a correct position but still renders `00:00 / 00:00`, so the service publishes
+  metadata too — and republishes when the duration appears, because right after a song starts the decoder has
+  not reported it yet (a once-per-second session refresh covers that; the bar itself is extrapolated by the
+  system from the last published state).
+* Starting a foreground service from the background is forbidden on Android 12+, so the service is started
+  when a song starts playing — which always happens from the UI, a legal moment — and only *updated* on later
+  song changes (auto-advance included).
+
 ## Voting: one gesture, no voting code in the UI
 
 The player has a single `Upvote` button, and it does not call `SongVotingService`. It flips
@@ -195,8 +225,9 @@ everywhere and consistent with the UI; changing that one colour in `values/color
 
 The Release APK has been installed and exercised on a real Android phone (arm64): the library scan finds the
 songs, playback starts, cover art is read out of the mp3, volume normalization measures and stores the
-loudness, the upvote gesture arms and casts, and the launcher icon resolves at all five densities — with an
-empty crash buffer throughout. `adb`-driven checks are the way to repeat this:
+loudness, the upvote gesture arms and casts, the media notification appears with art/controls/progress and
+its buttons drive playback (verified through logcat), and the launcher icon resolves at all five densities —
+with an empty crash buffer throughout. `adb`-driven checks are the way to repeat this:
 
 ```powershell
 adb install -r bin/Release/net10.0-android/com.jnccd.musicplayermobile-Signed.apk
@@ -238,8 +269,9 @@ Both halves of the fix matter:
 * **Playback is verified on one device / one Android version.** The audio path is inherently the least
   portable part; if another device has trouble, `adb logcat -s MusicPlayerMobile` says whether the output
   device opened and with which format before anything else needs guessing.
-* **Playback is not a background service.** Leaving the app may stop playback; a foreground service with a
-  media notification is the natural next step.
+* **Playback continues in the background** through the media notification's foreground service (see above),
+  but there is no `MediaButtonReceiver`, so a headset button press is handled while the session is active and
+  not after the process was killed and restarted by the system.
 * **Song library migrations (file renames/deletes) may fail on modern Android.** Since Android 10 the app
   may read media files by path but cannot rename/delete files in shared storage without broad storage
   access. The shared applier is existence-tolerant and does not advance its state on failure, so this is

@@ -20,6 +20,7 @@ namespace MusicPlayerAvaloniaPortMobile;
 public class MainActivity : AvaloniaMainActivity
 {
     const int AudioPermissionRequestCode = 4711;
+    const int NotificationPermissionRequestCode = 4712;
 
     protected override void OnCreate(Bundle? savedInstanceState)
     {
@@ -34,6 +35,7 @@ public class MainActivity : AvaloniaMainActivity
         Window?.SetSoftInputMode(SoftInput.AdjustResize);
 
         RequestAudioPermission();
+        RequestNotificationPermission();
     }
 
     /// <summary>
@@ -53,5 +55,20 @@ public class MainActivity : AvaloniaMainActivity
             return;
 
         RequestPermissions([permission], AudioPermissionRequestCode);
+    }
+
+    /// <summary>
+    /// Asks for POST_NOTIFICATIONS (API 33+), which the ongoing playback notification needs. Denying it does
+    /// not break playback - the foreground service still runs, the user just sees no notification - so this
+    /// is a separate request from the media permission.
+    /// </summary>
+    void RequestNotificationPermission()
+    {
+        if (!OperatingSystem.IsAndroidVersionAtLeast(33))
+            return;
+        if (CheckSelfPermission(Manifest.Permission.PostNotifications!) == Permission.Granted)
+            return;
+
+        RequestPermissions([Manifest.Permission.PostNotifications!], NotificationPermissionRequestCode);
     }
 }
