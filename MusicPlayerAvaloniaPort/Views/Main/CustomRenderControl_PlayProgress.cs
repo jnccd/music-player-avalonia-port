@@ -1,8 +1,6 @@
 using System.Diagnostics;
-using System.IO;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Shapes;
 using Avalonia.Media;
 using Avalonia.Threading;
 using MusicPlayerAvaloniaPort.Helpers;

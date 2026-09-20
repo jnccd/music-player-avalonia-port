@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,7 +9,6 @@ using Avalonia.Threading;
 using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using MusicPlayerAvaloniaPort.Services.Visualization;
-using Path = Avalonia.Controls.Shapes.Path;
 
 namespace MusicPlayerAvaloniaPort.Views.Main;
 
@@ -205,31 +203,31 @@ public class CustomRenderControl_Diagram : Control
                 switch (mode)
                 {
                     case VisMode.SmoothFFT:
-                    {
-                        float[] fftData = await diagramDataMapper.GetScaledAndSlicedFftData(width);
-                        float[] smoothedData = await diagramDataMapper.SmoothenFftData(fftData, width, 1);
-                        CopyToModel(smoothedData, model, width);
-                        break;
-                    }
-                    case VisMode.RawFFT:
-                    {
-                        float[] fftData = await diagramDataMapper.GetScaledAndSlicedFftData(width);
-                        CopyToModel(fftData, model, width);
-                        break;
-                    }
-                    case VisMode.Samples:
-                    {
-                        ReadOnlyMemory<float> sampleData = await diagramDataMapper.GetCurrentDiagramSampleData();
-                        var sampleDataSpan = sampleData.Span;
-                        if (sampleDataSpan.Length == 0)
-                            return;
-                        for (int i = 0; i < width; i++)
                         {
-                            int sampleFrom = (int)(i / (float)width * (sampleDataSpan.Length - 1));
-                            model[i] = sampleDataSpan[sampleFrom];
+                            float[] fftData = await diagramDataMapper.GetScaledAndSlicedFftData(width);
+                            float[] smoothedData = await diagramDataMapper.SmoothenFftData(fftData, width, 1);
+                            CopyToModel(smoothedData, model, width);
+                            break;
                         }
-                        break;
-                    }
+                    case VisMode.RawFFT:
+                        {
+                            float[] fftData = await diagramDataMapper.GetScaledAndSlicedFftData(width);
+                            CopyToModel(fftData, model, width);
+                            break;
+                        }
+                    case VisMode.Samples:
+                        {
+                            ReadOnlyMemory<float> sampleData = await diagramDataMapper.GetCurrentDiagramSampleData();
+                            var sampleDataSpan = sampleData.Span;
+                            if (sampleDataSpan.Length == 0)
+                                return;
+                            for (int i = 0; i < width; i++)
+                            {
+                                int sampleFrom = (int)(i / (float)width * (sampleDataSpan.Length - 1));
+                                model[i] = sampleDataSpan[sampleFrom];
+                            }
+                            break;
+                        }
                 }
 
                 // Publish. Both the swap and every UI read of the published model run under lockject,

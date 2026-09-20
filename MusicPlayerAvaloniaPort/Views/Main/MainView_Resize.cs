@@ -1,10 +1,7 @@
 using System;
-using System.Diagnostics;
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.LogicalTree;
 using MusicPlayerAvaloniaPort.Helpers;
 
 namespace MusicPlayerAvaloniaPort.Views.Main;

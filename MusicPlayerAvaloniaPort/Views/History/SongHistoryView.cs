@@ -14,7 +14,6 @@ using MusicPlayerAvaloniaPort.Helpers;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using MusicPlayerAvaloniaPort.Services.Song;
 using MusicPlayerAvaloniaPort.ViewModels;
-using MusicPlayerSyncInterface.DTOs;
 
 namespace MusicPlayerAvaloniaPort.Views.History;
 

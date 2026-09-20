@@ -1,15 +1,12 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
-using MusicPlayerAvaloniaPort.Services.Infrastructure;
 using Path = Avalonia.Controls.Shapes.Path;
 
 namespace MusicPlayerAvaloniaPort.Views.Main;

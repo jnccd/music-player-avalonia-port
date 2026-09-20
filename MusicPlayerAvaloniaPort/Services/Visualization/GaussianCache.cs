@@ -1,8 +1,4 @@
-using MusicPlayerAvaloniaPort.Helpers;
-using MusicPlayerAvaloniaPort.Services.Infrastructure;
-using MusicPlayerSyncInterface.DTOs;
 using System;
-using System.Collections.Generic;
 
 namespace MusicPlayerAvaloniaPort.Services.Visualization;
 

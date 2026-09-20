@@ -1,10 +1,5 @@
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
-using System.Threading.Tasks;
-using MusicPlayerAvaloniaPort.Persistence.Configuration;
 using MusicPlayerAvaloniaPort.Services.Infrastructure;
-using MusicPlayerSyncInterface.DTOs;
 
 namespace MusicPlayerAvaloniaPort.ViewModels;
 
