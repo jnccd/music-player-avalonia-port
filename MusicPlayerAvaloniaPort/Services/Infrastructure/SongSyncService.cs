@@ -338,12 +338,15 @@ public class SongSyncService
                     var (newHistoryEntries, merged) = incrementalContext.ApplyIncrementalPull(pulledData, authedUserId);
                     mergedDuplicates = merged;
 
-                    // Verification: when the client had no cursor yet, every entry of the response (the
-                    // verification tail) must already have been local - anything new means the client was
-                    // NOT fully synced and the bootstrap cannot be trusted. Additionally the local history
+                    // Verification: when the client had no cursor yet AND claimed to hold everything (the
+                    // response was the verification tail), nothing in it may be new - anything new means
+                    // the client was not fully synced and the bootstrap cannot be trusted. Otherwise (a
+                    // normal delta, or a bounded catch-up delta) the count check decides: the local history
                     // may never be MISSING entries the server has (orphans only make it larger).
                     int localCountAfterPull = incrementalContext.CountLocalHistory(authedUserId);
-                    bool tailVerified = historyCursor > 0 || newHistoryEntries == 0;
+                    bool tailVerified = historyCursor > 0
+                        || localHistoryCount < pulledData.TotalHistoryCount
+                        || newHistoryEntries == 0;
                     if (tailVerified && localCountAfterPull >= pulledData.TotalHistoryCount)
                     {
                         incrementalApplied = true;
