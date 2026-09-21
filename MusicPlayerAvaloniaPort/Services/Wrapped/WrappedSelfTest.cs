@@ -5,7 +5,9 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Threading;
+using System.Threading.Tasks;
 using MusicPlayerAvaloniaPort.Services.Wrapped.Analysis;
 
 namespace MusicPlayerAvaloniaPort.Services.Wrapped;
@@ -77,6 +79,9 @@ public static class WrappedSelfTest
 
         if (mode == "clusters")
             return RunClusterAnalysis();
+
+        if (mode == "retry")
+            return RunEnrichmentRetryCheck();
 
         failures += RunXamlNameCheck();
         failures += RunFftCheck();
@@ -302,6 +307,139 @@ public static class WrappedSelfTest
 
         Services.Wrapped.WrappedAudioCrossAnalyzer.DumpClusterAnalysis(features, Console.Out);
         return 0;
+    }
+
+    /// <summary>
+    /// Checks that the online lookup waits out MusicBrainz' rate limiting instead of failing on it, and that
+    /// a real answer is parsed into a release year.
+    /// <para>
+    /// The HTTP handler is stubbed, because the real service cannot be reached from a build machine - and
+    /// rate limiting is precisely the behaviour that cannot be verified by reading the code. The stub
+    /// answers 503 with a Retry-After header twice (which is what MusicBrainz does when its one request per
+    /// second window is exceeded) and then returns a normal answer. Before the fix the 503 was treated as a
+    /// hard failure, which is why a run stopped after nine requests and reported that nothing was matched.
+    /// </para>
+    /// </summary>
+    static int RunEnrichmentRetryCheck()
+    {
+        Console.WriteLine("\n--- online lookup retry check (stubbed HTTP) ---");
+        int failures = 0;
+
+        // The lookup caches its answers, so a previous run would short-circuit this check and it would
+        // "pass" without ever sending a request. Point the service at a scratch folder for the run.
+        string scratch = Path.Combine(Path.GetTempPath(), "music-player-wrapped-retry-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(scratch, "wrapped"));
+        string? originalDataDirectory = Environment.GetEnvironmentVariable("MUSIC_PLAYER_DATA_DIR");
+        Persistence.PersistenceLocations.Configure(Persistence.PersistenceLocations.DefaultAppName, () => scratch);
+
+        const string answer = """
+        {"recordings":[
+          {"id":"11111111-2222-3333-4444-555555555555","title":"Big Shot",
+           "artist-credit":[{"name":"Billy Joel"}],
+           "releases":[{"title":"52nd Street","date":"1978-10-11"}]}
+        ]}
+        """;
+
+        var handler = new StubHandler(answer, throttledAnswers: 2, retryAfterSeconds: 1);
+
+        // The pure back-off decision first: the server's Retry-After wins, otherwise exponential, always
+        // clamped to 1..60 seconds.
+        var fromHeader = WrappedEnrichmentService.BackoffFor(1, TimeSpan.FromSeconds(5), null);
+        var fromNone = WrappedEnrichmentService.BackoffFor(3, null, null);
+        var clampedLow = WrappedEnrichmentService.BackoffFor(1, TimeSpan.Zero, null);
+        var clampedHigh = WrappedEnrichmentService.BackoffFor(1, TimeSpan.FromMinutes(30), null);
+        bool backoffOk = fromHeader == TimeSpan.FromSeconds(5)
+                      && fromNone == TimeSpan.FromSeconds(8)
+                      && clampedLow == TimeSpan.FromSeconds(1)
+                      && clampedHigh == TimeSpan.FromSeconds(60);
+        if (!backoffOk)
+        {
+            Console.WriteLine($"  FAILED: back-off decision wrong (header {fromHeader.TotalSeconds}s, none {fromNone.TotalSeconds}s, " +
+                              $"low {clampedLow.TotalSeconds}s, high {clampedHigh.TotalSeconds}s)");
+            failures++;
+        }
+        else
+        {
+            Console.WriteLine($"  back-off: honours Retry-After ({fromHeader.TotalSeconds:0}s), doubles otherwise ({fromNone.TotalSeconds:0}s), " +
+                              $"clamped {clampedLow.TotalSeconds:0}-{clampedHigh.TotalSeconds:0}s  OK");
+        }
+
+        var service = new WrappedEnrichmentService(handler);
+        var songs = new List<(Guid SongId, string Artist, string Title)>
+        {
+            (Guid.NewGuid(), "Billy Joel", "Big Shot"),
+        };
+
+        var stopwatch = Stopwatch.StartNew();
+        var (matched, _) = service.EnrichAsync(songs, budget: 5, progress: null, CancellationToken.None).GetAwaiter().GetResult();
+        stopwatch.Stop();
+
+        Console.WriteLine($"  stub served {handler.RequestCount} request(s); matched {matched}; took {stopwatch.Elapsed.TotalSeconds:0.0}s; " +
+                          $"throttle waits {service.ThrottleWaits}");
+
+        if (handler.RequestCount < 3)
+        {
+            Console.WriteLine("  FAILED: the lookup did not retry after the 503 answers");
+            failures++;
+        }
+        if (matched != 1)
+        {
+            Console.WriteLine("  FAILED: the song was not matched from the stub's answer");
+            failures++;
+        }
+        if (service.ThrottleWaits != 2)
+        {
+            Console.WriteLine($"  FAILED: expected 2 waits for the two 503s, got {service.ThrottleWaits}");
+            failures++;
+        }
+        // Two instructs of one second each must actually have been waited out.
+        if (stopwatch.Elapsed.TotalSeconds < 2.0)
+        {
+            Console.WriteLine($"  FAILED: the Retry-After waits were not honoured ({stopwatch.Elapsed.TotalSeconds:0.0}s)");
+            failures++;
+        }
+
+        if (failures == 0)
+            Console.WriteLine("  retry: OK - the 503 answers were waited out and the parsed answer produced a release year");
+
+        // Leave no trace: the scratch folder is only there to give this check a cold cache.
+        try
+        {
+            Directory.Delete(scratch, recursive: true);
+        }
+        catch (Exception)
+        {
+            // A leftover temp folder is harmless.
+        }
+        _ = originalDataDirectory;
+
+        return failures;
+    }
+
+    /// <summary>
+    /// An HTTP handler that answers a configurable number of 503s (with Retry-After) before returning a
+    /// fixed body, so the lookup's throttling behaviour can be tested without a network.
+    /// </summary>
+    sealed class StubHandler(string answer, int throttledAnswers, int retryAfterSeconds) : HttpMessageHandler
+    {
+        public int RequestCount { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            RequestCount++;
+            if (RequestCount <= throttledAnswers)
+            {
+                var throttled = new HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable);
+                throttled.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(retryAfterSeconds));
+                return Task.FromResult(throttled);
+            }
+
+            var ok = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(answer, System.Text.Encoding.UTF8, "application/json"),
+            };
+            return Task.FromResult(ok);
+        }
     }
 
     /// <summary>

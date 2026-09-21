@@ -29,8 +29,13 @@ public sealed class WrappedOptions
     /// <summary>Ask MusicBrainz for release years of confidently matched songs (rate limited, budgeted).</summary>
     public bool EnrichOnline { get; set; }
 
-    /// <summary>Upper bound on online requests per run, so enabling the option can never run away.</summary>
-    public int OnlineRequestBudget { get; set; } = 300;
+    /// <summary>
+    /// Upper bound on online requests per run, so enabling the option can never run away. MusicBrainz allows
+    /// about one request per second, so the budget *is* the runtime of the lookup: 150 requests is roughly
+    /// three minutes. Kept modest because with generous budgets the lookup dominates the run while matching
+    /// few of the unobtainable songs this kind of library is mostly made of.
+    /// </summary>
+    public int OnlineRequestBudget { get; set; } = 150;
 
     /// <summary>
     /// Threads to measure songs with; 0 = the service's default (about one per core, minus one). Lower it
@@ -206,8 +211,10 @@ public sealed class WrappedService
             {
                 enrichment = new WrappedEnrichmentService();
                 int matches = await EnrichAsync(snapshot, options, enrichment, enrichmentNotes, cancellationToken);
-                if (matches == 0)
-                    enrichmentNotes.Add("No song could be matched online; the release years are missing.");
+                // Only claim "nothing matched" when the lookup actually completed: if it failed, the failure
+                // note above already explains the missing years, and printing both contradicted itself.
+                if (matches == 0 && enrichment.LastError.Length == 0)
+                    enrichmentNotes.Add("The lookup completed but matched no song; nothing in this library was found in MusicBrainz.");
             }
 
             var years = options.Years.Count > 0
@@ -618,8 +625,16 @@ public sealed class WrappedService
         }
         else if (budgetExhausted)
         {
-            notes.Add($"The online lookup was stopped after {options.OnlineRequestBudget} requests (MusicBrainz allows one per second); " +
-                      "run it again to continue - everything already found is cached.");
+            notes.Add($"The online lookup was stopped after {options.OnlineRequestBudget} requests (MusicBrainz allows one per second, so this is the " +
+                      "slow part of a run); run it again to continue - everything already found is cached.");
+        }
+
+        if (service.ThrottleWaits > 0)
+        {
+            // MusicBrainz throttles with a 503 rather than refusing, so waits are normal - but the user
+            // should know why the lookup took as long as it did.
+            notes.Add($"MusicBrainz asked the lookup to slow down {service.ThrottleWaits} time(s) (last wait {service.LastThrottleWait.TotalSeconds:0.#}s); " +
+                      "the requests were retried after waiting, so this made the run longer rather than losing the lookups.");
         }
 
         return matched;

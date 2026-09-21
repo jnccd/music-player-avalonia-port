@@ -51,6 +51,13 @@ public sealed class WrappedEnrichmentService
     const string BaseUrl = "https://musicbrainz.org/ws/2/recording";
     /// <summary>MusicBrainz allows one request per second; a little headroom avoids being throttled.</summary>
     static readonly TimeSpan MinimumRequestInterval = TimeSpan.FromMilliseconds(1100);
+
+    /// <summary>
+    /// How often a throttled (503/429) request is retried before the run gives up on the lookup. MusicBrainz
+    /// asks for a wait rather than refusing outright, so retrying is the correct reaction - but a service
+    /// that keeps refusing must not hang the run forever.
+    /// </summary>
+    const int MaximumThrottleRetries = 5;
     /// <summary>Neither the title nor the artist similarity may be below this, whatever the total is.</summary>
     const double MinimumTitleSimilarity = 0.7;
     const double MinimumArtistSimilarity = 0.6;
@@ -67,14 +74,23 @@ public sealed class WrappedEnrichmentService
 
     static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = false };
 
-    readonly HttpClient httpClient = new() { Timeout = TimeSpan.FromSeconds(20) };
+    readonly HttpClient httpClient;
     readonly Dictionary<string, WrappedEnrichmentEntry> entries = new(StringComparer.Ordinal);
     readonly HashSet<string> misses = new(StringComparer.Ordinal);
     DateTimeOffset lastRequest = DateTimeOffset.MinValue;
     bool dirty;
 
-    public WrappedEnrichmentService()
+    public WrappedEnrichmentService() : this(new HttpClientHandler())
     {
+    }
+
+    /// <summary>
+    /// Uses the given HTTP handler. This exists so the retry behaviour can be tested with a stub handler -
+    /// rate limiting is the part that cannot be exercised against the real service from a build machine.
+    /// </summary>
+    internal WrappedEnrichmentService(HttpMessageHandler handler)
+    {
+        httpClient = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
         httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
         Load();
     }
@@ -107,6 +123,8 @@ public sealed class WrappedEnrichmentService
         int processed = 0;
         LastError = "";
         RequestsSent = 0;
+        ThrottleWaits = 0;
+        LastThrottleWait = TimeSpan.Zero;
 
         foreach (var song in songs)
         {
@@ -200,7 +218,7 @@ public sealed class WrappedEnrichmentService
             : $"recording:\"{Escape(title)}\"";
         string url = $"{BaseUrl}?query={Uri.EscapeDataString(query)}&fmt=json&limit=5";
 
-        string body = await httpClient.GetStringAsync(url, cancellationToken);
+        string body = await GetWithBackoffAsync(url, cancellationToken);
         using var document = JsonDocument.Parse(body);
         if (!document.RootElement.TryGetProperty("recordings", out var recordings))
             return null;
@@ -282,6 +300,72 @@ public sealed class WrappedEnrichmentService
 
         return best;
     }
+
+    /// <summary>
+    /// Fetches a URL, waiting out MusicBrainz' rate limiting instead of failing on it.
+    /// <para>
+    /// MusicBrainz answers <b>503 Service Unavailable</b> (with a <c>Retry-After</c> header) when its
+    /// one-request-per-second window is exceeded - that is its throttling response, not an outage. Treating
+    /// it as a hard error is what made a lookup stop after nine requests and report that "nothing could be
+    /// matched", when in reality it simply needed to slow down. 429 is handled the same way, any other
+    /// status is a real error and propagates.
+    /// </para>
+    /// </summary>
+    async Task<string> GetWithBackoffAsync(string url, CancellationToken cancellationToken)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            await RespectRateLimitAsync(cancellationToken);
+
+            using var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseContentRead, cancellationToken);
+            if (response.IsSuccessStatusCode)
+                return await response.Content.ReadAsStringAsync(cancellationToken);
+
+            bool throttled = response.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable
+                          || response.StatusCode == System.Net.HttpStatusCode.TooManyRequests;
+            if (!throttled || attempt > MaximumThrottleRetries)
+                response.EnsureSuccessStatusCode(); // throws with the status in the message
+
+            TimeSpan wait = BackoffFor(attempt, response.Headers.RetryAfter?.Delta, response.Headers.RetryAfter?.Date);
+            RecordThrottleWait(wait);
+            await Task.Delay(wait, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// How long to wait before retrying a throttled request.
+    /// <para>
+    /// Split out from the HTTP call so it can be tested: this is the decision that was wrong (a throttled
+    /// answer was treated as a failure), and it cannot be exercised against the real service from a build
+    /// machine. The server's own <c>Retry-After</c> is honoured when present; otherwise the wait doubles per
+    /// attempt. The result is clamped to 1..60 seconds so neither a missing header nor an absurd one can
+    /// stall a run.
+    /// </para>
+    /// </summary>
+    internal static TimeSpan BackoffFor(int attempt, TimeSpan? retryAfterDelta, DateTimeOffset? retryAfterDate)
+    {
+        TimeSpan wait = retryAfterDelta
+            ?? (retryAfterDate is DateTimeOffset date ? date - DateTimeOffset.Now : (TimeSpan?)null)
+            ?? TimeSpan.FromSeconds(Math.Min(60, Math.Pow(2, attempt)));
+
+        if (wait < TimeSpan.FromSeconds(1))
+            wait = TimeSpan.FromSeconds(1);
+        if (wait > TimeSpan.FromSeconds(60))
+            wait = TimeSpan.FromSeconds(60);
+        return wait;
+    }
+
+    internal void RecordThrottleWait(TimeSpan wait)
+    {
+        ThrottleWaits++;
+        LastThrottleWait = wait;
+    }
+
+    /// <summary>How many times the lookup had to wait for MusicBrainz' rate limiting.</summary>
+    public int ThrottleWaits { get; private set; }
+
+    /// <summary>The last wait MusicBrainz asked for (for the report's notes).</summary>
+    public TimeSpan LastThrottleWait { get; private set; }
 
     async Task RespectRateLimitAsync(CancellationToken cancellationToken)
     {
