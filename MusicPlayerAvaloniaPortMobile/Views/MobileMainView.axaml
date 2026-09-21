@@ -12,6 +12,9 @@
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="HorizontalAlignment" Value="Center" />
       <Setter Property="TextAlignment" Value="Center" />
+      <!-- Wrap before trimming: with NoWrap a long title was cut off on one line even though MaxLines is 2.
+           Now it uses the second line and only ellipsizes if it still does not fit. -->
+      <Setter Property="TextWrapping" Value="Wrap" />
       <Setter Property="TextTrimming" Value="CharacterEllipsis" />
       <Setter Property="MaxLines" Value="2" />
     </Style>
@@ -22,12 +25,6 @@
       <Setter Property="TextAlignment" Value="Center" />
       <Setter Property="TextTrimming" Value="CharacterEllipsis" />
       <Setter Property="MaxLines" Value="1" />
-    </Style>
-    <Style Selector="TextBlock.sectionHeader">
-      <Setter Property="FontSize" Value="13" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Opacity" Value="0.55" />
-      <Setter Property="Margin" Value="0,4,0,8" />
     </Style>
     <Style Selector="TextBlock.time">
       <Setter Property="FontSize" Value="12" />
@@ -59,26 +56,29 @@
       <Setter Property="Background" Value="#FF5AE0E8" />
     </Style>
 
-    <!-- Vote button: arms the upvote; the shared playback logic casts it. -->
+    <!-- Vote button: a round heart that arms the upvote; the shared playback logic casts it. -->
     <Style Selector="Button.upvote">
-      <Setter Property="Padding" Value="22,11" />
-      <Setter Property="CornerRadius" Value="24" />
+      <Setter Property="Width" Value="60" />
+      <Setter Property="Height" Value="60" />
+      <Setter Property="CornerRadius" Value="30" />
+      <Setter Property="Padding" Value="0" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="BorderBrush" Value="#33FFFFFF" />
       <Setter Property="Background" Value="#14FFFFFF" />
       <Setter Property="Foreground" Value="#FFFFFF" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.upvote:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="#26FFFFFF" />
     </Style>
     <Style Selector="Button.upvote.active">
-      <Setter Property="Background" Value="#FF00BEC8" />
-      <Setter Property="BorderBrush" Value="#FF00BEC8" />
-      <Setter Property="Foreground" Value="#FF06131A" />
+      <Setter Property="Background" Value="{DynamicResource AppAccentBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource AppAccentInkBrush}" />
     </Style>
     <Style Selector="Button.upvote.active:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="#FF29D2DB" />
+      <Setter Property="Background" Value="{DynamicResource AppAccentHoverBrush}" />
     </Style>
 
     <!-- Small informational chips -->
@@ -90,6 +90,41 @@
     <Style Selector="Border.chip TextBlock">
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Opacity" Value="0.85" />
+    </Style>
+
+    <!-- Library search: a borderless text box inside the rounded header pill, plus its drop down rows -->
+    <Style Selector="TextBox.search">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="8,6" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBox.search /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Button.searchClear">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="6" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Foreground" Value="#B3FFFFFF" />
+    </Style>
+    <Style Selector="Button.searchClear:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#26FFFFFF" />
+    </Style>
+    <Style Selector="Button.searchResult">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="11" />
+      <Setter Property="Padding" Value="12,9" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+    </Style>
+    <Style Selector="Button.searchResult:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#1FFFFFFF" />
     </Style>
 
     <!-- Settings sheet controls -->
@@ -120,35 +155,59 @@
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
 
-    <!-- ================= Header: what the client is doing + the way into the sync settings ================= -->
-    <!-- The pill stretches into the free space instead of taking its natural width (with a long status text
-         it used to run underneath the Sync button) and centres itself vertically: the row is as tall as the
-         Sync button next to it, so without this the text sits at the top of the pill. -->
-    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="18,14,10,4">
-      <Border Grid.Column="0"
-              Background="#14FFFFFF"
-              CornerRadius="14"
-              Padding="12,7"
-              Margin="0,0,10,0"
-              VerticalAlignment="Center">
-        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <Panel VerticalAlignment="Center">
-            <Ellipse Width="8" Height="8" Fill="#FF00BEC8" IsVisible="{Binding IsPlaying}" />
-            <Ellipse Width="8" Height="8" Fill="#59FFFFFF" IsVisible="{Binding !IsPlaying}" />
-          </Panel>
-          <TextBlock Text="{Binding StatusText}"
-                     FontSize="12"
-                     Opacity="0.85"
-                     VerticalAlignment="Center"
-                     TextTrimming="CharacterEllipsis"
-                     TextWrapping="NoWrap"
-                     MaxLines="1" />
-        </StackPanel>
-      </Border>
+    <!-- ================= Header: library search + the way into the sync settings ================= -->
+    <!-- The header used to be a status pill; the status now sits as a thin line underneath, so the row that
+         is always on screen can be the search field. -->
+    <Grid Grid.Row="0" RowDefinitions="Auto,Auto" Margin="18,14,10,4">
+      <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+        <Border Grid.Column="0"
+                Background="#14FFFFFF"
+                CornerRadius="14"
+                Padding="12,2"
+                Margin="0,0,10,0"
+                VerticalAlignment="Center">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <PathIcon Grid.Column="0"
+                      Data="M15.5,14 L14.7,14 L14.4,13.7 A6,6 0 1 0 13.7,14.4 L14,14.7 L14,15.5 L19,20.5 L20.5,19 Z M10,15 A5,5 0 1 1 15,10 A5,5 0 0 1 10,15 Z"
+                      Width="15" Height="15"
+                      Opacity="0.5"
+                      VerticalAlignment="Center" />
+            <TextBox Grid.Column="1"
+                     Classes="search"
+                     Text="{Binding SearchText, Mode=TwoWay}"
+                     PlaceholderText="Search songs"
+                     VerticalAlignment="Center" />
+            <Button Grid.Column="2"
+                    Classes="searchClear"
+                    Click="ClearSearchButton_Click"
+                    IsVisible="{Binding HasSearchText}"
+                    VerticalAlignment="Center"
+                    ToolTip.Tip="Clear the search">
+              <PathIcon Data="M6,6 L14,14 M14,6 L6,14" Width="12" Height="12" />
+            </Button>
+          </Grid>
+        </Border>
 
-      <Button Grid.Column="1" Classes="secondary" Click="SyncButton_Click" VerticalAlignment="Center">
-        <TextBlock Text="Sync" FontSize="13" />
-      </Button>
+        <Button Grid.Column="1" Classes="secondary" Click="SyncButton_Click" VerticalAlignment="Center">
+          <TextBlock Text="Sync" FontSize="13" />
+        </Button>
+      </Grid>
+
+      <!--
+        Notice line: only failures and the result of a tap appear here, and they hide themselves again after a
+        few seconds. Steady state ("Library ready") is not worth a permanent line on a player screen - the
+        "N songs · M upvoted entries" line at the bottom already says the library loaded, and the running log
+        lives in the sync sheet.
+      -->
+      <TextBlock Grid.Row="1"
+                 Text="{Binding HeaderNotice}"
+                 IsVisible="{Binding HasHeaderNotice}"
+                 FontSize="11"
+                 Opacity="0.55"
+                 Margin="4,8,0,0"
+                 TextTrimming="CharacterEllipsis"
+                 TextWrapping="NoWrap"
+                 MaxLines="1" />
     </Grid>
 
     <!-- ================= The player ================= -->
@@ -156,7 +215,7 @@
       <StackPanel Spacing="10">
 
         <!-- Artwork. A Viewbox keeps it square and scaled to whatever room the screen has. -->
-        <Viewbox Stretch="Uniform" MaxWidth="268" HorizontalAlignment="Center" Margin="0,2,0,0">
+        <Viewbox Stretch="Uniform" MaxWidth="272" HorizontalAlignment="Center" Margin="0,4,0,0">
           <Border Width="300" Height="300" CornerRadius="26" ClipToBounds="True" BoxShadow="0 18 40 0 #66000000">
             <Grid>
               <Grid.Background>
@@ -185,13 +244,11 @@
           <TextBlock Classes="songSubtitle" Text="{Binding SongSubtitle}" />
         </StackPanel>
 
-        <!-- What the client knows about this song: votes, play chance, volume normalization -->
+        <!-- The only per-song fact the UI shows: the vote numbers. The play chance and the volume
+             normalization state used to be chips here as well; they are internals of the chooser and the
+             volume service rather than something a listener acts on. -->
         <WrapPanel HorizontalAlignment="Center">
           <Border Classes="chip" Margin="4,4,4,4"><TextBlock Text="{Binding VoteText}" /></Border>
-          <Border Classes="chip" Margin="4,4,4,4"><TextBlock Text="{Binding ChanceText}" /></Border>
-          <Border Classes="chip" Margin="4,4,4,4" IsVisible="{Binding VolumeNormalizationText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-            <TextBlock Text="{Binding VolumeNormalizationText}" />
-          </Border>
         </WrapPanel>
 
         <!-- Seek bar -->
@@ -207,19 +264,37 @@
           </Grid>
         </StackPanel>
 
-        <!-- Transport -->
+        <!--
+          Transport. The glyphs are Paths on an explicit 24x24 Canvas inside a Viewbox rather than PathIcon:
+          PathIcon places a geometry by its own bounds, so an asymmetric shape (a play triangle) ended up
+          visibly off-centre in its circle - measured at 28 device px left of the button's centre. On a fixed
+          canvas the coordinates below are exactly where the glyph lands, so the marks are centred by
+          construction.
+        -->
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="18" Margin="0,2,0,0">
           <Button Classes="transport" Click="PreviousButton_Click" ToolTip.Tip="Previous song">
-            <PathIcon Data="M6,5 L8,5 L8,19 L6,19 Z M18,5 L18,19 L9,12 Z" Width="26" Height="26" />
+            <Viewbox Width="44" Height="44">
+              <Canvas Width="24" Height="24">
+                <Path Fill="#FFFFFF" Data="M6,5 H8 V19 H6 Z M18,5 V19 L9,12 Z" />
+              </Canvas>
+            </Viewbox>
           </Button>
-          <Button Classes="transport playPause" Background="#FF00BEC8" Foreground="#FF06131A" Click="PlayPauseButton_Click" ToolTip.Tip="Play or pause">
-            <Panel>
-              <PathIcon Data="M9,6 L20,12 L9,18 Z" Width="34" Height="34" IsVisible="{Binding !IsPlaying}" />
-              <PathIcon Data="M8,6 L11,6 L11,18 L8,18 Z M14,6 L17,6 L17,18 L14,18 Z" Width="34" Height="34" IsVisible="{Binding IsPlaying}" />
-            </Panel>
+          <Button Classes="transport playPause" Background="{DynamicResource AppAccentBrush}" Click="PlayPauseButton_Click" ToolTip.Tip="Play or pause">
+            <Viewbox Width="64" Height="64">
+              <Canvas Width="24" Height="24">
+                <!-- The triangle gets a touch more room on the right than on the left: a right-pointing
+                     triangle centred by its bounds reads as left-heavy, so this is the optical centre. -->
+                <Path Fill="{DynamicResource AppAccentInkBrush}" Data="M8,5.5 L19,12 L8,18.5 Z" IsVisible="{Binding !IsPlaying}" />
+                <Path Fill="{DynamicResource AppAccentInkBrush}" Data="M8,5.5 H11 V18.5 H8 Z M13,5.5 H16 V18.5 H13 Z" IsVisible="{Binding IsPlaying}" />
+              </Canvas>
+            </Viewbox>
           </Button>
           <Button Classes="transport" Click="NextButton_Click" ToolTip.Tip="Next song">
-            <PathIcon Data="M6,5 L15,12 L6,19 Z M16,5 L18,5 L18,19 L16,19 Z" Width="26" Height="26" />
+            <Viewbox Width="44" Height="44">
+              <Canvas Width="24" Height="24">
+                <Path Fill="#FFFFFF" Data="M6,5 L15,12 L6,19 Z M16,5 H18 V19 H16 Z" />
+              </Canvas>
+            </Viewbox>
           </Button>
         </StackPanel>
 
@@ -228,58 +303,65 @@
           logic casts it when the song ends or is skipped (a song skipped early is voted down by that same
           logic, so there is nothing else to press).
 
-          The row itself stretches and each child centres itself - centring the panel by its own measured
-          width put the button visibly off-centre, because the wrapped hint below it dictates that width.
+          Icon only - a heart needs no label, and the accent colour it turns when armed is the state. The
+          automation name keeps it announceable for screen readers. Same fixed-canvas treatment as the
+          transport glyphs, and the heart sits a little below the geometric centre because its weight is in
+          the lobes, which otherwise reads as "floating too high".
         -->
-        <StackPanel Spacing="6" Margin="0,2,0,0">
-          <Button Classes="upvote" HorizontalAlignment="Center" Click="UpvoteButton_Click" Classes.active="{Binding UpvoteLockedIn}">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <PathIcon Data="M12,20 C12,20 4,14.6 4,9.6 A4.4,4.4 0 0 1 12,6.8 A4.4,4.4 0 0 1 20,9.6 C20,14.6 12,20 12,20 Z"
-                        Width="18" Height="18" />
-              <TextBlock Text="Upvote" FontSize="14" FontWeight="SemiBold" />
-            </StackPanel>
-          </Button>
-          <TextBlock Text="counts when the song ends · skipping early votes it down"
-                     FontSize="11"
-                     Opacity="0.45"
-                     MaxWidth="300"
-                     TextWrapping="Wrap"
-                     TextAlignment="Center"
-                     HorizontalAlignment="Center" />
-        </StackPanel>
+        <Button Classes="upvote"
+                HorizontalAlignment="Center"
+                Margin="0,4,0,0"
+                Click="UpvoteButton_Click"
+                Classes.active="{Binding UpvoteLockedIn}"
+                AutomationProperties.Name="Upvote">
+          <Viewbox Width="36" Height="36">
+            <Canvas Width="24" Height="24">
+              <Path Fill="{Binding $parent[Button].Foreground}"
+                    Data="M12,21.4 C12,21.4 3.2,14.5 3.2,9.4 C3.2,6.4 5.5,4.1 8.5,4.1 C10.3,4.1 11.4,5.1 12,6.2 C12.6,5.1 13.7,4.1 15.5,4.1 C18.5,4.1 20.8,6.4 20.8,9.4 C20.8,14.5 12,21.4 12,21.4 Z" />
+            </Canvas>
+          </Viewbox>
+        </Button>
 
         <!-- Volume -->
         <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,6,0,0">
           <PathIcon Grid.Column="0" Data="M4,10 L8,10 L13,6 L13,18 L8,14 L4,14 Z M16,9 A4,4 0 0 1 16,15"
                     Width="20" Height="20" Opacity="0.6" VerticalAlignment="Center" />
-          <Slider Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding UserVolume, Mode=TwoWay}" MinHeight="30" />
+          <Slider Grid.Column="1" Minimum="0" Maximum="200" Value="{Binding UserVolume, Mode=TwoWay}" MinHeight="30" />
           <TextBlock Grid.Column="2" Classes="time" Text="{Binding VolumeText}" MinWidth="42" TextAlignment="Right" />
         </Grid>
 
-        <!-- The weighted choosing pool: what the player is actually most likely to play next. -->
-        <StackPanel Margin="0,8,0,0">
-          <TextBlock Classes="sectionHeader" Text="MOST LIKELY NEXT" />
-          <ItemsControl ItemsSource="{Binding MostLikelySongs}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:MobileSongChanceItem">
-                <Border Background="#0FFFFFFF" CornerRadius="14" Padding="14,11" Margin="0,0,0,8">
-                  <Grid ColumnDefinitions="*,Auto">
-                    <StackPanel Grid.Column="0" Spacing="2">
-                      <TextBlock Text="{Binding Title}" FontSize="15" TextTrimming="CharacterEllipsis" MaxLines="1" />
-                      <TextBlock Text="{Binding Detail}" FontSize="12" Opacity="0.6" TextTrimming="CharacterEllipsis" MaxLines="1" />
-                    </StackPanel>
-                    <TextBlock Grid.Column="1" Text="{Binding ChanceText}" FontSize="13" FontWeight="SemiBold"
-                               Opacity="0.85" VerticalAlignment="Center" Margin="12,0,0,0" />
-                  </Grid>
-                </Border>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </StackPanel>
-
-        <TextBlock Text="{Binding LibrarySummary}" FontSize="12" Opacity="0.45" HorizontalAlignment="Center" Margin="0,4,0,0" />
+        <TextBlock Text="{Binding LibrarySummary}" FontSize="12" Opacity="0.45" HorizontalAlignment="Center" Margin="0,10,0,0" />
       </StackPanel>
     </ScrollViewer>
+
+    <!--
+      Search suggestions. Drawn AFTER the player content so it floats above it, like the drop down of a search
+      box: the header is always on screen, the list hangs off it and disappears as soon as a song is picked
+      (or the search is cleared).
+    -->
+    <Border Grid.Row="1"
+            VerticalAlignment="Top"
+            Margin="18,2,18,0"
+            Background="#FF16161F"
+            BorderBrush="#26FFFFFF"
+            BorderThickness="1"
+            CornerRadius="16"
+            Padding="6"
+            BoxShadow="0 14 30 0 #B3000000"
+            IsVisible="{Binding HasSearchResults}">
+      <ItemsControl ItemsSource="{Binding SearchResults}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:MobileSearchResult">
+            <Button Classes="searchResult" Click="SearchResult_Click">
+              <StackPanel Spacing="1">
+                <TextBlock Text="{Binding Title}" FontSize="14" TextTrimming="CharacterEllipsis" MaxLines="1" />
+                <TextBlock Text="{Binding Subtitle}" FontSize="11" Opacity="0.55" TextTrimming="CharacterEllipsis" MaxLines="1" />
+              </StackPanel>
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </Border>
 
     <!-- ================= Sync settings sheet ================= -->
     <Grid Grid.Row="0" Grid.RowSpan="2" Background="#CC05050A" IsVisible="{Binding SettingsOpen}">
@@ -305,8 +387,13 @@
             </StackPanel>
           </StackPanel>
 
+          <!--
+            The right margin is for the vertical scrollbar: it is an overlay scrollbar drawn on top of the
+            content, so without this the text boxes and long diagnostics lines run underneath it and look
+            clipped. Margin rather than ScrollViewer.Padding because it is the content that has to move.
+          -->
           <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Margin="0,4,0,0">
-            <StackPanel>
+            <StackPanel Margin="0,0,16,0">
 
               <!-- A library that belongs to another account (see SongSyncService.Pull) -->
               <Border IsVisible="{Binding HasLibraryOwnerWarning}"
@@ -317,7 +404,7 @@
                 <StackPanel Spacing="10">
                   <TextBlock Text="{Binding LibraryOwnerWarning}" FontSize="12" TextWrapping="Wrap" />
                   <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button Classes="primary" Background="#FF00BEC8" Foreground="#FF06131A" Click="AdoptLibraryButton_Click">
+                    <Button Classes="primary" Background="{DynamicResource AppAccentBrush}" Foreground="{DynamicResource AppAccentInkBrush}" Click="AdoptLibraryButton_Click">
                       <TextBlock Text="Take over" />
                     </Button>
                     <Button Classes="secondary" Click="DismissOwnerWarningButton_Click">
@@ -336,15 +423,33 @@
               <TextBlock Classes="fieldLabel" Text="PASSWORD" />
               <TextBox Text="{Binding Password, Mode=TwoWay}" PasswordChar="•" PlaceholderText="password" />
 
-              <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,14,0,0">
-                <Button Classes="primary" Background="#FF00BEC8" Foreground="#FF06131A"
+              <!-- WrapPanel, not a StackPanel: three buttons do not fit on one line on a phone, and a
+                   StackPanel would just clip the last one instead of wrapping it. -->
+              <WrapPanel Margin="0,14,0,0">
+                <Button Classes="primary" Background="{DynamicResource AppAccentBrush}" Foreground="{DynamicResource AppAccentInkBrush}" Margin="0,0,8,8"
                         IsEnabled="{Binding LoginEnabled}" Click="LoginButton_Click">
-                  <TextBlock Text="Log in &amp; sync" />
+                  <TextBlock Text="Log in &amp; upload" />
                 </Button>
-                <Button Classes="secondary" Click="RegisterButton_Click">
+                <Button Classes="secondary" Margin="0,0,8,8" IsEnabled="{Binding LoginEnabled}" Click="LoginWithoutUploadButton_Click">
+                  <TextBlock Text="Log in (no upload)" />
+                </Button>
+                <Button Classes="secondary" Margin="0,0,0,8" Click="RegisterButton_Click">
                   <TextBlock Text="Create account" />
                 </Button>
-              </StackPanel>
+              </WrapPanel>
+
+              <!-- Session state and log out -->
+              <Grid ColumnDefinitions="*,Auto" Margin="0,12,0,0">
+                <TextBlock Grid.Column="0" Text="{Binding SessionText}" FontSize="12" Opacity="0.6" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Classes="secondary" IsEnabled="{Binding LogoutEnabled}" Click="LogoutButton_Click">
+                  <TextBlock Text="Log out" />
+                </Button>
+              </Grid>
+              <TextBlock Text="Logging in without uploading pulls only: the local library is not sent, and queued votes/uploads are left for the next ordinary log in."
+                         FontSize="11"
+                         Opacity="0.45"
+                         TextWrapping="Wrap"
+                         Margin="0,6,0,0" />
 
               <TextBlock Classes="fieldLabel" Text="SONG LIBRARY FOLDER" />
               <SelectableTextBlock Text="{Binding LibraryPathText}" FontSize="12" TextWrapping="Wrap" Opacity="0.85" />
@@ -366,6 +471,11 @@
 
               <TextBlock Classes="fieldLabel" Text="SYNC STATE" />
               <SelectableTextBlock Text="{Binding SyncState}" FontSize="12" TextWrapping="Wrap" Opacity="0.7" />
+
+              <!-- The client's running log. It lives here rather than on the player screen: what the client
+                   is doing is something you look up, not something you watch. -->
+              <TextBlock Classes="fieldLabel" Text="STATUS" />
+              <SelectableTextBlock Text="{Binding StatusText}" FontSize="12" TextWrapping="Wrap" Opacity="0.7" />
             </StackPanel>
           </ScrollViewer>
 

@@ -95,16 +95,26 @@ public class MobileAudioPlayerService : IAudioPlaybackService
 
     // ---------- IAudioPlaybackService ----------
 
-    /// <summary>[0,1] playback volume; the volume service writes the normalized value here.</summary>
+    /// <summary>
+    /// Playback volume; the volume service writes the normalized value here. SoundFlow applies it as a gain
+    /// and accepts anything non-negative, so this is not limited to [0,1]: the user volume goes up to 200%
+    /// and a quiet song carries a normalization multiplier above 1. The value handed to the mixer is capped
+    /// at <see cref="MAX_PLAYBACK_VOLUME"/>, because stacking "200% user volume" with a large normalization
+    /// factor would only clip.
+    /// </summary>
     public float Volume
     {
         get;
         set
         {
-            soundPlayer?.Volume = value;
-            field = value;
+            float clamped = Math.Clamp(value, 0f, MAX_PLAYBACK_VOLUME);
+            soundPlayer?.Volume = clamped;
+            field = clamped;
         }
     } = 0;
+
+    /// <summary>Highest gain handed to the mixer (200% user volume, see <see cref="Volume"/>).</summary>
+    const float MAX_PLAYBACK_VOLUME = 2f;
 
     /// <summary>
     /// Playback position in [0,1]. Setting it seeks and adds the skipped amount to

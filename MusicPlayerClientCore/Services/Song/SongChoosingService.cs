@@ -14,16 +14,32 @@ public class SongChoosingService(DbWrapperService DbWrapper)
     List<AvailableSong> SongChoosingList = [];
     public float CreateSongChoosingDataStructureProgress { get; private set; } = 0;
 
+    /// <summary>
+    /// Picks the next song from the weighted choosing list, avoiding <paramref name="currentSongThatShouldntBeRepeated"/>
+    /// when there is an alternative.
+    /// </summary>
     public AvailableSong ChooseSongWithWeightedChances(AvailableSong? currentSongThatShouldntBeRepeated)
     {
         lock (SongChoosingList)
         {
-            int SongChoosingListIndex;
-            do
-                SongChoosingListIndex = Random.Shared.Next(SongChoosingList.Count);
-            while (SongChoosingList[SongChoosingListIndex] == currentSongThatShouldntBeRepeated);
+            // An empty choosing list means no library was scanned (or the scan failed). Saying so is the
+            // point: the old code called Random.Shared.Next(0) and then indexed the empty list, so the user
+            // saw "Index was out of range" instead of "there are no songs".
+            if (SongChoosingList.Count == 0)
+                throw new InvalidOperationException("There are no songs to play - the song library is empty or has not been scanned yet.");
 
-            return SongChoosingList[SongChoosingListIndex];
+            // The list holds one entry per chance unit, so it can consist entirely of the current song (a
+            // one-song library, or a song whose weight dwarfs the rest). Retrying until a different entry
+            // turns up would spin forever in that case, so give up after a few tries and repeat the song -
+            // it is the only thing there is to play.
+            for (int attempt = 0; attempt < 100; attempt++)
+            {
+                var candidate = SongChoosingList[Random.Shared.Next(SongChoosingList.Count)];
+                if (candidate != currentSongThatShouldntBeRepeated)
+                    return candidate;
+            }
+
+            return SongChoosingList[Random.Shared.Next(SongChoosingList.Count)];
         }
     }
 

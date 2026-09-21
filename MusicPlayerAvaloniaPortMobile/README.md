@@ -1,9 +1,51 @@
 # MusicPlayerAvaloniaPortMobile — Android client
 
 The phone head of the music player. It is **not** a scaled-down desktop window: a phone player is a different
-product, so this project has its own single-view UI (artwork, transport, voting, play-chance list, sync sheet)
+product, so this project has its own single-view UI (library search, artwork, transport, voting, sync sheet)
 and its own audio backend — but it shares every piece of *behaviour* with the desktop client through
 [`MusicPlayerClientCore`](../MusicPlayerClientCore).
+
+## The player screen
+
+* **Header**: a library search field. Typing lists the best matching songs as a drop down — the same
+  modified-Levenshtein ranking the desktop's "play a song quickly" flow uses
+  (`SongPlaybackService.FindBestSongMatches`), best first, with the artist/album as a second line when the
+  song has tags (and the library-relative folder otherwise, so a single-folder library reads as one line per
+  row). Tapping a suggestion plays it and closes the search.
+* **No permanent status line.** Routine status ("Library ready — tap play", the startup stages, what the sync
+  is doing) goes into the **STATUS** / **SYNC STATE** fields of the sync sheet, where it is looked up rather
+  than watched. The area under the search field is reserved for notices: failures and the results of actions
+  the UI cannot show by itself, which disappear again after a few seconds. Tapping the vote button produces
+  no notice at all — the button changing colour *is* the feedback.
+* **Artwork, title/artist, one chip with the vote numbers** (score, likes, dislikes, streak), the seek slider
+  and the transport. The title **wraps onto a second line** before it ellipsizes (`TextWrapping=Wrap` with
+  `MaxLines=2`): with the default `NoWrap` a long song name was cut off on one line even though two lines
+  were allowed.
+* **The glyphs are `Path`s on a fixed 24x24 `Canvas` inside a `Viewbox`, not `PathIcon`s.** `PathIcon` places
+  a geometry by its own bounds, which put an asymmetric shape visibly off-centre: the play triangle measured
+  28 device px (~10 dp) left of its circle's centre. On a fixed canvas the coordinates are exactly where the
+  glyph lands, so the icons are centred by construction (verified by measuring the rendered glyph against the
+  button's disc: the pause bars now land at 539.5 vs a 540 centre). The two shapes that need it also carry a
+  deliberate optical nudge — the play triangle sits slightly right of centre, the heart slightly below it,
+  because a triangle reads left-heavy and a heart reads top-heavy.
+  **The `Viewbox` is deliberately larger than the glyph** (44 for prev/next, 64 for play/pause, 36 for the
+  heart): the geometry only fills part of its 24-unit canvas, and the Viewbox scales the whole canvas — so
+  sizing the box to the wanted glyph size makes the icon come out at about half. The rendered sizes are the
+  ones measured above (prev/next 61x71 px, heart 71x71 px, play triangle 81 px wide on a phone at ~2.75x).
+* **One vote gesture**: a round heart button, icon only (the accent colour is the state, and
+  `AutomationProperties.Name` keeps it announceable). It arms the upvote; the shared playback logic casts it —
+  see the voting section below.
+* **Volume slider, 0..200%.** SoundFlow applies the volume as a gain and only rejects negative values, so
+  above 100% really does amplify (that is the point: a quiet recording becomes listenable). The value finally
+  handed to the mixer is capped at 2x in `MobileAudioPlayerService.Volume`, because the per-song
+  normalization multiplies the user volume and stacking 200% with a large normalization factor would only
+  clip.
+* **`N songs · M upvoted entries`** at the bottom is the "library is loaded" confirmation.
+
+Things that were removed on purpose, so they do not come back: the five most likely next songs (display-only —
+there was nothing to act on), the play-chance and volume-normalization chips (internals of the chooser and the
+volume service rather than something a listener uses), the vote button's label and its one-line explanation,
+and the always-visible status text.
 
 ## What is shared with the desktop client (i.e. behaves identically)
 
@@ -149,6 +191,41 @@ The settings sheet additionally shows **where music was looked for and why each 
 folder can be typed in by hand — the automatic detection only knows Android's public `Music` directory, and
 music on a phone is often somewhere else.
 
+## Sync session: log in, log in without uploading, log out
+
+The sync sheet has three session controls plus the current state ("signed in as X" / "not signed in"):
+
+| Control | What it does |
+|---|---|
+| **Log in & upload** | `Init(password, TryCallApiInit: true)`: authenticates, then seeds the server account from the local library with `POST /sync/init`, retries queued votes/uploads (`RetryUnsyncedEntries: true`), and pulls. |
+| **Log in (no upload)** | The same, but with `TryCallApiInit: false` **and** `RetryUnsyncedEntries: false`: it pulls only. Nothing is sent to the server — not the library, not queued votes. |
+| **Log out** | Forgets the session (`SongSyncService.Logout()`): drops the in-memory client and clears the stored refresh token. |
+
+Notes:
+
+* **Logging out uploads nothing** and does not touch the local database or the configured account name — the
+  library keeps working offline, and logging back in as the same account continues where it left off.
+* `/sync/init` is the *whole-library* upload, and the server answers `409` when the account already has songs
+  or history — exactly the case "log in (no upload)" exists for. It is also safe to use by accident: a full
+  pull against an empty account is rejected by the client before it rewrites anything, so the local library
+  survives and the ordinary log in can seed the account afterwards.
+* Logging out only forgets the token **locally**; there is no Keycloak logout call, because `EzAuth` (a
+  submodule shared with the other clients) exposes no logout endpoint. The refresh token therefore stays valid
+  server-side until it expires, which is what makes logging back in without a password work.
+* A logged-out client makes **no** requests at all: `Pull()` and the upload paths check the session and report
+  "Not logged in …" instead of dereferencing a null client. `UploadNewSongEntry` queues the song rather than
+  losing it, and `UploadQueuedVote` keeps its marker, so nothing is lost while logged out.
+
+Both behaviours are covered by a harness (`.build-check/sync-login-harness`, not part of any repo) that points
+the real `SongSyncService` at a fake sync server and asserts which endpoints get called:
+
+```
+log in without upload: GET /v1/authBackend, POST token, GET /v1/sync/pull      ← no /v1/sync/init
+ordinary login:        GET /v1/authBackend, POST token, POST /v1/sync/init     ← the flag gates the upload
+after logout:          <none>   (token cleared, database untouched)
+SYNC LOGIN HARNESS RESULT: PASS
+```
+
 ## Media notification & background playback
 
 `MobilePlaybackNotificationService` is the ongoing media notification every Android player has: cover art,
@@ -179,15 +256,35 @@ Two things worth knowing if you touch it:
   when a song starts playing — which always happens from the UI, a legal moment — and only *updated* on later
   song changes (auto-advance included).
 
+## Accent colour: defined once, and it overrides the platform's
+
+`MobileApp.axaml` holds the app's accent (`AppAccentBrush` `#00BEC8` plus its hover shade and the ink colour
+for text on it) and also overrides Fluent's `SystemAccentColor`.
+
+That override is not cosmetic housekeeping — without it the two halves of the UI disagree. The theme colours
+accent-driven controls itself: the slider's filled track and thumb, the progress bar, focus visuals. Left
+alone, `SystemAccentColor` comes from the **platform**, so on Android the sliders picked up the device's
+theme colour — MIUI handed us an olive `#717C35` — while this app's own brushes hardcoded teal. The seek and
+volume sliders therefore did not match the play/pause button.
+
+Measured on the device, counting pixels of each colour in the same screen:
+
+| | platform olive `#717C35` | app teal `#00BEC8` |
+|---|---|---|
+| before | 2178 px | 9870 px |
+| after | 30 px (one album-art pixel) | 12287 px |
+
+Changing the accent is now a one-line edit in `MobileApp.axaml`.
+
 ## Voting: one gesture, no voting code in the UI
 
-The player has a single `Upvote` button, and it does not call `SongVotingService`. It flips
-`SongPlaybackService.UpvoteLockedIn`, and the *shared* playback logic casts the vote — when the song ends or
-is skipped (`GetNextSong`/`GetPreviousSong`). A song skipped early is voted down by that same logic, so the
-downvote needs no button either: play on and press next, or skip early and it counts against the song. This
-is exactly the desktop client's behaviour, and it keeps the vote rules in one place instead of duplicating
-them in the UI (an earlier revision had `Dislike` / `Lock in` / `Upvote` buttons that called the voting
-service directly).
+The player has a single `Upvote` control — a round, icon-only heart. It does not call `SongVotingService`: it
+flips `SongPlaybackService.UpvoteLockedIn`, and the *shared* playback logic casts the vote — when the song
+ends or is skipped (`GetNextSong`/`GetPreviousSong`). A song skipped early is voted down by that same logic,
+so the downvote needs no button either: play on and press next, or skip early and it counts against the song.
+This is exactly the desktop client's behaviour, and it keeps the vote rules in one place instead of
+duplicating them in the UI (an earlier revision had `Dislike` / `Lock in` / `Upvote` buttons that called the
+voting service directly).
 
 The chip row still shows `score`, `▲`/`▼` and `streak` for the current song, refreshed from the row whenever
 a vote or a loudness measurement lands.

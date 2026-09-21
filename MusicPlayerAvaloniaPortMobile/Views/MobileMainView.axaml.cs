@@ -50,6 +50,26 @@ public partial class MobileMainView : UserControl
             await viewModel.LoginAndSyncAsync();
     }
 
+    async void LoginWithoutUploadButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (ViewModel is { } viewModel)
+            await viewModel.LoginWithoutUploadAsync();
+    }
+
+    void LogoutButton_Click(object? sender, RoutedEventArgs e) => Run(viewModel => viewModel.Logout());
+
+    void ClearSearchButton_Click(object? sender, RoutedEventArgs e) => Run(viewModel => viewModel.ClearSearch());
+
+    /// <summary>
+    /// Plays the song of the tapped suggestion. The row is a Button whose DataContext is the
+    /// <see cref="MobileSearchResult"/>, so the item does not need a command or a binding back to the view.
+    /// </summary>
+    void SearchResult_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: MobileSearchResult result })
+            Run(viewModel => viewModel.PlaySearchResult(result));
+    }
+
     void RegisterButton_Click(object? sender, RoutedEventArgs e) => Run(viewModel => viewModel.OpenRegistrationPage());
 
     async void RescanButton_Click(object? sender, RoutedEventArgs e)

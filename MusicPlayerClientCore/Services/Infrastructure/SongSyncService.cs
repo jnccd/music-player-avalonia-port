@@ -80,6 +80,45 @@ public class SongSyncService
         return warning;
     }
 
+    /// <summary>
+    /// True when this client holds a sync session: a client exists and a refresh token is stored, so the next
+    /// request can authenticate. It is deliberately "has a stored session" rather than "the session is known
+    /// to be valid" - a token the server has meanwhile revoked only shows up as a failed request, and checking
+    /// it here would cost a network round trip on every UI refresh.
+    /// </summary>
+    public bool IsLoggedIn => client != null && !string.IsNullOrEmpty(Config.Data.AuthBackendRefreshToken);
+
+    /// <summary>
+    /// Ends the sync session: the in-memory client is dropped and the stored refresh token is cleared, so the
+    /// client has to log in again before it can talk to the server.
+    /// <para>
+    /// Deliberately does NOT touch the local database or the configured account name: the song library keeps
+    /// working offline (the rows are the same either way), and logging back in as the same account simply
+    /// continues where it left off. Logging out uploads nothing.
+    /// </para>
+    /// <para>
+    /// The token is only forgotten locally - there is no Keycloak logout call, because <c>EzAuth</c> (a
+    /// submodule shared with the other clients) exposes no logout endpoint. The refresh token therefore stays
+    /// valid server-side until it expires, which is also what makes logging back in without a password work.
+    /// </para>
+    /// </summary>
+    public void Logout()
+    {
+        try
+        {
+            client?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Could not dispose the sync client while logging out: {ex.Message}");
+        }
+
+        client = null;
+        Config.Data.AuthBackendRefreshToken = null;
+        Config.Save();
+        State = "Logged out — the local library stays available offline.";
+    }
+
     public SongSyncService(HttpClient HttpClient, IEzAuth AuthBackend, DbWrapperService DbWrapper)
     {
         this.HttpClient = HttpClient;
@@ -263,6 +302,13 @@ public class SongSyncService
         SyncProgress = 0; // A previous pull (e.g. a login pull) may have left it at the end state.
         try
         {
+            if (client == null)
+            {
+                // Logged out (see Logout): say so instead of dereferencing a null client, because the UI shows
+                // this state and "you are logged out" is actionable where a NullReferenceException is not.
+                State = "Not logged in — log in from the sync settings to sync.";
+                return;
+            }
             // Incremental history pull: tell the server what this client already holds (see
             // ConfigData.SyncHistorySequences). Without any local history (fresh database) no parameters
             // are sent and the server answers with the full history, like before. The songs are always
@@ -455,6 +501,11 @@ public class SongSyncService
         var endpoint = $"{ROUTE_VERSION_PREFIX}/sync/song-library-migration";
         try
         {
+            if (client == null)
+            {
+                State = "Not logged in — a rename or delete needs the sync server (see song library migrations).";
+                return null;
+            }
             var migrationJson = JsonSerializer.Serialize(migration, jsonOptions);
             var migrationContent = new StringContent(migrationJson, Encoding.UTF8, "application/json");
             var res = client!.PostAsync($"{Config.Data.SyncServerHost}{endpoint}", migrationContent).Result;
@@ -793,8 +844,17 @@ public class SongSyncService
         using var dbContext = DbWrapper.GetContext();
         try
         {
+            if (client == null)
+            {
+                // Queue it instead of failing: the song is registered locally either way, and the queued body
+                // is uploaded by the next login's retry pass (see Init).
+                dbContext.AddNewNotYetSyncedDataEntry(newSongJson, queuedEndpoint, "Not logged in.", newSong.SongId);
+                State = "Not logged in — the song was queued and uploads after the next login.";
+                return;
+            }
+
             var newSongContent = new StringContent(newSongJson, Encoding.UTF8, "application/json");
-            var res = client!.PostAsync($"{Config.Data.SyncServerHost}{endpoint}", newSongContent).Result;
+            var res = client.PostAsync($"{Config.Data.SyncServerHost}{endpoint}", newSongContent).Result;
 
             if (res.StatusCode == System.Net.HttpStatusCode.Conflict)
             {
@@ -872,14 +932,23 @@ public class SongSyncService
         string? error = null;
         try
         {
-            var newEntryContent = new StringContent(newEntryJson, Encoding.UTF8, "application/json");
-            var res = client!.PostAsync($"{Config.Data.SyncServerHost}{endpoint}", newEntryContent).Result;
+            if (client == null)
+            {
+                // Keep the marker (the vote is not lost) and record why - the next login's retry pass sends it.
+                error = "Not logged in.";
+                State = "Not logged in — the vote is queued and uploads after the next login.";
+            }
+            else
+            {
+                var newEntryContent = new StringContent(newEntryJson, Encoding.UTF8, "application/json");
+                var res = client.PostAsync($"{Config.Data.SyncServerHost}{endpoint}", newEntryContent).Result;
 
-            accepted = res.IsSuccessStatusCode || res.StatusCode == System.Net.HttpStatusCode.Conflict;
-            if (!accepted)
-                error = $"{res.IsSuccessStatusCode} {res.Content.ReadAsStringAsync().Result}";
+                accepted = res.IsSuccessStatusCode || res.StatusCode == System.Net.HttpStatusCode.Conflict;
+                if (!accepted)
+                    error = $"{res.IsSuccessStatusCode} {res.Content.ReadAsStringAsync().Result}";
 
-            State = $"Vote {res.StatusCode} {res.Content.ReadAsStringAsync().Result}";
+                State = $"Vote {res.StatusCode} {res.Content.ReadAsStringAsync().Result}";
+            }
         }
         catch (Exception ex)
         {

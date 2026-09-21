@@ -230,7 +230,10 @@ public class MobilePlaybackNotificationService : Service
     /// controls show the right button and can drive playback.</summary>
     public void PublishSessionState()
     {
-        if (mediaSession == null)
+        // Snapshot into locals: the fields can be cleared from OnDestroy at any moment, and the compiler can
+        // then also prove the null checks below hold for the whole method.
+        var session = mediaSession;
+        if (session == null)
             return;
 
         try
@@ -241,15 +244,18 @@ public class MobilePlaybackNotificationService : Service
 
             // The transport actions the session advertises are a long bitmask of PlaybackState.Action*
             // constants (not an enum) - this is what makes the lock screen / bluetooth buttons appear.
-            var builder = new Android.Media.Session.PlaybackState.Builder()
-                .SetActions(PlaybackState.ActionPlay | PlaybackState.ActionPause | PlaybackState.ActionStop
-                    | PlaybackState.ActionSkipToNext | PlaybackState.ActionSkipToPrevious)
-                .SetState(
-                    isPlaying ? PlaybackStateCode.Playing : PlaybackStateCode.Paused,
-                    (long)(positionSeconds * 1000),
-                    1.0f);
-
-            mediaSession.SetPlaybackState(builder.Build());
+            //
+            // Deliberately not a fluent chain: the Java builder methods are annotated as possibly returning
+            // null, so chaining them is a nullable dereference on every step (CS8602) even though they never
+            // actually return null.
+            var stateBuilder = new Android.Media.Session.PlaybackState.Builder();
+            stateBuilder.SetActions(PlaybackState.ActionPlay | PlaybackState.ActionPause | PlaybackState.ActionStop
+                | PlaybackState.ActionSkipToNext | PlaybackState.ActionSkipToPrevious);
+            stateBuilder.SetState(
+                isPlaying ? PlaybackStateCode.Playing : PlaybackStateCode.Paused,
+                (long)(positionSeconds * 1000),
+                1.0f);
+            session.SetPlaybackState(stateBuilder.Build());
 
             var song = playback?.CurrentlyPlaying;
             if (song == null)
@@ -266,15 +272,15 @@ public class MobilePlaybackNotificationService : Service
             if (metadataSongId == song.UpvotedSongId && metadataDurationMs == durationMs)
                 return;
 
-            var metadata = new MediaMetadata.Builder()
-                .PutString(MediaMetadata.MetadataKeyTitle, IOPath.GetFileNameWithoutExtension(song.FilePath))
-                .PutString(MediaMetadata.MetadataKeyArtist, BuildArtistText(song))
-                .PutLong(MediaMetadata.MetadataKeyDuration, durationMs);
+            var metadata = new MediaMetadata.Builder();
+            metadata.PutString(MediaMetadata.MetadataKeyTitle, IOPath.GetFileNameWithoutExtension(song.FilePath));
+            metadata.PutString(MediaMetadata.MetadataKeyArtist, BuildArtistText(song));
+            metadata.PutLong(MediaMetadata.MetadataKeyDuration, durationMs);
 
-            if (largeIcon != null)
-                metadata.PutBitmap(MediaMetadata.MetadataKeyAlbumArt, largeIcon);
+            if (largeIcon is { } art)
+                metadata.PutBitmap(MediaMetadata.MetadataKeyAlbumArt, art);
 
-            mediaSession.SetMetadata(metadata.Build());
+            session.SetMetadata(metadata.Build());
             metadataSongId = song.UpvotedSongId;
             metadataDurationMs = durationMs;
         }
@@ -441,28 +447,29 @@ public class MobilePlaybackNotificationService : Service
 
             SetLargeIcon(ref largeIcon, builder, song);
 
-            builder
-                .SetContentTitle(title)
-                .SetContentText(subtitle)
-                .SetSmallIcon(Resource.Drawable.ic_stat_music)
-                .SetContentIntent(OpenAppIntent())
-                .SetDeleteIntent(ServiceIntent(ActionStop, 4))
-                .SetOngoing(isPlaying)
-                .SetOnlyAlertOnce(true)
-                .SetShowWhen(false)
-                .SetVisibility(NotificationVisibility.Public)
-                .SetCategory(Notification.CategoryTransport)
-                .AddAction(ServiceAction(Resource.Drawable.ic_media_prev, "Previous", ActionPrevious, 1))
-                .AddAction(ServiceAction(isPlaying ? Resource.Drawable.ic_media_pause : Resource.Drawable.ic_media_play,
-                    isPlaying ? "Pause" : "Play", ActionPlayPause, 2))
-                .AddAction(ServiceAction(Resource.Drawable.ic_media_next, "Next", ActionNext, 3));
+            // Not a fluent chain on purpose: the Android builder methods are annotated as possibly returning
+            // null, so every chained call is reported as a nullable dereference (CS8602).
+            builder.SetContentTitle(title);
+            builder.SetContentText(subtitle);
+            builder.SetSmallIcon(Resource.Drawable.ic_stat_music);
+            builder.SetContentIntent(OpenAppIntent());
+            builder.SetDeleteIntent(ServiceIntent(ActionStop, 4));
+            builder.SetOngoing(isPlaying);
+            builder.SetOnlyAlertOnce(true);
+            builder.SetShowWhen(false);
+            builder.SetVisibility(NotificationVisibility.Public);
+            builder.SetCategory(Notification.CategoryTransport);
+            builder.AddAction(ServiceAction(Resource.Drawable.ic_media_prev, "Previous", ActionPrevious, 1));
+            builder.AddAction(ServiceAction(isPlaying ? Resource.Drawable.ic_media_pause : Resource.Drawable.ic_media_play,
+                isPlaying ? "Pause" : "Play", ActionPlayPause, 2));
+            builder.AddAction(ServiceAction(Resource.Drawable.ic_media_next, "Next", ActionNext, 3));
 
             // MediaStyle is what makes the system treat this as a media notification (compact view, lock
             // screen, media output switcher, bluetooth metadata) instead of a plain one.
-            var style = new Notification.MediaStyle()
-                .SetShowActionsInCompactView(0, 1, 2);
-            if (mediaSession?.SessionToken != null)
-                style.SetMediaSession(mediaSession.SessionToken);
+            var style = new Notification.MediaStyle();
+            style.SetShowActionsInCompactView(0, 1, 2);
+            if (mediaSession?.SessionToken is { } sessionToken)
+                style.SetMediaSession(sessionToken);
             builder.SetStyle(style);
 
             return builder.Build();
@@ -502,8 +509,15 @@ public class MobilePlaybackNotificationService : Service
         }
     }
 
-    Notification.Action ServiceAction(int icon, string title, string action, int requestCode) =>
-        new Notification.Action.Builder(icon, new Java.Lang.String(title), ServiceIntent(action, requestCode)).Build();
+    /// <summary>
+    /// One notification action. The icon-object overload is used instead of the resource-id one: the latter is
+    /// obsolete since API 23 (CA1422), and this app never runs below API 24.
+    /// </summary>
+    Notification.Action ServiceAction(int icon, string title, string action, int requestCode)
+    {
+        var actionIcon = Android.Graphics.Drawables.Icon.CreateWithResource(this, icon)!;
+        return new Notification.Action.Builder(actionIcon, new Java.Lang.String(title), ServiceIntent(action, requestCode)).Build();
+    }
 
     PendingIntent ServiceIntent(string action, int requestCode)
     {

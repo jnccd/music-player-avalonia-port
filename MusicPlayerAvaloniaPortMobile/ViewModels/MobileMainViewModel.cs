@@ -13,14 +13,12 @@ using System.Threading.Tasks;
 namespace MusicPlayerAvaloniaPortMobile.ViewModels;
 
 /// <summary>
-/// One entry of the "most likely next" list: a song of the library and how likely the weighted choosing
-/// algorithm is to pick it next (the chance is the song's share of the choosing list, see
-/// <see cref="SongChoosingService.GetSongChoosingChances"/>).
+/// One suggestion of the library search: the song and the two lines the list shows for it.
 /// </summary>
-public record MobileSongChanceItem(string Title, string Detail, string ChanceText);
+public record MobileSearchResult(string Title, string Subtitle, AvailableSong Song);
 
 /// <summary>
-/// The whole mobile client state: transport, voting, the play-chance list and the sync settings.
+/// The whole mobile client state: transport, voting, the library search and the sync settings.
 /// <para>
 /// It drives exactly the same services the desktop client drives (all from MusicPlayerClientCore), which is
 /// the point of the mobile head: playing, voting, weighting and syncing behave identically, only the UI and
@@ -29,8 +27,11 @@ public record MobileSongChanceItem(string Title, string Detail, string ChanceTex
 /// </summary>
 public class MobileMainViewModel : MobileViewModelBase
 {
-    /// <summary>How many entries the "most likely next" list shows.</summary>
-    const int MOST_LIKELY_SONGS_COUNT = 5;
+    /// <summary>How many search suggestions the drop down shows.</summary>
+    const int SEARCH_RESULT_COUNT = 8;
+
+    /// <summary>What <see cref="BuildSubtitle"/> returns for a song without artist and album metadata.</summary>
+    const string NoTagsText = "no tags";
 
     readonly SongPlaybackService playback;
     readonly SongVotingService voting;
@@ -81,6 +82,7 @@ public class MobileMainViewModel : MobileViewModelBase
         UserVolume = volume.UserDefinedVolume * 100;
         ServerHost = Config.Data.SyncServerHost ?? "";
         Username = Config.Data.SyncServerUsername ?? "";
+        IsLoggedIn = sync.IsLoggedIn;
         LibraryPathText = Config.Data.SongLibraryPath ?? "";
         StatusText = "Starting up…";
         SongTitle = "Nothing playing";
@@ -99,12 +101,37 @@ public class MobileMainViewModel : MobileViewModelBase
             if (playback.CurrentlyPlaying != null)
                 audio.PlayProgress = (float)pendingSeek;
         };
+
+        // A notice is informational, not a dialog: it fades out on its own instead of staying on screen.
+        noticeTimer.Tick += (_, _) =>
+        {
+            noticeTimer.Stop();
+            HeaderNotice = null;
+        };
     }
 
     // ---------- Bindable state ----------
 
     string statusText = "";
+    /// <summary>
+    /// The client's running log - what it is doing right now, and the outcome of the last action. Shown in the
+    /// sync sheet rather than on the player screen (see <see cref="SetStatus"/>).
+    /// </summary>
     public string StatusText { get => statusText; private set => SetProperty(ref statusText, value); }
+
+    string? headerNotice;
+    /// <summary>A failure or the result of the last tap, shown under the header and hidden again after a few
+    /// seconds. Null the rest of the time, so the player screen carries no permanent status text.</summary>
+    public string? HeaderNotice
+    {
+        get => headerNotice;
+        private set { if (SetProperty(ref headerNotice, value)) OnPropertyChanged(nameof(HasHeaderNotice)); }
+    }
+    public bool HasHeaderNotice => !string.IsNullOrEmpty(headerNotice);
+
+    /// <summary>How long a <see cref="HeaderNotice"/> stays on screen.</summary>
+    static readonly TimeSpan NoticeDuration = TimeSpan.FromSeconds(6);
+    readonly Avalonia.Threading.DispatcherTimer noticeTimer = new() { Interval = NoticeDuration };
 
     string songTitle = "";
     public string SongTitle { get => songTitle; private set => SetProperty(ref songTitle, value); }
@@ -150,12 +177,6 @@ public class MobileMainViewModel : MobileViewModelBase
     string voteText = "No song";
     public string VoteText { get => voteText; private set => SetProperty(ref voteText, value); }
 
-    string chanceText = "—";
-    public string ChanceText { get => chanceText; private set => SetProperty(ref chanceText, value); }
-
-    string volumeNormalizationText = "";
-    public string VolumeNormalizationText { get => volumeNormalizationText; private set => SetProperty(ref volumeNormalizationText, value); }
-
     Bitmap? coverArt;
     public Bitmap? CoverArt { get => coverArt; private set => SetProperty(ref coverArt, value); }
 
@@ -164,8 +185,6 @@ public class MobileMainViewModel : MobileViewModelBase
 
     string librarySummary = "No library yet";
     public string LibrarySummary { get => librarySummary; private set => SetProperty(ref librarySummary, value); }
-
-    public ObservableCollection<MobileSongChanceItem> MostLikelySongs { get; } = [];
 
     // Settings sheet
     bool settingsOpen;
@@ -184,9 +203,29 @@ public class MobileMainViewModel : MobileViewModelBase
     public bool LoginBusy
     {
         get => loginBusy;
-        private set { if (SetProperty(ref loginBusy, value)) OnPropertyChanged(nameof(LoginEnabled)); }
+        private set { if (SetProperty(ref loginBusy, value)) { OnPropertyChanged(nameof(LoginEnabled)); OnPropertyChanged(nameof(LogoutEnabled)); } }
     }
     public bool LoginEnabled => !loginBusy;
+
+    bool isLoggedIn;
+    /// <summary>Whether the client currently holds a sync session (drives the log out button).</summary>
+    public bool IsLoggedIn
+    {
+        get => isLoggedIn;
+        private set
+        {
+            if (!SetProperty(ref isLoggedIn, value))
+                return;
+            OnPropertyChanged(nameof(LogoutEnabled));
+            OnPropertyChanged(nameof(SessionText));
+        }
+    }
+    public bool LogoutEnabled => isLoggedIn && !loginBusy;
+
+    /// <summary>"signed in as X" / "not signed in", shown above the session buttons.</summary>
+    public string SessionText => isLoggedIn
+        ? $"signed in as {Config.Data.SyncServerUsername ?? "?"}"
+        : "not signed in";
 
     string libraryPathText = "";
     public string LibraryPathText { get => libraryPathText; private set => SetProperty(ref libraryPathText, value); }
@@ -228,20 +267,127 @@ public class MobileMainViewModel : MobileViewModelBase
     }
     public bool HasLibraryOwnerWarning => !string.IsNullOrEmpty(libraryOwnerWarning);
 
+    /// <summary>
+    /// Highest user volume the slider offers, in percent. Above 100% the audio layer amplifies (SoundFlow
+    /// applies the volume as a gain, it only rejects negative values), which is what makes a quiet song or a
+    /// quiet recording listenable; the final value handed to the audio backend is capped in
+    /// <see cref="Services.MobileAudioPlayerService.Volume"/> so the per-song normalization cannot multiply
+    /// it into clipping territory.
+    /// </summary>
+    public const double MaxUserVolumePercent = 200;
+
     double userVolume = 80;
-    /// <summary>User volume in percent (the slider's unit).</summary>
+    /// <summary>User volume in percent (the slider's unit, 0..<see cref="MaxUserVolumePercent"/>).</summary>
     public double UserVolume
     {
         get => userVolume;
         set
         {
-            if (!SetProperty(ref userVolume, value))
+            double clamped = Math.Clamp(value, 0, MaxUserVolumePercent);
+            if (!SetProperty(ref userVolume, clamped))
                 return;
-            volume.UserDefinedVolume = (float)(value / 100.0);
+            volume.UserDefinedVolume = (float)(clamped / 100.0);
             OnPropertyChanged(nameof(VolumeText));
         }
     }
     public string VolumeText => $"{userVolume:0}%";
+
+    // ---------- Library search ----------
+
+    string searchText = "";
+    /// <summary>
+    /// What the user typed into the search field. Setting it recomputes the suggestions, so the list follows
+    /// every keystroke like a search box is expected to.
+    /// </summary>
+    public string SearchText
+    {
+        get => searchText;
+        set
+        {
+            if (!SetProperty(ref searchText, value))
+                return;
+            OnPropertyChanged(nameof(HasSearchText));
+            RefreshSearchResults();
+        }
+    }
+    public bool HasSearchText => !string.IsNullOrEmpty(searchText);
+
+    /// <summary>Best matching songs for the current search text, best first.</summary>
+    public ObservableCollection<MobileSearchResult> SearchResults { get; } = [];
+
+    public bool HasSearchResults => SearchResults.Count > 0;
+
+    /// <summary>
+    /// Recomputes the suggestions with the same modified-Levenshtein matching the "play a song quickly" flow
+    /// of the desktop client uses (see <see cref="SongPlaybackService.FindBestSongMatches"/>), so the ranking
+    /// is "closest name first" rather than a prefix filter.
+    /// </summary>
+    void RefreshSearchResults()
+    {
+        SearchResults.Clear();
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(searchText) && playback.AvailableSongsCount > 0)
+            {
+                using var context = dbWrapper.GetContext();
+                foreach (var (song, _) in playback.FindBestSongMatches(searchText, SEARCH_RESULT_COUNT))
+                {
+                    var row = context.GetUpvotedSongByIdOrNull(song.UpvotedSongId);
+                    string subtitle = row == null ? "not registered yet" : BuildSubtitle(row.Artist, row.Album);
+                    if (subtitle == NoTagsText)
+                        subtitle = DescribeSongFolder(song);
+
+                    SearchResults.Add(new MobileSearchResult(Path.GetFileNameWithoutExtension(song.FilePath), subtitle, song));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            MobileLog.Error("Library search failed", ex);
+        }
+        finally
+        {
+            OnPropertyChanged(nameof(HasSearchResults));
+        }
+    }
+
+    /// <summary>
+    /// The secondary line of a suggestion for a song without tags: where it sits inside the library, relative
+    /// to the library root. Empty for songs directly in the root - then the suggestion is one line, which reads
+    /// better than repeating the same folder name on every row of a single-folder library.
+    /// </summary>
+    static string DescribeSongFolder(AvailableSong song)
+    {
+        try
+        {
+            string? folder = Path.GetDirectoryName(song.FilePath);
+            if (string.IsNullOrEmpty(folder))
+                return "";
+
+            string? libraryRoot = Config.Data.SongLibraryPath;
+            if (string.IsNullOrWhiteSpace(libraryRoot))
+                return Path.GetFileName(folder) ?? "";
+
+            string relative = Path.GetRelativePath(libraryRoot, folder);
+            return relative == "." ? "" : relative;
+        }
+        catch (Exception ex)
+        {
+            MobileLog.Warn($"Could not describe the folder of \"{song.FilePath}\": {ex.Message}");
+            return "";
+        }
+    }
+
+    /// <summary>Plays a suggestion and closes the search.</summary>
+    public void PlaySearchResult(MobileSearchResult result)
+    {
+        SearchText = "";
+        playback.PlaySpecificSong(result.Song);
+        MobileLog.Info($"Search: playing \"{result.Title}\"");
+    }
+
+    public void ClearSearch() => SearchText = "";
 
 
     bool IsPlayingNow => audio.PlayState == SoundFlow.Enums.PlaybackState.Playing;
@@ -272,7 +418,7 @@ public class MobileMainViewModel : MobileViewModelBase
                 string? libraryPath = MobilePlatform.ResolveSongLibraryPath();
                 if (libraryPath == null)
                 {
-                    SetStatus("No music folder found — open Sync and set the folder by hand.");
+                    SetStatus("No music folder found — open Sync and set the folder by hand.", notify: true);
                     SetLibrarySummary("No songs found");
                     SetLibraryDiagnostics(MobilePlatform.DescribeLibraryCandidates());
                     return;
@@ -300,12 +446,12 @@ public class MobileMainViewModel : MobileViewModelBase
 
                 MobileLog.Info($"Startup: scan done, {playback.AvailableSongsCount} song(s) available");
                 RefreshLibrarySummary();
-                SetStatus(MostLikelySongs.Count == 0 ? "Library ready" : "Library ready — tap play");
+                SetStatus(playback.AvailableSongsCount == 0 ? "Library ready, but it holds no songs" : "Library ready — tap play");
             }
             catch (Exception ex)
             {
                 MobileLog.Error("Startup failed", ex);
-                SetStatus($"Startup failed: {ex.Message}");
+                SetStatus($"Startup failed: {ex.Message}", notify: true);
             }
             finally
             {
@@ -337,7 +483,7 @@ public class MobileMainViewModel : MobileViewModelBase
         }
         catch (Exception ex)
         {
-            SetStatus($"Cannot play: {ex.Message}");
+            SetStatus($"Cannot play: {ex.Message}", notify: true);
         }
     }
 
@@ -353,7 +499,7 @@ public class MobileMainViewModel : MobileViewModelBase
         }
         catch (Exception ex)
         {
-            SetStatus($"Cannot switch song: {ex.Message}");
+            SetStatus($"Cannot switch song: {ex.Message}", notify: true);
         }
     }
 
@@ -365,7 +511,7 @@ public class MobileMainViewModel : MobileViewModelBase
         }
         catch (Exception ex)
         {
-            SetStatus($"Cannot switch song: {ex.Message}");
+            SetStatus($"Cannot switch song: {ex.Message}", notify: true);
         }
     }
 
@@ -390,6 +536,9 @@ public class MobileMainViewModel : MobileViewModelBase
         playback.UpvoteLockedIn = !playback.UpvoteLockedIn;
         UpvoteLockedIn = playback.UpvoteLockedIn;
         MobileLog.Info($"Upvote armed: {playback.UpvoteLockedIn} (the vote itself is cast when the song ends or is skipped)");
+
+        // No notice: the button turning accent-coloured *is* the feedback. The line still goes into the status
+        // log that the sync sheet shows.
         SetStatus(playback.UpvoteLockedIn
             ? "Upvote locked in — it counts when this song ends"
             : "Upvote removed");
@@ -402,8 +551,25 @@ public class MobileMainViewModel : MobileViewModelBase
 
     // ---------- Sync settings ----------
 
-    /// <summary>Logs in, pushes the local account state once if the account is empty and pulls everything.</summary>
-    public async Task LoginAndSyncAsync()
+    /// <summary>
+    /// Logs in and seeds the server account from the local library when the account is still empty
+    /// (<c>/sync/init</c>, the whole-library upload), then pulls.
+    /// </summary>
+    public Task LoginAndSyncAsync() => LoginAsync(uploadLocalLibrary: true);
+
+    /// <summary>
+    /// Logs in and pulls, but sends nothing: no <c>/sync/init</c> (which would upload the whole local library
+    /// to seed an empty account) and no retry of queued votes/uploads either.
+    /// <para>
+    /// Meant for logging into an account that is already in use, where the library upload is at best a 409 and
+    /// at worst unwanted. Because a full pull against an empty account is rejected by the client before it
+    /// rewrites anything, this is also safe to use by accident: the local library survives, and the ordinary
+    /// log in can seed the account afterwards.
+    /// </para>
+    /// </summary>
+    public Task LoginWithoutUploadAsync() => LoginAsync(uploadLocalLibrary: false);
+
+    async Task LoginAsync(bool uploadLocalLibrary)
     {
         if (LoginBusy)
             return;
@@ -414,10 +580,13 @@ public class MobileMainViewModel : MobileViewModelBase
 
         string enteredPassword = Password;
         LoginBusy = true;
-        SetStatus("Logging in…");
+        MobileLog.Info($"Login requested (upload: {uploadLocalLibrary})");
+        SetStatus(uploadLocalLibrary ? "Logging in and uploading the library…" : "Logging in (no upload)…");
         try
         {
-            await Task.Run(() => sync.Init(enteredPassword, TryCallApiInit: true));
+            // TryCallApiInit is the /sync/init whole-library upload; RetryUnsyncedEntries sends queued votes
+            // and song uploads. "Without uploading" turns off both.
+            await Task.Run(() => sync.Init(enteredPassword, TryCallApiInit: uploadLocalLibrary, RetryUnsyncedEntries: uploadLocalLibrary));
             await Task.Run(() => sync.Pull());
 
             SetLibraryOwnerWarning(sync.TakeSongLibraryOwnerWarning());
@@ -432,22 +601,48 @@ public class MobileMainViewModel : MobileViewModelBase
                 ScanRunning = false;
             }
 
-            // A sync session exists now, so songs registered (and tagged) without one are uploaded.
-            sync.ProcessPendingSongUploadsInBackground();
+            // A sync session exists now, so songs registered (and tagged) without one are uploaded - unless
+            // the user explicitly asked for a login that uploads nothing.
+            if (uploadLocalLibrary)
+                sync.ProcessPendingSongUploadsInBackground();
 
             RefreshLibrarySummary();
-            RefreshMostLikelySongs();
             SetStatus(sync.State);
         }
         catch (Exception ex)
         {
-            SetStatus($"Login failed: {ex.Message}");
+            MobileLog.Error("Login failed", ex);
+            SetStatus($"Login failed: {ex.Message}", notify: true);
         }
         finally
         {
             ScanRunning = false;
             LoginBusy = false;
             Password = "";
+            IsLoggedIn = sync.IsLoggedIn;
+        }
+    }
+
+    /// <summary>
+    /// Ends the sync session (the "Log out" button). The local library and the configured account name stay, so
+    /// the player keeps working offline and logging back in as the same account continues where it left off.
+    /// </summary>
+    public void Logout()
+    {
+        try
+        {
+            sync.Logout();
+            MobileLog.Info("Logged out");
+            SetStatus(sync.State, notify: true); // direct response to the tap
+        }
+        catch (Exception ex)
+        {
+            MobileLog.Error("Log out failed", ex);
+            SetStatus($"Log out failed: {ex.Message}", notify: true);
+        }
+        finally
+        {
+            IsLoggedIn = sync.IsLoggedIn;
         }
     }
 
@@ -463,7 +658,7 @@ public class MobileMainViewModel : MobileViewModelBase
             RefreshLibraryDiagnostics();
             if (libraryPath == null)
             {
-                SetStatus("No music folder with songs found — set the folder below.");
+                SetStatus("No music folder with songs found — set the folder below.", notify: true);
                 return;
             }
 
@@ -472,13 +667,12 @@ public class MobileMainViewModel : MobileViewModelBase
             SetStatus("Scanning the song library…");
             await Task.Run(() => playback.UpdateAvailableSongPaths(libraryPath));
             RefreshLibrarySummary();
-            RefreshMostLikelySongs();
-            SetStatus($"Library scan finished ({playback.AvailableSongsCount} songs)");
+            SetStatus($"Library scan finished ({playback.AvailableSongsCount} songs)", notify: true);
         }
         catch (Exception ex)
         {
             MobileLog.Error("Library scan failed", ex);
-            SetStatus($"Library scan failed: {ex.Message}");
+            SetStatus($"Library scan failed: {ex.Message}", notify: true);
         }
         finally
         {
@@ -495,7 +689,7 @@ public class MobileMainViewModel : MobileViewModelBase
         string folder = LibraryFolderInput.Trim();
         if (folder.Length == 0)
         {
-            SetStatus("Enter a folder path first");
+            SetStatus("Enter a folder path first", notify: true);
             return;
         }
 
@@ -503,7 +697,7 @@ public class MobileMainViewModel : MobileViewModelBase
         if (problem != null)
         {
             RefreshLibraryDiagnostics();
-            SetStatus($"\"{folder}\" cannot be used: {problem}");
+            SetStatus($"\"{folder}\" cannot be used: {problem}", notify: true);
             return;
         }
 
@@ -535,13 +729,13 @@ public class MobileMainViewModel : MobileViewModelBase
 
         sync.AdoptSongLibrary(Config.Data.SongLibraryPath);
         LibraryOwnerWarning = null;
-        SetStatus("The song library now belongs to your account");
+        SetStatus("The song library now belongs to your account", notify: true);
     }
 
     public void DismissLibraryOwnerWarning()
     {
         LibraryOwnerWarning = null;
-        SetStatus("The song library was left untouched");
+        SetStatus("The song library was left untouched", notify: true);
     }
 
     /// <summary>Opens the account registration page of the configured sync server in the browser.</summary>
@@ -551,11 +745,11 @@ public class MobileMainViewModel : MobileViewModelBase
         {
             string url = sync.GetAccountRegistrationAddress(ServerHost.Trim());
             if (!MobilePlatform.OpenUrl(url))
-                SetStatus("Could not open the registration page");
+                SetStatus("Could not open the registration page", notify: true);
         }
         catch (Exception ex)
         {
-            SetStatus($"Cannot open the registration page: {ex.Message}");
+            SetStatus($"Cannot open the registration page: {ex.Message}", notify: true);
         }
     }
 
@@ -605,13 +799,12 @@ public class MobileMainViewModel : MobileViewModelBase
         if (!audioReportedUnavailable && !audio.IsAvailable && audio.LastError is { Length: > 0 } audioError)
         {
             audioReportedUnavailable = true;
-            SetStatus(audioError);
+            SetStatus(audioError, notify: true);
         }
     }
 
     /// <summary>
-    /// Refreshes everything that depends on which song is playing: title, artist, cover art, vote numbers,
-    /// the song's play chance and the "most likely next" list.
+    /// Refreshes everything that depends on which song is playing: title, artist, cover art and vote numbers.
     /// </summary>
     void OnSongChanged(AvailableSong? song)
     {
@@ -622,8 +815,6 @@ public class MobileMainViewModel : MobileViewModelBase
             CoverArt = null;
             HasCoverArt = false;
             VoteText = "No song";
-            ChanceText = "—";
-            VolumeNormalizationText = "";
             return;
         }
 
@@ -631,8 +822,6 @@ public class MobileMainViewModel : MobileViewModelBase
         RefreshSongChips(song);
         CoverArt = LoadCoverArt(song);
         HasCoverArt = CoverArt != null;
-
-        RefreshMostLikelySongs();
     }
 
     /// <summary>
@@ -645,9 +834,8 @@ public class MobileMainViewModel : MobileViewModelBase
     {
         if (song == null)
         {
+            SongSubtitle = "";
             VoteText = "No song";
-            ChanceText = "—";
-            VolumeNormalizationText = "";
             return;
         }
 
@@ -657,64 +845,11 @@ public class MobileMainViewModel : MobileViewModelBase
         {
             SongSubtitle = "Not registered yet";
             VoteText = "No votes yet";
-            ChanceText = "—";
-            VolumeNormalizationText = "";
             return;
         }
 
         SongSubtitle = BuildSubtitle(row.Artist, row.Album);
         VoteText = $"score {row.Score:0.0} · ▲ {row.TotalLikes} · ▼ {row.TotalDislikes} · streak {row.Streak}";
-        VolumeNormalizationText = row.Volume > 0
-            ? $"volume normalized ({row.Volume:F3})"
-            : "measuring volume…";
-
-        var chances = choosing.GetSongChoosingChances();
-        ChanceText = chances.TryGetValue(row.SongId, out float chance)
-            ? $"next-song chance {chance * 100:0.00}%"
-            : "not in the choosing pool";
-    }
-
-    /// <summary>
-    /// Rebuilds the "most likely next" list from the choosing data structure - the weighted pool the player
-    /// actually draws from, so this is not a guess but the real probability of each song.
-    /// </summary>
-    void RefreshMostLikelySongs()
-    {
-        MostLikelySongs.Clear();
-
-        try
-        {
-            var chances = choosing.GetSongChoosingChances();
-            if (chances.Count == 0)
-                return;
-
-            using var context = dbWrapper.GetContext();
-            var rowsById = context.DumpUpvotedSongs()
-                .Where(row => row.SongId != Guid.Empty)
-                .GroupBy(row => row.SongId)
-                .ToDictionary(group => group.Key, group => group.First());
-
-            foreach (var entry in chances
-                .OrderByDescending(pair => pair.Value)
-                .Take(MOST_LIKELY_SONGS_COUNT))
-            {
-                if (!rowsById.TryGetValue(entry.Key, out var row))
-                    continue;
-
-                string detail = BuildSubtitle(row.Artist, row.Album);
-                if (detail.Length == 0)
-                    detail = $"score {row.Score:0.0} · ▲ {row.TotalLikes} ▼ {row.TotalDislikes}";
-
-                MostLikelySongs.Add(new MobileSongChanceItem(
-                    Path.GetFileNameWithoutExtension(row.Name),
-                    detail,
-                    $"{entry.Value * 100:0.00}%"));
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Could not build the most-likely-next list: {ex}");
-        }
     }
 
     void RefreshLibrarySummary()
@@ -742,7 +877,7 @@ public class MobileMainViewModel : MobileViewModelBase
             return artist!;
         if (hasAlbum)
             return album!;
-        return "no tags";
+        return NoTagsText;
     }
 
     Bitmap? LoadCoverArt(AvailableSong song)
@@ -778,7 +913,27 @@ public class MobileMainViewModel : MobileViewModelBase
 
     // ---------- Thread safe state setters (the startup/login/scan work runs off the UI thread) ----------
 
-    void SetStatus(string text) => OnUi(() => StatusText = text);
+    /// <summary>
+    /// Records what the client is doing. <see cref="StatusText"/> is the running log and is shown in the sync
+    /// sheet; <paramref name="notify"/> additionally surfaces it under the header for a few seconds.
+    /// <para>
+    /// Only failures and the direct result of a tap notify. Steady state ("Library ready — tap play", the
+    /// startup stages) does not: it is not worth a permanent line on a player screen, and the
+    /// "N songs · M upvoted entries" line at the bottom already says the library is loaded.
+    /// </para>
+    /// </summary>
+    void SetStatus(string text, bool notify = false) => OnUi(() =>
+    {
+        StatusText = text;
+
+        if (!notify)
+            return;
+
+        HeaderNotice = text;
+        noticeTimer.Stop();
+        noticeTimer.Start();
+    });
+
     void SetSyncState(string text) => OnUi(() => SyncState = text);
     void SetLibraryPath(string text) => OnUi(() => { LibraryPathText = text; LibraryFolderInput = text; });
     void SetLibrarySummary(string text) => OnUi(() => LibrarySummary = text);

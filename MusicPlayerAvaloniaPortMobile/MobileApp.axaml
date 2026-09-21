@@ -4,9 +4,33 @@
              RequestedThemeVariant="Dark">
 
   <!--
+    The app's single accent definition.
+
+    SystemAccentColor (+ its light/dark shades) is what the Fluent theme colours accent-driven controls with -
+    the slider's filled track and thumb, the progress bar, focus visuals. Left alone it comes from the
+    platform, so on Android the sliders picked up the device's theme colour (MIUI handed us an olive #717C35)
+    while this app's own buttons hardcoded a teal - which is exactly why the seek/volume sliders and the
+    play button did not match. Overriding the accent here makes the theme and our own brushes agree, and
+    AppAccentBrush below is the one place the app's accent is written down.
+
     A dark theme is the natural default for a phone music player (and the only one this client ships with),
     so the player view can be built on it without a light/dark switch.
   -->
+  <Application.Resources>
+    <Color x:Key="SystemAccentColor">#FF00BEC8</Color>
+    <Color x:Key="SystemAccentColorLight1">#FF33CBD3</Color>
+    <Color x:Key="SystemAccentColorLight2">#FF66D8DE</Color>
+    <Color x:Key="SystemAccentColorLight3">#FF99E5EA</Color>
+    <Color x:Key="SystemAccentColorDark1">#FF0098A0</Color>
+    <Color x:Key="SystemAccentColorDark2">#FF007278</Color>
+    <Color x:Key="SystemAccentColorDark3">#FF004C50</Color>
+
+    <SolidColorBrush x:Key="AppAccentBrush" Color="#FF00BEC8" />
+    <SolidColorBrush x:Key="AppAccentHoverBrush" Color="#FF29D2DB" />
+    <!-- Ink colour for text/icons sitting on the accent (teal needs dark text, not white). -->
+    <SolidColorBrush x:Key="AppAccentInkBrush" Color="#FF06131A" />
+  </Application.Resources>
+
   <Application.Styles>
     <FluentTheme />
   </Application.Styles>
