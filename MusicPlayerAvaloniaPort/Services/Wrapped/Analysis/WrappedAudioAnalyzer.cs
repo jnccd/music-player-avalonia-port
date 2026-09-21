@@ -52,6 +52,20 @@ public sealed class WrappedAudioAnalyzer : IDisposable
     /// <summary>Frames actually stored per song (the rest only feeds the statistics).</summary>
     public const int MaxStoredFrames = 6000;
 
+    /// <summary>
+    /// Slots the stored frames are downsampled to when the features are exported. Sixty-four slots still
+    /// describe the song's shape over time (and give the clustering a view of its parts) while keeping one
+    /// song's cache entry in the tens of kilobytes instead of hundreds.
+    /// </summary>
+    public const int FrameFeatureCount = 64;
+
+    /// <summary>
+    /// Length of one slot of the structural segmentation matrix. Half a second keeps the novelty curve
+    /// sharp enough that a boundary lands where the music actually changes - at two seconds the averaging
+    /// smoothed the curve so far that no boundary cleared the threshold - while still costing little.
+    /// </summary>
+    public const double SectionSlotSeconds = 0.5;
+
     /// <summary>Frame feature width used by the clustering and the structure detector.</summary>
     public const int FrameFeatureValues = 5;
 
@@ -422,7 +436,35 @@ public sealed class WrappedAudioAnalyzer : IDisposable
                 frameFeatures.Add(frameFlux);
                 StoredFrameCount++;
             }
+
+            // The structural segmentation accumulates over EVERY frame, not just the stored ones, so it
+            // covers the whole song. Keeping only the first MaxStoredFrames frames (about seventy seconds)
+            // and segmenting those made the section times wrong for anything longer than that.
+            int slot = (int)(index * HopSize / (SectionSlotSeconds * AnalysisSampleRate));
+            if (slot >= 0)
+            {
+                if (slot >= sectionSlotCounts.Length)
+                {
+                    int newLength = Math.Max(slot + 1, sectionSlotCounts.Length * 2);
+                    Array.Resize(ref sectionSlotCounts, newLength);
+                    Array.Resize(ref sectionSlotSums, newLength * FrameFeatureValues);
+                }
+                int target = slot * FrameFeatureValues;
+                sectionSlotSums[target] += frameRms;
+                sectionSlotSums[target + 1] += frameCentroid;
+                sectionSlotSums[target + 2] += frameRolloff / 1000f;
+                sectionSlotSums[target + 3] += frameFlatness * 100f;
+                sectionSlotSums[target + 4] += frameFlux;
+                sectionSlotCounts[slot]++;
+            }
         }
+
+        /// <summary>Per-slot sums and counts of the structural segmentation matrix (see <see cref="BuildSectionMatrix"/>).</summary>
+        int[] sectionSlotCounts = new int[256];
+        float[] sectionSlotSums = new float[256 * FrameFeatureValues];
+
+        /// <summary>Total analysis frames the pass saw - the true length of the analysis, in frames.</summary>
+        public long FrameCount => frameIndex;
 
         public int StoredFrameCount { get; private set; }
 
@@ -510,7 +552,10 @@ public sealed class WrappedAudioAnalyzer : IDisposable
             // ---- Shape ----
             FillLoudnessCurve(features, sortedRms, gain);
             FillFrameFeatures(features, gain);
-            features.Sections = DetectSections(features);
+            features.FrameSampleCount = StoredFrameCount;
+            features.SectionFeatures = BuildSectionMatrix(gain);
+            features.SectionSampleCount = (int)frameIndex;
+            features.Sections = DetectSections(features, TotalSeconds);
 
             return features;
         }
@@ -613,179 +658,71 @@ public sealed class WrappedAudioAnalyzer : IDisposable
             _ = sortedRms;
         }
 
-        /// <summary>Applies the loudness gain to the stored frame matrix and exports it as a flat array.</summary>
+        /// <summary>
+        /// Applies the loudness gain to the recorded frames and downsamples them to
+        /// <see cref="FrameFeatureCount"/> slots. Downsampling (rather than keeping every recorded frame) is
+        /// what keeps one song's cache entry small: at ~6000 frames per song the serialized matrix alone was
+        /// ~300 kB, which made a whole library's cache about a gigabyte and therefore impossible to write.
+        /// The sections are derived from this same sampled matrix, so nothing that is displayed is lost.
+        /// </summary>
         void FillFrameFeatures(AudioFeatures features, float gain)
         {
-            var compact = new float[StoredFrameCount * FrameFeatureValues];
-            for (int frame = 0; frame < StoredFrameCount; frame++)
+            var compact = new float[FrameFeatureCount * FrameFeatureValues];
+            if (StoredFrameCount == 0)
             {
-                int offset = frame * FrameFeatureValues;
-                compact[offset] = frameFeatures[offset] * gain;
+                features.FrameFeatures = compact;
+                return;
+            }
+
+            for (int slot = 0; slot < FrameFeatureCount; slot++)
+            {
+                int source = (int)((long)slot * StoredFrameCount / FrameFeatureCount);
+                if (source >= StoredFrameCount)
+                    source = StoredFrameCount - 1;
+
+                int target = slot * FrameFeatureValues;
+                int origin = source * FrameFeatureValues;
+                compact[target] = frameFeatures[origin] * gain;
                 for (int value = 1; value < FrameFeatureValues; value++)
-                    compact[offset + value] = frameFeatures[offset + value];
+                    compact[target + value] = frameFeatures[origin + value];
             }
             features.FrameFeatures = compact;
         }
 
         /// <summary>
-        /// Finds the structural segments by novelty segmentation over the frame matrix: adjacent windows
-        /// are compared, a boundary sits where the sound changes most, and the resulting segments are then
-        /// described in measurable terms (loud/quiet, bright/dark). Deliberately not "verse"/"chorus" -
-        /// with no online reference involved that would be a guess.
+        /// Averages every frame of the song into <see cref="SectionSlotSeconds"/> long slots for the
+        /// structural segmentation. Accumulated while the song streams (see <see cref="AnalyzeFrame"/>), so
+        /// it covers the whole file - unlike the frames kept for the shape export, which stop after
+        /// <see cref="MaxStoredFrames"/>. Averaging (rather than picking frames) keeps every moment
+        /// represented, so a short quiet passage a sampler would step over still shows up as a dip.
         /// </summary>
-        List<AudioSection> DetectSections(AudioFeatures features)
+        float[] BuildSectionMatrix(float gain)
         {
-            var sections = new List<AudioSection>();
-            var data = features.FrameFeatures;
-            int frames = data.Length / FrameFeatureValues;
-            const int windowRadius = 4;
-            if (frames < windowRadius * 2 + 2)
-                return sections;
+            if (sectionSlotCounts.Length == 0)
+                return [];
 
-            // Novelty: cosine-ish distance between the means of the frames left and right of a position.
-            var novelty = new float[frames];
-            for (int center = windowRadius; center < frames - windowRadius; center++)
+            int usedSlots = 0;
+            for (int slot = 0; slot < sectionSlotCounts.Length; slot++)
+                if (sectionSlotCounts[slot] > 0)
+                    usedSlots = slot + 1;
+
+            if (usedSlots == 0)
+                return [];
+
+            var matrix = new float[usedSlots * FrameFeatureValues];
+            for (int slot = 0; slot < usedSlots; slot++)
             {
-                double distance = 0.0;
-                double normLeft = 0.0;
-                double normRight = 0.0;
-                for (int radius = 1; radius <= windowRadius; radius++)
+                int count = Math.Max(1, sectionSlotCounts[slot]);
+                int target = slot * FrameFeatureValues;
+                for (int value = 0; value < FrameFeatureValues; value++)
                 {
-                    distance += Distance(data, center - radius, center + radius - 1);
-                    normLeft += Norm(data, center - radius);
-                    normRight += Norm(data, center + radius - 1);
+                    float sum = sectionSlotSums[target + value];
+                    // Only loudness is gain dependent (value 0); the rest are level invariant.
+                    matrix[target + value] = value == 0 ? sum * gain / count : sum / count;
                 }
-                double denominator = Math.Sqrt(normLeft * normRight);
-                novelty[center] = denominator > 1e-9 ? (float)(distance / denominator) : 0f;
             }
 
-            float noveltyMean = Mean(novelty);
-            float noveltyStd = StandardDeviation(novelty, noveltyMean);
-            float threshold = noveltyMean + 1.0f * noveltyStd;
-
-            var candidates = new List<int>();
-            for (int i = 1; i < frames - 1; i++)
-                if (novelty[i] > threshold && novelty[i] >= novelty[i - 1] && novelty[i] >= novelty[i + 1])
-                    candidates.Add(i);
-            candidates.Sort((left, right) => novelty[right].CompareTo(novelty[left]));
-
-            // At least ~20 seconds between two boundaries, so eight "sections" cannot all be a drum fill.
-            double secondsPerFrame = features.AnalyzedSeconds / Math.Max(1, frames - 1);
-            int minimumGap = Math.Max(1, (int)Math.Round(20.0 / Math.Max(1e-6, secondsPerFrame)));
-
-            // The last frame starts one window before the end of the decoded signal, so scaling by
-            // AnalyzedSeconds would push the final section past the end of the song. The file's own
-            // duration is the bound the display needs.
-            double songEndSeconds = TotalSeconds > 0 ? TotalSeconds : features.AnalyzedSeconds;
-
-            var boundaries = new List<int>();
-            foreach (int candidate in candidates)
-            {
-                if (boundaries.Count >= 7)
-                    break;
-                bool tooClose = false;
-                foreach (int existing in boundaries)
-                    if (Math.Abs(existing - candidate) < minimumGap)
-                    {
-                        tooClose = true;
-                        break;
-                    }
-                if (!tooClose)
-                    boundaries.Add(candidate);
-            }
-            boundaries.Sort();
-
-            var edges = new List<int> { 0 };
-            edges.AddRange(boundaries);
-            edges.Add(frames - 1);
-
-            double overallLoudness = 0.0;
-            double overallBrightness = 0.0;
-            for (int frame = 0; frame < frames; frame++)
-            {
-                overallLoudness += data[frame * FrameFeatureValues];
-                overallBrightness += data[frame * FrameFeatureValues + 1];
-            }
-            overallLoudness /= frames;
-            overallBrightness /= frames;
-
-            for (int i = 0; i < edges.Count - 1; i++)
-            {
-                int from = edges[i];
-                int to = edges[i + 1];
-                if (to <= from)
-                    continue;
-
-                double loudness = 0.0;
-                double brightness = 0.0;
-                for (int frame = from; frame <= to; frame++)
-                {
-                    loudness += data[frame * FrameFeatureValues];
-                    brightness += data[frame * FrameFeatureValues + 1];
-                }
-                int count = to - from + 1;
-                double relativeLoudness = overallLoudness > 1e-9 ? loudness / count / overallLoudness : 1.0;
-                double relativeBrightness = overallBrightness > 1e-9 ? brightness / count / overallBrightness : 1.0;
-
-                double startSeconds = Math.Min(Math.Round(from * secondsPerFrame, 1), songEndSeconds);
-                double endSeconds = Math.Min(Math.Round(to * secondsPerFrame, 1), songEndSeconds);
-                if (endSeconds - startSeconds < 1.0)
-                    continue; // clamped away by the end of the song - not a segment the UI should show
-
-                sections.Add(new AudioSection
-                {
-                    StartSeconds = startSeconds,
-                    EndSeconds = endSeconds,
-                    RelativeLoudness = (float)relativeLoudness,
-                    RelativeBrightness = (float)relativeBrightness,
-                    Character = DescribeSection(relativeLoudness, relativeBrightness),
-                });
-            }
-
-            return sections;
-        }
-
-        static string DescribeSection(double relativeLoudness, double relativeBrightness)
-        {
-            string loudness = relativeLoudness switch
-            {
-                >= 1.25 => "loud",
-                >= 1.05 => "full",
-                >= 0.85 => "steady",
-                >= 0.6 => "held back",
-                _ => "quiet",
-            };
-            string brightness = relativeBrightness switch
-            {
-                >= 1.25 => "bright",
-                >= 1.08 => "open",
-                >= 0.92 => "balanced",
-                >= 0.75 => "warm",
-                _ => "dark",
-            };
-            return $"{loudness}, {brightness}";
-        }
-
-        static double Distance(float[] data, int firstIndex, int secondIndex)
-        {
-            int first = firstIndex * FrameFeatureValues;
-            int second = secondIndex * FrameFeatureValues;
-            double sum = 0.0;
-            for (int i = 0; i < FrameFeatureValues; i++)
-            {
-                double difference = data[first + i] - data[second + i];
-                sum += difference * difference;
-            }
-            return Math.Sqrt(sum);
-        }
-
-        static double Norm(float[] data, int index)
-        {
-            int offset = index * FrameFeatureValues;
-            double sum = 0.0;
-            for (int i = 0; i < FrameFeatureValues; i++)
-                sum += (double)data[offset + i] * data[offset + i];
-            return Math.Sqrt(sum);
+            return matrix;
         }
 
         // ---- statistics helpers ----
@@ -900,4 +837,218 @@ public sealed class WrappedAudioAnalyzer : IDisposable
         // The decoder engine is process wide and intentionally not disposed per analyzer; nothing else is
         // unmanaged here. The method exists so callers can use `using` uniformly.
     }
+
+    // ---------------------------------------------------------------------------------------------
+    //  Structural segmentation (also used to rebuild sections from the analysis cache).
+    // ---------------------------------------------------------------------------------------------
+
+/// <summary>
+/// Finds the structural segments by novelty segmentation over the sampled frame matrix: adjacent
+/// windows are compared, a boundary sits where the sound changes most, and the resulting segments
+/// are then described in measurable terms (loud/quiet, bright/dark). Deliberately not
+/// "verse"/"chorus" - with no online reference involved that would be a guess.
+/// <para>
+/// This runs on <see cref="AudioFeatures.SectionFeatures"/> - the song's frames averaged into
+/// <see cref="SectionSlotSeconds"/> long slots - so it has both the resolution to place a boundary where
+/// the music changes and the same input on a re-run, which is what lets a song loaded from the analysis
+/// cache produce exactly the sections a fresh analysis produced.
+/// </para>
+/// </summary>
+    internal static List<AudioSection> DetectSections(AudioFeatures features, double totalSeconds)
+{
+    var sections = new List<AudioSection>();
+    var data = features.SectionFeatures;
+    int frames = data.Length / FrameFeatureValues;
+    const int windowRadius = 4;
+    if (frames < windowRadius * 2 + 2)
+        return sections;
+
+    // Novelty: cosine-ish distance between the means of the frames left and right of a position.
+    var novelty = new float[frames];
+    for (int center = windowRadius; center < frames - windowRadius; center++)
+    {
+        double distance = 0.0;
+        double normLeft = 0.0;
+        double normRight = 0.0;
+        for (int radius = 1; radius <= windowRadius; radius++)
+        {
+            distance += Distance(data, center - radius, center + radius - 1);
+            normLeft += Norm(data, center - radius);
+            normRight += Norm(data, center + radius - 1);
+        }
+        double denominator = Math.Sqrt(normLeft * normRight);
+        novelty[center] = denominator > 1e-9 ? (float)(distance / denominator) : 0f;
+    }
+
+    float noveltyMean = MeanOf(novelty);
+    float noveltyStd = StandardDeviationOf(novelty, noveltyMean);
+    // A little above the average change: demanding a full standard deviation left whole songs (and the
+    // smoother stretches of the others) with no boundary at all.
+    float threshold = noveltyMean + 0.5f * noveltyStd;
+
+    var candidates = new List<int>();
+    for (int i = 1; i < frames - 1; i++)
+        if (novelty[i] > threshold && novelty[i] >= novelty[i - 1] && novelty[i] >= novelty[i + 1])
+            candidates.Add(i);
+    candidates.Sort((left, right) => novelty[right].CompareTo(novelty[left]));
+
+    // The slots stand for the whole song, so the slot length is the time scale. This must not be derived
+    // from SectionSampleCount: that counts analysis frames (~11 ms each), not slots, and mixing the two
+    // squashed every section to a few seconds at the start of the song.
+    double secondsPerFrame = SectionSlotSeconds;
+
+    // At least fifteen seconds between two boundaries, so the segments describe the song's form instead of
+    // picking up a single fill or a drum break. `IgnoreEdgeSeconds` keeps the routine from spending its
+    // boundaries on the song's own start and end, which are always a change but never a segment.
+    const double IgnoreEdgeSeconds = 8.0;
+    int edgeSlots = (int)Math.Round(IgnoreEdgeSeconds / Math.Max(1e-6, secondsPerFrame));
+    var interior = candidates.Where(index => index >= edgeSlots && index <= frames - 1 - edgeSlots).ToList();
+    if (interior.Count == 0)
+        interior = candidates;
+
+    int minimumGap = Math.Max(1, (int)Math.Round(15.0 / Math.Max(1e-6, secondsPerFrame)));
+    minimumGap = Math.Min(minimumGap, Math.Max(1, frames / 4));
+
+    double songEndSeconds = totalSeconds > 0 ? Math.Min(totalSeconds, DurationFromSlots(frames)) : DurationFromSlots(frames);
+
+    // The last frame starts one window before the end of the decoded signal, so scaling by
+    // AnalyzedSeconds would push the final section past the end of the song. The file's own
+    // duration is the bound the display needs.
+
+    var boundaries = new List<int>();
+    foreach (int candidate in interior)
+    {
+        if (boundaries.Count >= 7)
+            break;
+        bool tooClose = false;
+        foreach (int existing in boundaries)
+            if (Math.Abs(existing - candidate) < minimumGap)
+            {
+                tooClose = true;
+                break;
+            }
+        if (!tooClose)
+            boundaries.Add(candidate);
+    }
+    boundaries.Sort();
+
+    var edges = new List<int> { 0 };
+    edges.AddRange(boundaries);
+    edges.Add(frames - 1);
+
+    double overallLoudness = 0.0;
+    double overallBrightness = 0.0;
+    for (int frame = 0; frame < frames; frame++)
+    {
+        overallLoudness += data[frame * FrameFeatureValues];
+        overallBrightness += data[frame * FrameFeatureValues + 1];
+    }
+    overallLoudness /= frames;
+    overallBrightness /= frames;
+
+    for (int i = 0; i < edges.Count - 1; i++)
+    {
+        int from = edges[i];
+        int to = edges[i + 1];
+        if (to <= from)
+            continue;
+
+        double loudness = 0.0;
+        double brightness = 0.0;
+        for (int frame = from; frame <= to; frame++)
+        {
+            loudness += data[frame * FrameFeatureValues];
+            brightness += data[frame * FrameFeatureValues + 1];
+        }
+        int count = to - from + 1;
+        double relativeLoudness = overallLoudness > 1e-9 ? loudness / count / overallLoudness : 1.0;
+        double relativeBrightness = overallBrightness > 1e-9 ? brightness / count / overallBrightness : 1.0;
+
+        double startSeconds = Math.Min(Math.Round(from * secondsPerFrame, 1), songEndSeconds);
+        double endSeconds = Math.Min(Math.Round(to * secondsPerFrame, 1), songEndSeconds);
+        if (endSeconds - startSeconds < 1.0)
+            continue; // clamped away by the end of the song - not a segment the UI should show
+
+        sections.Add(new AudioSection
+        {
+            StartSeconds = startSeconds,
+            EndSeconds = endSeconds,
+            RelativeLoudness = (float)relativeLoudness,
+            RelativeBrightness = (float)relativeBrightness,
+            Character = DescribeSection(relativeLoudness, relativeBrightness),
+        });
+    }
+
+    return sections;
+}
+
+/// <summary>How long the sampled slots span, in seconds.</summary>
+static double DurationFromSlots(int frames) => Math.Max(0, frames - 1) * SectionSlotSeconds;
+
+/// <summary>Mean of a signal (used by the structural segmentation).</summary>
+static float MeanOf(float[] values)
+{
+    if (values.Length == 0)
+        return 0f;
+    double sum = 0.0;
+    for (int i = 0; i < values.Length; i++)
+        sum += values[i];
+    return (float)(sum / values.Length);
+}
+
+/// <summary>Standard deviation of a signal around a known mean.</summary>
+static float StandardDeviationOf(float[] values, float mean)
+{
+    if (values.Length == 0)
+        return 0f;
+    double sum = 0.0;
+    for (int i = 0; i < values.Length; i++)
+    {
+        double difference = values[i] - mean;
+        sum += difference * difference;
+    }
+    return (float)Math.Sqrt(sum / values.Length);
+}
+static string DescribeSection(double relativeLoudness, double relativeBrightness)
+{
+    string loudness = relativeLoudness switch
+    {
+        >= 1.25 => "loud",
+        >= 1.05 => "full",
+        >= 0.85 => "steady",
+        >= 0.6 => "held back",
+        _ => "quiet",
+    };
+    string brightness = relativeBrightness switch
+    {
+        >= 1.25 => "bright",
+        >= 1.08 => "open",
+        >= 0.92 => "balanced",
+        >= 0.75 => "warm",
+        _ => "dark",
+    };
+    return $"{loudness}, {brightness}";
+}
+
+static double Distance(float[] data, int firstIndex, int secondIndex)
+{
+    int first = firstIndex * FrameFeatureValues;
+    int second = secondIndex * FrameFeatureValues;
+    double sum = 0.0;
+    for (int i = 0; i < FrameFeatureValues; i++)
+    {
+        double difference = data[first + i] - data[second + i];
+        sum += difference * difference;
+    }
+    return Math.Sqrt(sum);
+}
+
+static double Norm(float[] data, int index)
+{
+    int offset = index * FrameFeatureValues;
+    double sum = 0.0;
+    for (int i = 0; i < FrameFeatureValues; i++)
+        sum += (double)data[offset + i] * data[offset + i];
+    return Math.Sqrt(sum);
+}
 }

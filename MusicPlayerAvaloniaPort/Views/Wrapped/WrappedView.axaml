@@ -51,6 +51,8 @@
                 <StackPanel Orientation="Horizontal" Spacing="12">
                     <CheckBox Name="audioCheckBox" Content="Measure the audio (tempo, timbre, key, loudness)" IsChecked="True" />
                     <CheckBox Name="onlineCheckBox" Content="Look up release years online (MusicBrainz, slow)" />
+                    <TextBlock Text="Measuring threads:" VerticalAlignment="Center" />
+                    <ComboBox Name="threadsSelector" MinWidth="150" VerticalAlignment="Center" />
                 </StackPanel>
                 <TextBlock
                     Name="libraryStateLabel"

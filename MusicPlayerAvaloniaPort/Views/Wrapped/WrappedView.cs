@@ -33,26 +33,30 @@ public partial class WrappedView : UserControl
 {
     readonly WrappedService wrappedService = ServiceContainer.GetService<WrappedService>();
 
-    // The controls are resolved by name after the XAML is loaded (see the properties below). The axaml
-    // names them for the Avalonia name generator, but those generated fields are only filled by the
-    // generated InitializeComponent() - which this view does not call (it uses AvaloniaXamlLoader.Load
-    // like the other windows) - so reading the generated fields directly is a NullReferenceException at
-    // runtime. Exactly that is how the "Compute wrapped" button came to close the whole application
-    // instead of doing anything. The properties below are therefore resolved through the visual tree, and
-    // they are deliberately *not* named like the controls in the axaml (the name generator would then
-    // declare a conflicting member).
-    ComboBox? ReportSelector => this.GetNestedControl<ComboBox>("reportSelector");
-    CheckBox? AudioCheckBox => this.GetNestedControl<CheckBox>("audioCheckBox");
-    CheckBox? OnlineCheckBox => this.GetNestedControl<CheckBox>("onlineCheckBox");
-    TextBlock? LibraryStateLabel => this.GetNestedControl<TextBlock>("libraryStateLabel");
-    ItemsControl? YearsPanel => this.GetNestedControl<ItemsControl>("yearsPanel");
-    ProgressBar? ProgressBar => this.GetNestedControl<ProgressBar>("progressBar");
-    TextBlock? ProgressPercentLabel => this.GetNestedControl<TextBlock>("progressPercentLabel");
-    TextBlock? ProgressLabel => this.GetNestedControl<TextBlock>("progressLabel");
-    StackPanel? ContentPanel => this.GetNestedControl<StackPanel>("contentPanel");
-    Button? ComputeButton => this.GetNestedControl<Button>("computeButton");
-    Button? CancelButton => this.GetNestedControl<Button>("cancelButton");
-    Button? DeleteReportButton => this.GetNestedControl<Button>("deleteReportButton");
+    /// <summary>How many of the newest years are ticked when the window opens.</summary>
+    const int DefaultSelectedYears = 3;
+
+    // The controls are resolved by name. The axaml names them for the Avalonia name generator, but those
+    // generated fields are only filled by the generated InitializeComponent() - which this view does not
+    // call (it uses AvaloniaXamlLoader.Load like the other windows) - so reading the generated fields
+    // directly is a NullReferenceException at runtime. Exactly that is how "Compute wrapped" once closed
+    // the whole application. These properties resolve through the visual tree instead, and
+    // GetNestedControl throws when a control is missing, so a name that drifts away from the axaml fails
+    // loudly instead of silently doing nothing. They are deliberately *not* named like the controls in the
+    // axaml, or the name generator would declare a conflicting member.
+    ComboBox ReportSelector => this.GetNestedControl<ComboBox>("reportSelector");
+    CheckBox AudioCheckBox => this.GetNestedControl<CheckBox>("audioCheckBox");
+    CheckBox OnlineCheckBox => this.GetNestedControl<CheckBox>("onlineCheckBox");
+    TextBlock LibraryStateLabel => this.GetNestedControl<TextBlock>("libraryStateLabel");
+    ItemsControl YearsPanel => this.GetNestedControl<ItemsControl>("yearsPanel");
+    ProgressBar ProgressBar => this.GetNestedControl<ProgressBar>("progressBar");
+    TextBlock ProgressPercentLabel => this.GetNestedControl<TextBlock>("progressPercentLabel");
+    TextBlock ProgressLabel => this.GetNestedControl<TextBlock>("progressLabel");
+    StackPanel ContentPanel => this.GetNestedControl<StackPanel>("contentPanel");
+    Button ComputeButton => this.GetNestedControl<Button>("computeButton");
+    Button CancelButton => this.GetNestedControl<Button>("cancelButton");
+    Button DeleteReportButton => this.GetNestedControl<Button>("deleteReportButton");
+    ComboBox ThreadsSelector => this.GetNestedControl<ComboBox>("threadsSelector");
 
     /// <summary>The reports on disk, as the selector shows them.</summary>
     List<WrappedStore.WrappedIndexEntry> reports = [];
@@ -72,8 +76,31 @@ public partial class WrappedView : UserControl
         wrappedService.ProgressChanged -= OnProgress;
         wrappedService.ProgressChanged += OnProgress;
 
+        BuildThreadsSelector();
         UpdateLibraryState();
         ReloadReports(selectNewest: true);
+    }
+
+    /// <summary>
+    /// Fills the thread selector: "Auto" plus the explicit counts. Measuring songs is the one long CPU
+    /// bound step, so the choice is exposed - a machine with a slow NAS may well be faster with fewer
+    /// threads than with one per core, and the automatic choice cannot know that.
+    /// </summary>
+    void BuildThreadsSelector()
+    {
+        var options = new List<string> { $"Auto ({WrappedService.DefaultThreads})" };
+        for (int threads = 1; threads <= Math.Min(16, Environment.ProcessorCount * 2); threads++)
+            options.Add(threads == 1 ? "1 thread" : $"{threads} threads");
+
+        ThreadsSelector.ItemsSource = options;
+        ThreadsSelector.SelectedIndex = 0;
+    }
+
+    /// <summary>The thread count the selector stands for (0 = let the service decide).</summary>
+    int SelectedThreads()
+    {
+        int index = ThreadsSelector.SelectedIndex;
+        return index <= 0 ? 0 : index;
     }
 
     void OnUnloaded(object? sender, RoutedEventArgs e)
@@ -87,41 +114,48 @@ public partial class WrappedView : UserControl
 
     void UpdateLibraryState()
     {
-        if (LibraryStateLabel == null)
-            return;
-
         var years = wrappedService.GetAvailableYears();
         if (years.Count == 0)
         {
             LibraryStateLabel.Text = "The local database has no play history yet - play some songs first.";
+            YearsPanel.ItemsSource = null;
             return;
         }
 
         bool libraryConfigured = !string.IsNullOrWhiteSpace(Config.Data.SongLibraryPath);
+        // Deliberately short and stable: this line sits above the year boxes, and a decade of history must
+        // not turn it into a paragraph. The year list itself is not repeated here - the boxes show it.
         LibraryStateLabel.Text =
-            $"History available for {years.Count} year(s): {string.Join(", ", years)}. " +
-            $"Audio already measured for {wrappedService.CachedAnalyses} song file(s) - a second run reuses them. " +
+            $"{years.Count} year(s) of history ({years[^1]}-{years[0]}) - one report per ticked year, plus one over everything. " +
+            $"Audio measured for {wrappedService.CachedAnalyses} file(s); " +
             (libraryConfigured
-                ? "Each selected year becomes its own report, plus one report over everything."
-                : "No song library is configured, so the audio cannot be measured (the history part still works).");
+                ? "a second run reuses them and only re-reads the history."
+                : "no song library is configured, so only the history part can run.");
 
         BuildYearCheckBoxes(years);
     }
 
+    /// <summary>
+    /// Builds the year tick boxes.
+    /// <para>
+    /// A wrapped per year is cheap once the audio cache is warm (the analysis is shared by every report),
+    /// so a long history stays usable: by default only the newest <see cref="DefaultSelectedYears"/> are
+    /// ticked - which is what somebody opening this window almost always wants - while "All" selects the
+    /// whole history. The boxes wrap onto several rows and are small, so ten or twenty years read as a
+    /// compact block rather than a wall of controls.
+    /// </para>
+    /// </summary>
     void BuildYearCheckBoxes(List<int> years)
     {
-        if (YearsPanel == null)
-            return;
-
-        // Default: everything. The listener almost always wants the whole picture, and unticking is cheap.
+        // Default: the newest few years. Ticking every year of a decade long history by default would make
+        // the first run do a lot of work nobody asked for; "All" is one click away.
         if (selectedYears.Count == 0)
-            foreach (int year in years)
+            foreach (int year in years.Take(DefaultSelectedYears))
                 selectedYears.Add(year);
 
         // Drop selections of years that disappeared (a history pull can remove rows).
         selectedYears.RemoveWhere(year => !years.Contains(year));
 
-        YearsPanel.ItemsSource = null;
         YearsPanel.ItemsSource = years
             .OrderByDescending(year => year)
             .Select(year =>
@@ -130,8 +164,11 @@ public partial class WrappedView : UserControl
                 {
                     Content = year.ToString(),
                     IsChecked = selectedYears.Contains(year),
-                    Margin = new Thickness(0, 0, 8, 0),
+                    Margin = new Thickness(0, 0, 6, 0),
+                    MinWidth = 0,
+                    Padding = new Thickness(6, 1, 6, 1),
                 };
+                ToolTip.SetTip(checkBox, $"Write a wrapped for {year}");
                 checkBox.IsCheckedChanged += (_, _) =>
                 {
                     if (checkBox.IsChecked == true)
@@ -288,6 +325,7 @@ public partial class WrappedView : UserControl
             Years = years,
             AnalyzeAudio = AudioCheckBox.IsChecked == true,
             EnrichOnline = OnlineCheckBox.IsChecked == true,
+            Threads = SelectedThreads(),
         };
 
         cancellation = new CancellationTokenSource();
@@ -311,6 +349,10 @@ public partial class WrappedView : UserControl
             SetRunning(false);
             cancellation?.Dispose();
             cancellation = null;
+
+            // The run just added to the audio cache, so the "measured for N file(s)" line is refreshed
+            // instead of still showing what was true before it started.
+            UpdateLibraryState();
         }
     }
 
@@ -409,11 +451,13 @@ public partial class WrappedView : UserControl
             ContentPanel.Children.Add(Section("Your sound worlds", BuildClusters(report.SoundClusters)));
         }
 
-        if (report.SignatureSong != null)
-            ContentPanel.Children.Add(Section("The song that sounds most like your period", BuildSongs([report.SignatureSong], showReason: true)));
+        var signatureSong = report.SignatureSong;
+        if (signatureSong != null)
+            ContentPanel.Children.Add(Section("The song that sounds most like your period", BuildSongs([signatureSong], showReason: true)));
 
-        if (report.OutlierSong != null)
-            ContentPanel.Children.Add(Section("The odd one out", BuildSongs([report.OutlierSong], showReason: true)));
+        var outlierSong = report.OutlierSong;
+        if (outlierSong != null)
+            ContentPanel.Children.Add(Section("The odd one out", BuildSongs([outlierSong], showReason: true)));
 
         if (report.ReleaseYears.Count > 0)
             ContentPanel.Children.Add(Section("Release years (from the online lookup)", BuildReleaseYears(report.ReleaseYears)));
@@ -659,6 +703,20 @@ public partial class WrappedView : UserControl
         var panel = new StackPanel { Spacing = 12 };
         panel.Children.Add(Info("These groups come from the measured sound of your library (tempo, timbre, key, loudness) - " +
                                 "no online genre database is involved, so the labels describe what the music measurably is."));
+        // The grouping is a measurement, so the number it was chosen by is shown: with a low separation the
+        // honest reading is "your library does not split into more than this", not "you only listen to two
+        // kinds of music".
+        if (clusters[0].ClusterCount > 0 && clusters[0].Separation > 0)
+        {
+            float separation = clusters[0].Separation;
+            string verdict = separation >= 400
+                ? "clearly separate groups"
+                : separation >= 150
+                    ? "reasonably separate groups"
+                    : "groups that overlap a lot - this library does not split into more distinct kinds than this";
+            panel.Children.Add(Info($"The library split into {clusters[0].ClusterCount} groups by itself (separation score {separation:0} - {verdict}). " +
+                                    "A finer split would have to be measurably better separated than this one to be used."));
+        }
 
         foreach (var cluster in clusters)
         {

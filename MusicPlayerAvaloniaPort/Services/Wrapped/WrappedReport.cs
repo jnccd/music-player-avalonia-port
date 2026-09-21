@@ -303,6 +303,15 @@ public sealed class WrappedSoundCluster
     public List<string> TopArtists { get; set; } = [];
     /// <summary>Share of the cluster's songs that were never played in the period, in percent.</summary>
     public float UntouchedPercent { get; set; }
+    /// <summary>
+    /// How well separated this grouping is - the Calinski-Harabasz ratio the number of groups was chosen
+    /// by. Reported so "my library is two sound worlds" can be told apart from "two is what the data
+    /// supports": a low ratio means the groups are not clearly distinct, and it is also what a finer split
+    /// would have to beat.
+    /// </summary>
+    public float Separation { get; set; }
+    /// <summary>How many groups the clustering settled on, so the UI can say why it stopped there.</summary>
+    public int ClusterCount { get; set; }
 }
 
 /// <summary>Library-wide audio statistics, the baseline every song is compared against.</summary>

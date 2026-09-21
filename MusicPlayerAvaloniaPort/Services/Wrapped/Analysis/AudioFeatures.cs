@@ -95,10 +95,37 @@ public sealed class AudioFeatures
 
     /// <summary>Compact peak loudness curve over the song, normalized to its own peak.</summary>
     public float[] LoudnessCurve { get; set; } = [];
-    /// <summary>Coarse structural segments found by novelty segmentation.</summary>
+    /// <summary>Coarse structural segments, derived from the frame features (see <see cref="FrameFeatures"/>).</summary>
     public List<AudioSection> Sections { get; set; } = [];
-    /// <summary>The first <see cref="WrappedAudioAnalyzer.FrameFeatureCount"/> frames, flattened, 5 values each.</summary>
+
+    /// <summary>
+    /// The song's frames, downsampled to <see cref="WrappedAudioAnalyzer.FrameFeatureCount"/> slots and
+    /// flattened (5 values per slot). This is the <i>only</i> per-frame data kept: it is what the clustering
+    /// and the section detection work on, so the full per-frame series is not retained. Retaining it made
+    /// one song's cache entry ~300 kB and a whole library's ~1 GB of JSON - and a full run then wrote no
+    /// cache at all, because the serialization failed and the error went to a console that a windowed
+    /// application does not have.
+    /// </summary>
     public float[] FrameFeatures { get; set; } = [];
+
+    /// <summary>
+    /// How many analysis frames the sampled <see cref="FrameFeatures"/> represent. Needed to put the
+    /// structural section boundaries back on the song's timeline, since the sampling maps the whole song
+    /// onto a fixed number of slots regardless of its length.
+    /// </summary>
+    public int FrameSampleCount { get; set; }
+
+    /// <summary>
+    /// Frames averaged into <see cref="WrappedAudioAnalyzer.SectionSlotSeconds"/> slots, flattened, used for
+    /// the structural segmentation. Coarser than <see cref="FrameFeatures"/> but far finer than it, because
+    /// the section detection needs to see a change <i>inside</i> the song: on 64 slots a three second
+    /// window covers ten seconds of music and every real boundary is averaged away. This replaces keeping
+    /// the whole per-frame series, which is what made the cache file unmanageably large.
+    /// </summary>
+    public float[] SectionFeatures { get; set; } = [];
+
+    /// <summary>How many analysis frames the averaged <see cref="SectionFeatures"/> were built from.</summary>
+    public int SectionSampleCount { get; set; }
 
     /// <summary>Duration of the file.</summary>
     public double DurationSeconds { get; set; }

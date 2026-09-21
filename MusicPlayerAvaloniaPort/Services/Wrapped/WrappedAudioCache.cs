@@ -103,6 +103,10 @@ public sealed class WrappedAudioCache
             return null;
         }
 
+        // The structural sections are not stored (they are derived from the sampled frame matrix), so they
+        // are recomputed here. That keeps the cache small and makes a cached run produce exactly the report
+        // a fresh analysis would produce.
+        entry.Features.Sections = WrappedAudioAnalyzer.DetectSections(entry.Features, entry.Features.DurationSeconds);
         return entry.Features;
     }
 
@@ -171,13 +175,49 @@ public sealed class WrappedAudioCache
 
             string directory = PersistenceLocations.WrappedDirectory;
             Directory.CreateDirectory(directory);
-            File.WriteAllText(PersistenceLocations.WrappedAudioCachePath, JsonSerializer.Serialize(document, JsonOptions));
+
+            // Written to a temporary file and moved into place: a crash or a cancel during the write must
+            // not leave a truncated document that the next run then fails to parse (and silently re-does
+            // hours of analysis).
+            string path = PersistenceLocations.WrappedAudioCachePath;
+            string temporaryPath = path + ".tmp";
+            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(document, JsonOptions));
+            File.Move(temporaryPath, path, true);
+
+            LastFailure = "";
         }
         catch (Exception ex)
         {
-            // A cache that cannot be written must not fail the run - the wrapped results themselves are
-            // what the user asked for.
-            Console.WriteLine($"Could not write the wrapped audio cache: {ex.Message}");
+            // A cache that cannot be written must not fail the run - the wrapped results themselves are what
+            // the user asked for. It is recorded rather than only printed, because this is a windowed
+            // application: a Console.WriteLine here is invisible, which is how a full library's analysis
+            // once ended up with no cache and no explanation.
+            LastFailure = $"{ex.GetType().Name}: {ex.Message}";
+            Console.WriteLine($"Could not write the wrapped audio cache: {LastFailure}");
+        }
+    }
+
+    /// <summary>
+    /// Why the last <see cref="Save"/> did not write the cache ("" when it succeeded). The wrapped report
+    /// carries this into its notes, so a cache that cannot be persisted is visible in the UI instead of
+    /// costing the user another full analysis run in silence.
+    /// </summary>
+    public string LastFailure { get; private set; } = "";
+
+    /// <summary>Approximate size of the cache document on disk in bytes (0 when it was never written).</summary>
+    public long FileSizeBytes
+    {
+        get
+        {
+            try
+            {
+                var info = new FileInfo(PersistenceLocations.WrappedAudioCachePath);
+                return info.Exists ? info.Length : 0;
+            }
+            catch (Exception)
+            {
+                return 0;
+            }
         }
     }
 

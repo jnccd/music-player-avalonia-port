@@ -31,6 +31,12 @@ public sealed class WrappedOptions
 
     /// <summary>Upper bound on online requests per run, so enabling the option can never run away.</summary>
     public int OnlineRequestBudget { get; set; } = 300;
+
+    /// <summary>
+    /// Threads to measure songs with; 0 = the service's default (about one per core, minus one). Lower it
+    /// when the song library is on storage that does not like many concurrent readers.
+    /// </summary>
+    public int Threads { get; set; }
 }
 
 /// <summary>
@@ -49,8 +55,21 @@ public sealed class WrappedService
     /// <summary>Attempts per audio file before it counts as unreadable (a NAS can hiccup).</summary>
     const int AudioAnalysisAttempts = 2;
 
-    /// <summary>Distance between two songs of the library is resolved in parallel; this is how many decoders run at once.</summary>
-    static readonly int AnalysisParallelism = Math.Clamp(Environment.ProcessorCount / 2, 1, 4);
+    /// <summary>
+    /// How many songs are decoded and measured at the same time when the user did not choose.
+    /// <para>
+    /// Decoding plus FFT is CPU bound and parallelises almost linearly up to the core count, so the default
+    /// is deliberately generous: a first run over a whole library is the one long wait in this feature, and
+    /// a half-idle CPU during it is wasted time. It is capped below the core count so the machine (and the
+    /// client's own UI) stays responsive, and the user can override it in the wrapped options when the
+    /// bottleneck is the storage rather than the CPU - a NAS that thrashes under concurrent reads is
+    /// better served by fewer threads.
+    /// </para>
+    /// </summary>
+    static readonly int DefaultAnalysisParallelism = Math.Clamp(Environment.ProcessorCount - 1, 2, 8);
+
+    /// <summary>The thread count a run uses when the caller did not pick one (shown in the UI's "Auto").</summary>
+    public static int DefaultThreads => DefaultAnalysisParallelism;
 
     readonly DbWrapperService dbWrapper;
     readonly SongPlaybackService songPlayback;
@@ -66,6 +85,20 @@ public sealed class WrappedService
     /// <summary>Raised on a worker thread whenever a run made progress.</summary>
     public event Action<WrappedProgress>? ProgressChanged;
 
+    /// <summary>
+    /// Set <c>MUSIC_PLAYER_WRAPPED_DEBUG=1</c> to have the run explain its decisions on the console (how
+    /// many songs resolved to files, how many were measured, which stage was skipped and why). The client
+    /// is a windowed application, so nothing it writes is visible; this is the switch that makes a run
+    /// diagnosable from a terminal instead of guesswork.
+    /// </summary>
+    static readonly bool DebugTrace = Environment.GetEnvironmentVariable("MUSIC_PLAYER_WRAPPED_DEBUG") == "1";
+
+    static void Trace(string message)
+    {
+        if (DebugTrace)
+            Console.WriteLine($"[Wrapped] {message}");
+    }
+
     /// <summary>True while a run is going on.</summary>
     public bool IsRunning { get; private set; }
 
@@ -78,8 +111,27 @@ public sealed class WrappedService
     /// <summary>Deletes a stored report.</summary>
     public void DeleteReport(WrappedStore.WrappedIndexEntry entry) => store.Delete(entry);
 
-    /// <summary>How many songs the audio cache can answer for (shown in the options).</summary>
-    public int CachedAnalyses => audioCache.Count;
+    /// <summary>
+    /// How many song files the audio cache can answer for, i.e. how much of the library is already
+    /// measured. Read from disk rather than from this instance's copy: the options and wrapped windows show
+    /// this number, and a run may have added to the cache since the service was created - which is how the
+    /// UI came to still claim "measured for 0 files" right after a full analysis run.
+    /// </summary>
+    public int CachedAnalyses
+    {
+        get
+        {
+            try
+            {
+                return new WrappedAudioCache().Count;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Wrapped: could not read the audio cache: {ex.Message}");
+                return audioCache.Count;
+            }
+        }
+    }
 
     /// <summary>Calendar years present in the local history, newest first.</summary>
     public List<int> GetAvailableYears()
@@ -188,6 +240,9 @@ public sealed class WrappedService
                 report.AudioAnalysisSkipped = !options.AnalyzeAudio;
                 report.EnrichmentRan = options.EnrichOnline;
                 report.Notes.AddRange(enrichmentNotes);
+                if (audioCache.LastFailure.Length > 0)
+                    report.Notes.Add($"The audio analysis could not be saved for reuse ({audioCache.LastFailure}); " +
+                                     "the next run will have to measure every song again.");
 
                 Report(WrappedStage.ClusteringSound, stageFraction, $"Grouping the songs by sound for {label}…", 0, 0,
                     yearIndex, targets.Count, label);
@@ -275,7 +330,22 @@ public sealed class WrappedService
 
         using (var songDbContext = new Persistence.Database.SongDbContext())
         {
-            var user = songDbContext.Users.FirstOrDefault();
+            // The first row is not necessarily the account: an abandoned local registration can sit next to
+            // the real one with nothing but empty strings in it, which is how the report came out without a
+            // name. Prefer the account the history belongs to, then any row that actually carries a name.
+            var users = songDbContext.Users.ToList();
+            var historyUserIds = snapshot.Events
+                .Select(entry => entry.UserId)
+                .Where(id => !string.IsNullOrEmpty(id))
+                .GroupBy(id => id)
+                .OrderByDescending(group => group.Count())
+                .Select(group => group.Key)
+                .ToHashSet(StringComparer.Ordinal);
+
+            var user = users.FirstOrDefault(candidate => historyUserIds.Contains(candidate.UserId))
+                ?? users.FirstOrDefault(candidate => !string.IsNullOrWhiteSpace(candidate.UserDisplayName))
+                ?? users.FirstOrDefault();
+
             snapshot.DisplayName = user?.UserDisplayName ?? "";
             snapshot.UserId = user?.UserId ?? "";
         }
@@ -305,15 +375,41 @@ public sealed class WrappedService
     /// </summary>
     void ResolveLibraryPaths(LibrarySnapshot snapshot, CancellationToken cancellationToken)
     {
-        foreach (var available in songPlayback.DumpAvailableSongs())
+        var available = songPlayback.DumpAvailableSongs();
+
+        // The wrapped can be asked to run before the startup library scan has happened (it is a separate
+        // window and a user can open it while the client is still starting up). Without the scan list every
+        // song would look like it has no file and the whole audio half would silently come out empty, so
+        // the scan is run on demand here. It is the same call the startup path makes, and it is skipped
+        // when the list is already populated.
+        if (available.Count == 0 && !string.IsNullOrWhiteSpace(Config.Data.SongLibraryPath))
+        {
+            Report(WrappedStage.ResolvingFiles, 0.1,
+                "Scanning the song library first, so the songs can be measured…");
+            try
+            {
+                songPlayback.UpdateAvailableSongPaths(Config.Data.SongLibraryPath);
+                available = songPlayback.DumpAvailableSongs();
+            }
+            catch (Exception ex)
+            {
+                // A library that cannot be scanned is reported, not fatal: the history half of the wrapped
+                // does not need files at all.
+                Console.WriteLine($"Wrapped: could not scan the song library: {ex.Message}");
+                Report(WrappedStage.ResolvingFiles, 0.15, $"The song library could not be scanned: {ex.Message}");
+            }
+        }
+
+        foreach (var song in available)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (available.UpvotedSongId is Guid songId && !string.IsNullOrWhiteSpace(available.FilePath))
-                snapshot.PathsBySongId[songId] = available.FilePath;
+            if (song.UpvotedSongId is Guid songId && !string.IsNullOrWhiteSpace(song.FilePath))
+                snapshot.PathsBySongId[songId] = song.FilePath;
         }
 
         Report(WrappedStage.ResolvingFiles, 0.15,
             $"{snapshot.PathsBySongId.Count} of {snapshot.Songs.Count} songs have a file in the scanned library.");
+        Trace($"resolved {snapshot.PathsBySongId.Count} of {snapshot.Songs.Count} song(s); scanned library list had {available.Count} entry(ies); config library path = \"{Config.Data.SongLibraryPath}\"");
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -345,14 +441,21 @@ public sealed class WrappedService
         }
 
         var paths = byPath.Keys.ToList();
+        Trace($"audio stage: {snapshot.Songs.Count} song rows, {snapshot.PathsBySongId.Count} resolved to a file, {paths.Count} distinct file path(s), cache has {audioCache.Count} entries");
         int done = 0;
+        int cacheHitCount = 0;
+        int analysedCount = 0;
+        int unreadableCount = 0;
+        int parallelism = options.Threads > 0 ? options.Threads : DefaultAnalysisParallelism;
+        Report(WrappedStage.AnalyzingAudio, 0.15,
+            $"Measuring {paths.Count} song file(s) with {parallelism} thread(s)…", 0, paths.Count);
         var queue = new System.Collections.Concurrent.ConcurrentQueue<(string Path, AudioFeatures? Features, bool FromCache, bool Unreadable)>();
 
         await Task.Run(() =>
         {
             Parallel.ForEach(
                 paths,
-                new ParallelOptions { MaxDegreeOfParallelism = AnalysisParallelism, CancellationToken = cancellationToken },
+                new ParallelOptions { MaxDegreeOfParallelism = parallelism, CancellationToken = cancellationToken },
                 path =>
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -361,6 +464,7 @@ public sealed class WrappedService
                         var cached = audioCache.TryGet(path);
                         if (cached != null)
                         {
+                            Interlocked.Increment(ref cacheHitCount);
                             queue.Enqueue((path, cached, true, false));
                             return;
                         }
@@ -384,9 +488,15 @@ public sealed class WrappedService
                         }
 
                         if (features == null || features.AnalyzedSeconds <= 0)
+                        {
+                            Interlocked.Increment(ref unreadableCount);
                             queue.Enqueue((path, null, false, true));
+                        }
                         else
+                        {
+                            Interlocked.Increment(ref analysedCount);
                             queue.Enqueue((path, features, false, false));
+                        }
                     }
                     catch (OperationCanceledException)
                     {
@@ -395,15 +505,26 @@ public sealed class WrappedService
                     catch (Exception ex)
                     {
                         Console.WriteLine($"Wrapped: could not analyse \"{path}\": {ex.Message}");
+                        Interlocked.Increment(ref unreadableCount);
                         queue.Enqueue((path, null, false, true));
                     }
 
                     int completed = Interlocked.Increment(ref done);
                     if (completed % 10 == 0 || completed == paths.Count)
-                        Report(WrappedStage.AnalyzingAudio,
-                            0.15 + 0.5 * completed / Math.Max(1, paths.Count),
-                            "Measuring the songs (tempo, timbre, key, loudness)…",
-                            completed, paths.Count);
+                    {
+                        var snapshot = new WrappedProgress
+                        {
+                            Stage = WrappedStage.AnalyzingAudio,
+                            StageFraction = 0.15 + 0.5 * completed / Math.Max(1, paths.Count),
+                            Message = "Measuring the songs (tempo, timbre, key, loudness)…",
+                            ItemsDone = completed,
+                            ItemsTotal = paths.Count,
+                            CacheHits = Volatile.Read(ref cacheHitCount),
+                            Analysed = Volatile.Read(ref analysedCount),
+                            Unreadable = Volatile.Read(ref unreadableCount),
+                        };
+                        ReportProgress(snapshot);
+                    }
                 });
         }, cancellationToken);
 
@@ -428,9 +549,25 @@ public sealed class WrappedService
         }
 
         audioCache.Save();
+        if (audioCache.LastFailure.Length > 0)
+        {
+            // Surfaced into the report below: without the cache every future run re-analyses the whole
+            // library, which is the one thing in this feature that costs hours.
+            ReportProgress(new WrappedProgress
+            {
+                Stage = WrappedStage.AnalyzingAudio,
+                StageFraction = 0.65,
+                Message = $"Warning: the analysis could not be cached ({audioCache.LastFailure}) - a later run will measure everything again.",
+                ItemsDone = paths.Count,
+                ItemsTotal = paths.Count,
+                CacheHits = result.CacheHits,
+                Analysed = result.Analysed,
+                Unreadable = result.Unreadable,
+            });
+        }
 
         Report(WrappedStage.AnalyzingAudio, 0.65,
-            $"Measured {result.Features.Count} song(s) in {FormatDuration(stopwatch.Elapsed)} ({result.CacheHits} from the cache).",
+            $"Measured {result.Features.Count} song(s) in {FormatDuration(stopwatch.Elapsed)} - {result.CacheHits} from the cache, {result.Analysed} newly measured, {result.Unreadable} unreadable.",
             paths.Count, paths.Count);
 
         _ = options;
@@ -703,10 +840,7 @@ public sealed class WrappedService
         int yearCount = 0,
         string yearLabel = "")
     {
-        if (ProgressChanged == null)
-            return;
-
-        var progress = new WrappedProgress
+        ReportProgress(new WrappedProgress
         {
             Stage = stage,
             StageFraction = Math.Clamp(stageFraction, 0, 1),
@@ -716,10 +850,18 @@ public sealed class WrappedService
             YearIndex = yearIndex,
             YearCount = yearCount,
             YearLabel = yearLabel,
-        };
+        });
+    }
+
+    void ReportProgress(WrappedProgress progress)
+    {
+        var listener = ProgressChanged;
+        if (listener == null)
+            return;
+
         try
         {
-            ProgressChanged(progress);
+            listener(progress);
         }
         catch (Exception ex)
         {

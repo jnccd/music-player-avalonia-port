@@ -62,10 +62,18 @@ public static class WrappedSelfTest
         int failures = 0;
 
         if (mode == "wrapped")
-            return RunWrappedOverDatabase();
+            return RunWrappedOverDatabase(analyzeAudio: false);
+
+        /// The "wrappedaudio" mode is the same run with the audio measurement switched on - the path the
+        /// real client takes, which is where the analysis cache and the progress counters are exercised.
+        if (mode == "wrappedaudio")
+            return RunWrappedOverDatabase(analyzeAudio: true);
 
         if (mode == "ui")
             return RunXamlNameCheck();
+
+        if (mode == "cache")
+            return RunAudioCacheCheck();
 
         failures += RunXamlNameCheck();
         failures += RunFftCheck();
@@ -171,12 +179,102 @@ public static class WrappedSelfTest
     }
 
     /// <summary>
+    /// Analyses real files, stores the result through the durable cache and reads it back.
+    /// <para>
+    /// The cache is what makes a second wrapped run cheap instead of another hour of decoding, so if it
+    /// cannot be written or read the feature silently becomes unusable - which is exactly what happened:
+    /// a full 22 minute run over 3 445 files left no cache file behind. This check covers the whole path
+    /// (serialize, write, reload, validate against the file's size and timestamp) with real measured
+    /// features rather than with a hand-built object.
+    /// </para>
+    /// </summary>
+    static int RunAudioCacheCheck()
+    {
+        Console.WriteLine("\n--- audio cache round trip ---");
+        int failures = 0;
+
+        string? fileList = Environment.GetEnvironmentVariable(FilesEnvironmentVariableName);
+        if (string.IsNullOrWhiteSpace(fileList))
+        {
+            Console.WriteLine($"  set {FilesEnvironmentVariableName} to one or more audio files");
+            return 1;
+        }
+
+        var files = fileList
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(File.Exists)
+            .ToList();
+        if (files.Count == 0)
+        {
+            Console.WriteLine("  none of the given files exist");
+            return 1;
+        }
+
+        var cache = new WrappedAudioCache();
+        Console.WriteLine($"  cache before: {cache.Count} entries at {Persistence.PersistenceLocations.WrappedAudioCachePath}");
+
+        var analysed = new Dictionary<string, Analysis.AudioFeatures>();
+        foreach (string file in files)
+        {
+            var features = Analysis.WrappedAudioAnalyzer.AnalyzeFile(file);
+            analysed[file] = features;
+            cache.Store(file, features);
+        }
+        cache.Save();
+
+        bool written = File.Exists(Persistence.PersistenceLocations.WrappedAudioCachePath);
+        var writtenSize = written ? new FileInfo(Persistence.PersistenceLocations.WrappedAudioCachePath).Length : 0;
+        Console.WriteLine($"  cache after save: {(written ? $"{writtenSize} bytes" : "NOT WRITTEN")}");
+        if (!written)
+        {
+            Console.WriteLine("  FAILED: the cache file does not exist after Save()");
+            return failures + 1;
+        }
+
+        // A fresh instance is what the next run uses, so the reload path is the one that matters.
+        var reloaded = new WrappedAudioCache();
+        foreach (string file in files)
+        {
+            var back = reloaded.TryGet(file);
+            if (back == null)
+            {
+                Console.WriteLine($"  FAILED: no cached features came back for {Path.GetFileName(file)}");
+                failures++;
+                continue;
+            }
+
+            var original = analysed[file];
+            bool same = Math.Abs(back.Bpm - original.Bpm) < 0.001f
+                && Math.Abs(back.LoudnessMean - original.LoudnessMean) < 1e-6f
+                && Math.Abs(back.SpectralCentroidHz - original.SpectralCentroidHz) < 0.01f
+                && back.MfccMean.Length == original.MfccMean.Length
+                && back.LoudnessCurve.Length == original.LoudnessCurve.Length
+                && back.FrameFeatures.Length == original.FrameFeatures.Length
+                && back.Sections.Count == original.Sections.Count
+                && back.Chroma.Length == 12;
+            if (!same)
+            {
+                Console.WriteLine($"  FAILED: the round tripped features differ for {Path.GetFileName(file)}");
+                failures++;
+            }
+            else
+            {
+                Console.WriteLine($"  {Path.GetFileName(file)}: cached and read back ({back.Bpm:0.0} BPM, " +
+                                  $"{back.Sections.Count} sections, {back.LoudnessCurve.Length}-point curve)");
+            }
+        }
+
+        Console.WriteLine(failures == 0 ? "  audio cache: OK" : $"  audio cache: {failures} failure(s)");
+        return failures;
+    }
+
+    /// <summary>
     /// Runs the whole wrapped pipeline over a copy of a real data directory - the listening analysis, the
     /// report building and the JSON round trip - with the audio analysis switched off, so it needs no
     /// library. This is what verifies the feature against 20 000+ real history entries instead of against
     /// a fixture.
     /// </summary>
-    static int RunWrappedOverDatabase()
+    static int RunWrappedOverDatabase(bool analyzeAudio)
     {
         string? dataDirectory = Environment.GetEnvironmentVariable(DataDirectoryEnvironmentVariableName);
         if (string.IsNullOrWhiteSpace(dataDirectory) || !Directory.Exists(dataDirectory))
@@ -189,6 +287,18 @@ public static class WrappedSelfTest
         Persistence.PersistenceLocations.Configure(Persistence.PersistenceLocations.DefaultAppName, () => dataDirectory);
 
         var service = ServiceContainer.GetService<Services.Wrapped.WrappedService>();
+
+        // The wrapped resolves files from the scanned library list; in the real client that scan ran during
+        // startup, here it has to be done explicitly.
+        if (!string.IsNullOrWhiteSpace(Persistence.Configuration.Config.Data.SongLibraryPath))
+        {
+            // UpdateAvailableSongPaths kicks the tag/upload worker, which needs a sync session; without one
+            // it simply tags nothing and returns.
+            ServiceContainer.GetService<Services.Song.SongPlaybackService>()
+                .UpdateAvailableSongPaths(Persistence.Configuration.Config.Data.SongLibraryPath);
+            Console.WriteLine($"Library scan: {ServiceContainer.GetService<Services.Song.SongPlaybackService>().AvailableSongsCount} songs found");
+        }
+
         var years = service.GetAvailableYears();
         Console.WriteLine($"History years in the database: {string.Join(", ", years)}");
         if (years.Count == 0)
@@ -200,8 +310,14 @@ public static class WrappedSelfTest
         var options = new Services.Wrapped.WrappedOptions
         {
             Years = years,
-            AnalyzeAudio = false,
+            AnalyzeAudio = analyzeAudio,
             EnrichOnline = false,
+        };
+
+        service.ProgressChanged += progress =>
+        {
+            if (progress.ItemsTotal > 0)
+                Console.WriteLine($"    progress: {progress.Message} {progress.AudioSummary}");
         };
 
         var reports = service.ComputeAsync(options, CancellationToken.None).GetAwaiter().GetResult();
@@ -537,6 +653,11 @@ public static class WrappedSelfTest
             features.Sections.Count,
             string.Join(", ", features.Sections.Select(section =>
                 $"{section.StartSeconds:0}-{section.EndSeconds:0}s {section.Character} (x{section.RelativeLoudness:0.00})"))));
+        Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+            "    matrices   : frame slots {0} (from {1} frames), section slots {2} (from {3} frames), analysed {4:0.0}s of {5:0.0}s",
+            features.FrameFeatures.Length / WrappedAudioAnalyzer.FrameFeatureValues, features.FrameSampleCount,
+            features.SectionFeatures.Length / WrappedAudioAnalyzer.FrameFeatureValues, features.SectionSampleCount,
+            features.AnalyzedSeconds, features.DurationSeconds));
     }
 
     /// <summary>

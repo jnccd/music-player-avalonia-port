@@ -243,15 +243,24 @@ public static class WrappedAudioCrossAnalyzer
         public int ClusterCount { get; set; }
         public int[] Assignment { get; set; } = [];
         public double[][] Centroids { get; set; } = [];
-        public double Silhouette { get; set; }
+        /// <summary>Calinski-Harabasz score of the assignment: between-cluster vs. within-cluster spread.</summary>
+        public double Separation { get; set; }
     }
 
     /// <summary>
-    /// k-means over the standardized vectors, with k chosen by silhouette score.
+    /// k-means over the standardized vectors, with k chosen by the Calinski-Harabasz score.
     /// <para>
     /// Deterministic on purpose: a wrapped is compared with the previous one, so the same library must
     /// produce the same clusters. The random restarts use a fixed seed and every comparison is a total
     /// order (score, then index), so no tie can be broken differently between runs.
+    /// </para>
+    /// <para>
+    /// The score is the ratio of between-cluster to within-cluster spread (scaled by the degrees of
+    /// freedom), which is cheap to compute from the centroids alone. A plain "more clusters is better"
+    /// rule would always answer with the maximum, so a candidate has to beat the best so far by
+    /// <see cref="MinimumSeparationGain"/> to win - and the winning ratio is reported
+    /// (<see cref="WrappedSoundCluster.Separation"/>) instead of being hidden, so a library whose clusters
+    /// are genuinely just two big groups says so.
     /// </para>
     /// </summary>
     static ClusteringResult Cluster(double[][] vectors, double[] means, double[] deviations)
@@ -259,24 +268,73 @@ public static class WrappedAudioCrossAnalyzer
         _ = means;
         _ = deviations;
 
-        int maxK = Math.Clamp(vectors.Length / 12, 3, 8);
+        // Up to ten groups for a large library, but never more groups than there is data to support.
+        int maxK = Math.Clamp(vectors.Length / 6, 3, 10);
         var best = new ClusteringResult();
 
         for (int k = 2; k <= maxK; k++)
         {
-            var candidate = RunKMeans(vectors, k, restarts: 8, seed: 20240501 + k);
-            double silhouette = SilhouetteScore(vectors, candidate.Assignment, k);
-            candidate.Silhouette = silhouette;
+            var candidate = RunKMeans(vectors, k, restarts: 10, seed: 20240501 + k);
+            candidate.Separation = SeparationScore(vectors, candidate.Assignment, candidate.Centroids, k);
 
-            // Prefer more clusters only when they are clearly better separated (a 5% margin avoids
-            // flipping between 5 and 6 clusters because of numerical noise).
-            if (silhouette > best.Silhouette * 1.05 || best.ClusterCount == 0)
-            {
+            if (best.ClusterCount == 0 || candidate.Separation > best.Separation * MinimumSeparationGain)
                 best = candidate;
-            }
         }
 
         return best;
+    }
+
+    /// <summary>
+    /// How much better a candidate has to be before a finer split is accepted. 2% keeps the choice stable
+    /// between runs (and between an analysis and the next one) while still following a real improvement.
+    /// </summary>
+    const double MinimumSeparationGain = 1.02;
+
+    /// <summary>
+    /// Calinski-Harabasz score: (between-cluster spread / (k - 1)) / (within-cluster spread / (n - k)).
+    /// Higher means the groups are tighter and further apart. O(n * k), so evaluating every candidate k
+    /// costs nothing worth optimising.
+    /// </summary>
+    static double SeparationScore(double[][] vectors, int[] assignment, double[][] centroids, int k)
+    {
+        int n = vectors.Length;
+        if (n <= k || k < 2)
+            return double.NegativeInfinity;
+
+        var globalMean = new double[FeatureCount];
+        for (int i = 0; i < n; i++)
+            for (int feature = 0; feature < FeatureCount; feature++)
+                globalMean[feature] += vectors[i][feature];
+        for (int feature = 0; feature < FeatureCount; feature++)
+            globalMean[feature] /= n;
+
+        var counts = new int[k];
+        for (int i = 0; i < n; i++)
+            counts[assignment[i]]++;
+
+        double between = 0.0;
+        double within = 0.0;
+        for (int cluster = 0; cluster < k; cluster++)
+        {
+            if (counts[cluster] == 0)
+                continue;
+
+            double distance = 0.0;
+            for (int feature = 0; feature < FeatureCount; feature++)
+            {
+                double difference = centroids[cluster][feature] - globalMean[feature];
+                distance += difference * difference;
+            }
+            between += counts[cluster] * distance;
+        }
+
+        for (int i = 0; i < n; i++)
+            within += SquaredDistance(vectors[i], centroids[assignment[i]]);
+
+        if (within <= 1e-12)
+            return double.PositiveInfinity;
+
+        return (between / (k - 1)) / (within / (n - k));
     }
 
     static ClusteringResult RunKMeans(double[][] vectors, int k, int restarts, int seed)
@@ -420,102 +478,6 @@ public static class WrappedAudioCrossAnalyzer
         return sum;
     }
 
-    /// <summary>
-    /// Mean silhouette of the assignment: how much closer each song is to its own cluster than to the
-    /// nearest other one. This is what makes "how many sound worlds are there" a measured decision rather
-    /// than a number somebody picked.
-    /// </summary>
-    static double SilhouetteScore(double[][] vectors, int[] assignment, int k)
-    {
-        // Sampled for large libraries: the score is used to compare values of k, not as an exact figure.
-        int sampleSize = Math.Min(vectors.Length, 1200);
-        var indexes = Enumerable.Range(0, vectors.Length).ToArray();
-        if (vectors.Length > sampleSize)
-        {
-            var random = new Random(4242);
-            for (int i = indexes.Length - 1; i > 0; i--)
-            {
-                int j = random.Next(i + 1);
-                (indexes[i], indexes[j]) = (indexes[j], indexes[i]);
-            }
-            indexes = indexes.Take(sampleSize).ToArray();
-        }
-
-        var totals = new double[k][];
-        var counts = new int[k];
-        for (int cluster = 0; cluster < k; cluster++)
-            totals[cluster] = new double[FeatureCount];
-        for (int i = 0; i < vectors.Length; i++)
-        {
-            int cluster = assignment[i];
-            counts[cluster]++;
-            for (int feature = 0; feature < FeatureCount; feature++)
-                totals[cluster][feature] += vectors[i][feature];
-        }
-
-        var centroids = new double[k][];
-        for (int cluster = 0; cluster < k; cluster++)
-        {
-            centroids[cluster] = new double[FeatureCount];
-            if (counts[cluster] == 0)
-                continue;
-            for (int feature = 0; feature < FeatureCount; feature++)
-                centroids[cluster][feature] = totals[cluster][feature] / counts[cluster];
-        }
-
-        double sum = 0.0;
-        int counted = 0;
-        foreach (int i in indexes)
-        {
-            int own = assignment[i];
-            if (counts[own] <= 1)
-                continue;
-
-            // a(i): mean distance to the other members of the own cluster; b(i): mean distance to the
-            // members of the closest other cluster.
-            double ownSum = 0.0;
-            int ownCount = 0;
-            var otherSums = new double[k];
-            var otherCounts = new int[k];
-            for (int j = 0; j < vectors.Length; j++)
-            {
-                if (i == j)
-                    continue;
-                double distance = Math.Sqrt(SquaredDistance(vectors[i], vectors[j]));
-                int cluster = assignment[j];
-                if (cluster == own)
-                {
-                    ownSum += distance;
-                    ownCount++;
-                }
-                else
-                {
-                    otherSums[cluster] += distance;
-                    otherCounts[cluster]++;
-                }
-            }
-
-            if (ownCount == 0)
-                continue;
-
-            double a = ownSum / ownCount;
-            double b = double.MaxValue;
-            for (int cluster = 0; cluster < k; cluster++)
-                if (cluster != own && otherCounts[cluster] > 0)
-                    b = Math.Min(b, otherSums[cluster] / otherCounts[cluster]);
-
-            if (b == double.MaxValue)
-                continue;
-
-            double denominator = Math.Max(a, b);
-            if (denominator > 1e-12)
-                sum += (b - a) / denominator;
-            counted++;
-        }
-
-        return counted > 0 ? sum / counted : double.NegativeInfinity;
-    }
-
     // ---------------------------------------------------------------------------------------------
     //  Cluster descriptions
     // ---------------------------------------------------------------------------------------------
@@ -548,6 +510,8 @@ public static class WrappedAudioCrossAnalyzer
                 AverageLoudness = (float)members.Average(i => songs[i].Features.LoudnessMean),
                 AverageBrightnessHz = (float)members.Average(i => songs[i].Features.SpectralCentroidHz),
                 NetLikes = members.Sum(i => songs[i].TotalLikes - songs[i].TotalDislikes),
+                Separation = (float)clustering.Separation,
+                ClusterCount = clustering.ClusterCount,
             };
 
             cluster.PlaySharePercent = periodPlayTotal > 0 ? 100f * cluster.Plays / periodPlayTotal : 0f;
