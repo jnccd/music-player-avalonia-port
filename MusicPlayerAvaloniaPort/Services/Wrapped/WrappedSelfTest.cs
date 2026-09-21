@@ -1,5 +1,6 @@
 #if DEBUG
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -63,6 +64,10 @@ public static class WrappedSelfTest
         if (mode == "wrapped")
             return RunWrappedOverDatabase();
 
+        if (mode == "ui")
+            return RunXamlNameCheck();
+
+        failures += RunXamlNameCheck();
         failures += RunFftCheck();
 
         if (mode is "all" or "tempo")
@@ -73,6 +78,96 @@ public static class WrappedSelfTest
 
         Console.WriteLine("=== wrapped self test finished ===");
         return failures;
+    }
+
+    /// <summary>
+    /// Checks that every control the Wrapped window looks up by name actually exists in its axaml.
+    /// <para>
+    /// This exists because of a real bug: the view loads its XAML with <c>AvaloniaXamlLoader.Load</c>
+    /// instead of the generated <c>InitializeComponent</c>, so the fields the name generator declares are
+    /// never assigned. Reading them threw a <c>NullReferenceException</c> inside an <c>async void</c>
+    /// handler, which took the whole application down - and only in Release, because the self test path
+    /// (which populated the report list) is compiled out there. A compile-time check cannot catch that, and
+    /// the names are strings, so they are checked against the XAML here. This runs without any UI platform,
+    /// which matters because a self test that needs a window cannot run in a build or CI environment.
+    /// </para>
+    /// </summary>
+    static int RunXamlNameCheck()
+    {
+        Console.WriteLine("\n--- Wrapped view XAML name check ---");
+
+        string? xamlPath = FindWrappedViewXaml();
+        if (xamlPath == null)
+        {
+            Console.WriteLine("  could not locate WrappedView.axaml next to the executable");
+            return 1;
+        }
+
+        string xaml = File.ReadAllText(xamlPath);
+        // Both "Name" and "x:Name" name a control; the word boundary keeps other attributes that merely
+        // end in "Name" out of the result.
+        var declaredNames = System.Text.RegularExpressions.Regex
+            .Matches(xaml, @"(?<![:\w])x?:?Name\s*=\s*""(?<name>[^""]+)""")
+            .Select(match => match.Groups["name"].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        // Every name the view resolves through the visual tree has to be declared in the axaml.
+        string[] lookedUp =
+        [
+            "reportSelector", "audioCheckBox", "onlineCheckBox", "libraryStateLabel", "yearsPanel",
+            "progressBar", "progressPercentLabel", "progressLabel", "contentPanel", "computeButton",
+            "cancelButton", "deleteReportButton",
+        ];
+
+        int failures = 0;
+        foreach (string name in lookedUp)
+        {
+            bool found = declaredNames.Contains(name);
+            if (!found)
+                failures++;
+            Console.WriteLine($"  {name,-22} {(found ? "declared" : "MISSING IN AXAML")}");
+        }
+
+        // And every event handler the axaml wires up has to exist on the view. The event names are matched
+        // explicitly (rather than any "attribute=value" pair, which would also match property assignments).
+        int handlerFailures = 0;
+        foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(
+            xaml, @"(?<![A-Za-z])(?<event>IsCheckedChanged|SelectionChanged|TextChanged|Unchecked|Checked|Click|KeyDown|Loaded|Unloaded|Opening)\s*=\s*""(?<handler>\w+)"""))
+        {
+            string handler = match.Groups["handler"].Value;
+            bool exists = typeof(Views.Wrapped.WrappedView)
+                .GetMethod(handler, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public) != null;
+            if (!exists)
+            {
+                Console.WriteLine($"  event handler {handler} is wired in the axaml but missing on the view");
+                handlerFailures++;
+            }
+        }
+        failures += handlerFailures;
+        Console.WriteLine($"  event handlers: {handlerFailures} missing");
+
+        Console.WriteLine(failures == 0 ? "  xaml name check: OK" : $"  xaml name check: {failures} failure(s)");
+        return failures;
+    }
+
+    /// <summary>Finds WrappedView.axaml in the build output (it is a UserControl, not an embedded resource).</summary>
+    static string? FindWrappedViewXaml()
+    {
+        // The axaml is compiled, but the original file is copied to the output directory by the Avalonia
+        // build targets' item metadata, so looking next to the executable and in the project layout covers
+        // both a build-output run and a run from the project folder.
+        var candidates = new List<string>
+        {
+            Path.Combine(AppContext.BaseDirectory, "Views", "Wrapped", "WrappedView.axaml"),
+            Path.Combine(AppContext.BaseDirectory, "WrappedView.axaml"),
+        };
+
+        // Walk up from the executable towards the project file (bin/Debug/net10.0 -> the project folder).
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        for (int depth = 0; depth < 6 && directory != null; depth++, directory = directory.Parent)
+            candidates.Add(Path.Combine(directory.FullName, "Views", "Wrapped", "WrappedView.axaml"));
+
+        return candidates.FirstOrDefault(File.Exists);
     }
 
     /// <summary>

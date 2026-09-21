@@ -33,9 +33,26 @@ public partial class WrappedView : UserControl
 {
     readonly WrappedService wrappedService = ServiceContainer.GetService<WrappedService>();
 
-    // The controls with an x:Name in the axaml are declared by the Avalonia name generator (they are the
-    // private fields named exactly like the control), so they are used directly below instead of being
-    // declared again here.
+    // The controls are resolved by name after the XAML is loaded (see the properties below). The axaml
+    // names them for the Avalonia name generator, but those generated fields are only filled by the
+    // generated InitializeComponent() - which this view does not call (it uses AvaloniaXamlLoader.Load
+    // like the other windows) - so reading the generated fields directly is a NullReferenceException at
+    // runtime. Exactly that is how the "Compute wrapped" button came to close the whole application
+    // instead of doing anything. The properties below are therefore resolved through the visual tree, and
+    // they are deliberately *not* named like the controls in the axaml (the name generator would then
+    // declare a conflicting member).
+    ComboBox? ReportSelector => this.GetNestedControl<ComboBox>("reportSelector");
+    CheckBox? AudioCheckBox => this.GetNestedControl<CheckBox>("audioCheckBox");
+    CheckBox? OnlineCheckBox => this.GetNestedControl<CheckBox>("onlineCheckBox");
+    TextBlock? LibraryStateLabel => this.GetNestedControl<TextBlock>("libraryStateLabel");
+    ItemsControl? YearsPanel => this.GetNestedControl<ItemsControl>("yearsPanel");
+    ProgressBar? ProgressBar => this.GetNestedControl<ProgressBar>("progressBar");
+    TextBlock? ProgressPercentLabel => this.GetNestedControl<TextBlock>("progressPercentLabel");
+    TextBlock? ProgressLabel => this.GetNestedControl<TextBlock>("progressLabel");
+    StackPanel? ContentPanel => this.GetNestedControl<StackPanel>("contentPanel");
+    Button? ComputeButton => this.GetNestedControl<Button>("computeButton");
+    Button? CancelButton => this.GetNestedControl<Button>("cancelButton");
+    Button? DeleteReportButton => this.GetNestedControl<Button>("deleteReportButton");
 
     /// <summary>The reports on disk, as the selector shows them.</summary>
     List<WrappedStore.WrappedIndexEntry> reports = [];
@@ -70,18 +87,18 @@ public partial class WrappedView : UserControl
 
     void UpdateLibraryState()
     {
-        if (libraryStateLabel == null)
+        if (LibraryStateLabel == null)
             return;
 
         var years = wrappedService.GetAvailableYears();
         if (years.Count == 0)
         {
-            libraryStateLabel.Text = "The local database has no play history yet - play some songs first.";
+            LibraryStateLabel.Text = "The local database has no play history yet - play some songs first.";
             return;
         }
 
         bool libraryConfigured = !string.IsNullOrWhiteSpace(Config.Data.SongLibraryPath);
-        libraryStateLabel.Text =
+        LibraryStateLabel.Text =
             $"History available for {years.Count} year(s): {string.Join(", ", years)}. " +
             $"Audio already measured for {wrappedService.CachedAnalyses} song file(s) - a second run reuses them. " +
             (libraryConfigured
@@ -93,7 +110,7 @@ public partial class WrappedView : UserControl
 
     void BuildYearCheckBoxes(List<int> years)
     {
-        if (yearsPanel == null)
+        if (YearsPanel == null)
             return;
 
         // Default: everything. The listener almost always wants the whole picture, and unticking is cheap.
@@ -104,8 +121,8 @@ public partial class WrappedView : UserControl
         // Drop selections of years that disappeared (a history pull can remove rows).
         selectedYears.RemoveWhere(year => !years.Contains(year));
 
-        yearsPanel.ItemsSource = null;
-        yearsPanel.ItemsSource = years
+        YearsPanel.ItemsSource = null;
+        YearsPanel.ItemsSource = years
             .OrderByDescending(year => year)
             .Select(year =>
             {
@@ -130,28 +147,21 @@ public partial class WrappedView : UserControl
     void ReloadReports(bool selectNewest)
     {
         reports = wrappedService.ListReports();
-        if (reportSelector != null)
-        {
-            reportSelector.ItemsSource = reports
-                .Select(entry => $"{entry.PeriodLabel}  -  computed {entry.ComputedAt.LocalDateTime:yyyy-MM-dd HH:mm}  ({entry.Plays} plays)")
-                .ToList();
-            if (reports.Count > 0 && selectNewest)
-                reportSelector.SelectedIndex = 0;
-            else if (reports.Count == 0)
-                ShowPlaceholder();
-        }
+        ReportSelector.ItemsSource = reports
+            .Select(entry => $"{entry.PeriodLabel}  -  computed {entry.ComputedAt.LocalDateTime:yyyy-MM-dd HH:mm}  ({entry.Plays} plays)")
+            .ToList();
+        if (reports.Count > 0 && selectNewest)
+            ReportSelector.SelectedIndex = 0;
+        else if (reports.Count == 0)
+            ShowPlaceholder();
 
-        if (deleteReportButton != null)
-            deleteReportButton.IsEnabled = reports.Count > 0;
+        DeleteReportButton.IsEnabled = reports.Count > 0;
     }
 
     void ShowPlaceholder()
     {
-        if (contentPanel == null)
-            return;
-
-        contentPanel.Children.Clear();
-        contentPanel.Children.Add(new TextBlock
+        ContentPanel.Children.Clear();
+        ContentPanel.Children.Add(new TextBlock
         {
             Text = "No wrapped yet. Tick the years you want and press \"Compute wrapped\".",
             TextWrapping = TextWrapping.Wrap,
@@ -161,22 +171,19 @@ public partial class WrappedView : UserControl
 
     void ReportSelector_SelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        int index = reportSelector.SelectedIndex;
+        int index = ReportSelector.SelectedIndex;
         if (index < 0 || index >= reports.Count)
             return;
 
         var report = wrappedService.LoadReport(reports[index]);
         if (report == null)
         {
-            if (contentPanel != null)
+            ContentPanel.Children.Clear();
+            ContentPanel.Children.Add(new TextBlock
             {
-                contentPanel.Children.Clear();
-                contentPanel.Children.Add(new TextBlock
-                {
-                    Text = "This report cannot be read (it may have been written by an older version). Compute it again.",
-                    TextWrapping = TextWrapping.Wrap,
-                });
-            }
+                Text = "This report cannot be read (it may have been written by an older version). Compute it again.",
+                TextWrapping = TextWrapping.Wrap,
+            });
             return;
         }
 
@@ -187,7 +194,7 @@ public partial class WrappedView : UserControl
 
     void DeleteReportButton_Click(object? sender, RoutedEventArgs e)
     {
-        int index = reportSelector.SelectedIndex;
+        int index = ReportSelector.SelectedIndex;
         if (index < 0 || index >= reports.Count)
             return;
 
@@ -216,7 +223,7 @@ public partial class WrappedView : UserControl
 
     async void ExportButton_Click(object? sender, RoutedEventArgs e)
     {
-        int index = reportSelector.SelectedIndex;
+        int index = ReportSelector.SelectedIndex;
         if (index < 0 || index >= reports.Count)
             return;
 
@@ -233,11 +240,11 @@ public partial class WrappedView : UserControl
             string path = Path.Combine(PersistenceLocations.WrappedDirectory, fileName);
             await File.WriteAllTextAsync(path, RenderReportAsText(report));
 
-            progressLabel.Text = $"Written to {path}";
+            ProgressLabel.Text = $"Written to {path}";
         }
         catch (Exception ex)
         {
-            progressLabel.Text = $"Could not write the report: {ex.Message}";
+            ProgressLabel.Text = $"Could not write the report: {ex.Message}";
         }
     }
 
@@ -272,16 +279,15 @@ public partial class WrappedView : UserControl
         var years = selectedYears.OrderByDescending(year => year).ToList();
         if (years.Count == 0)
         {
-            if (progressLabel != null)
-                progressLabel.Text = "Select at least one year (or press \"All\").";
+            ProgressLabel.Text = "Select at least one year (or press \"All\").";
             return;
         }
 
         var options = new WrappedOptions
         {
             Years = years,
-            AnalyzeAudio = audioCheckBox.IsChecked == true,
-            EnrichOnline = onlineCheckBox.IsChecked == true,
+            AnalyzeAudio = AudioCheckBox.IsChecked == true,
+            EnrichOnline = OnlineCheckBox.IsChecked == true,
         };
 
         cancellation = new CancellationTokenSource();
@@ -298,8 +304,7 @@ public partial class WrappedView : UserControl
         }
         catch (Exception ex)
         {
-            if (progressLabel != null)
-                progressLabel.Text = $"The wrapped computation failed: {ex.Message}";
+            ProgressLabel.Text = $"The wrapped computation failed: {ex.Message}";
         }
         finally
         {
@@ -311,19 +316,15 @@ public partial class WrappedView : UserControl
 
     void CancelButton_Click(object? sender, RoutedEventArgs e)
     {
-        if (progressLabel != null)
-            progressLabel.Text = "Cancelling… (the audio measured so far is kept)";
+        ProgressLabel.Text = "Cancelling… (the audio measured so far is kept)";
         cancellation?.Cancel();
     }
 
     void SetRunning(bool running)
     {
-        if (computeButton != null)
-            computeButton.IsEnabled = !running;
-        if (cancelButton != null)
-            cancelButton.IsEnabled = running;
-        if (reportSelector != null)
-            reportSelector.IsEnabled = !running;
+        ComputeButton.IsEnabled = !running;
+        CancelButton.IsEnabled = running;
+        ReportSelector.IsEnabled = !running;
     }
 
     void OnProgress(WrappedProgress progress)
@@ -331,19 +332,14 @@ public partial class WrappedView : UserControl
         // Progress arrives from the computation thread, the controls belong to the UI thread.
         Dispatcher.UIThread.Post(() =>
         {
-            if (progressBar != null)
-                progressBar.Value = progress.OverallFraction;
-            if (progressPercentLabel != null)
-                progressPercentLabel.Text = $"{progress.OverallFraction * 100:0}%";
-
-            if (progressLabel == null)
-                return;
+            ProgressBar.Value = progress.OverallFraction;
+            ProgressPercentLabel.Text = $"{progress.OverallFraction * 100:0}%";
 
             string prefix = progress.YearCount > 0 ? $"[{progress.YearLabel}] " : "";
             string items = progress.ItemsTotal > 0 || progress.ItemsDone > 0
                 ? $"  ({progress.AudioSummary})"
                 : "";
-            progressLabel.Text = $"{prefix}{progress.Message}{items}";
+            ProgressLabel.Text = $"{prefix}{progress.Message}{items}";
         });
     }
 
@@ -353,12 +349,12 @@ public partial class WrappedView : UserControl
 
     void RenderReport(WrappedReport report)
     {
-        if (contentPanel == null)
+        if (ContentPanel == null)
             return;
 
-        contentPanel.Children.Clear();
+        ContentPanel.Children.Clear();
 
-        contentPanel.Children.Add(Header(report.PeriodLabel,
+        ContentPanel.Children.Add(Header(report.PeriodLabel,
             $"{report.DisplayName}".Trim().Length > 0
                 ? $"{report.DisplayName} - {report.PeriodStart.LocalDateTime:yyyy-MM-dd} to {report.PeriodEnd.LocalDateTime:yyyy-MM-dd}"
                 : $"{report.PeriodStart.LocalDateTime:yyyy-MM-dd} to {report.PeriodEnd.LocalDateTime:yyyy-MM-dd}"));
@@ -368,7 +364,7 @@ public partial class WrappedView : UserControl
             var highlights = new StackPanel { Spacing = 4 };
             foreach (string highlight in report.Highlights)
                 highlights.Children.Add(new TextBlock { Text = "• " + highlight, TextWrapping = TextWrapping.Wrap });
-            contentPanel.Children.Add(Section("The short version", highlights));
+            ContentPanel.Children.Add(Section("The short version", highlights));
         }
 
         // Scope: what was included, so a partial run is never mistaken for the whole story.
@@ -381,49 +377,49 @@ public partial class WrappedView : UserControl
             scope.Children.Add(Info("The audio analysis was switched off for this run; the sound sections are missing."));
         foreach (string note in report.Notes)
             scope.Children.Add(Info(note));
-        contentPanel.Children.Add(Section("What went into this", scope));
+        ContentPanel.Children.Add(Section("What went into this", scope));
 
-        contentPanel.Children.Add(Section("The numbers", BuildHeadline(report.Headline)));
-        contentPanel.Children.Add(Section("Top artists", BuildArtists(report.TopArtists)));
-        contentPanel.Children.Add(Section("Most played songs", BuildSongs(report.TopSongs, showReason: true)));
-        contentPanel.Children.Add(Section("Obsessions (plays per day of listening)", BuildSongs(report.Obsessions, showReason: true)));
-        contentPanel.Children.Add(Section("One-hit wonders (a burst, then never again)", BuildSongs(report.OneHitWonders, showReason: true)));
-        contentPanel.Children.Add(Section("Hall of fame", BuildSongs(report.HallOfFame, showReason: true)));
-        contentPanel.Children.Add(Section("Hall of shame", BuildSongs(report.HallOfShame, showReason: true)));
-        contentPanel.Children.Add(Section("Most divisive", BuildSongs(report.MostDivisive, showReason: true)));
-        contentPanel.Children.Add(Section("Faded out", BuildSongs(report.FastestFaders, showReason: true)));
-        contentPanel.Children.Add(Section("Rediscovered", BuildSongs(report.Rediscovered, showReason: true)));
-        contentPanel.Children.Add(Section("Newly embraced", BuildSongs(report.NewlyEmbraced, showReason: true)));
-        contentPanel.Children.Add(Section("Positively rated the longest", BuildSongs(report.LongestVoted, showReason: true)));
-        contentPanel.Children.Add(Section("When you listen", BuildRhythm(report.Rhythm)));
-        contentPanel.Children.Add(Section("Sittings", BuildSessions(report.Sessions)));
+        ContentPanel.Children.Add(Section("The numbers", BuildHeadline(report.Headline)));
+        ContentPanel.Children.Add(Section("Top artists", BuildArtists(report.TopArtists)));
+        ContentPanel.Children.Add(Section("Most played songs", BuildSongs(report.TopSongs, showReason: true)));
+        ContentPanel.Children.Add(Section("Obsessions (plays per day of listening)", BuildSongs(report.Obsessions, showReason: true)));
+        ContentPanel.Children.Add(Section("One-hit wonders (a burst, then never again)", BuildSongs(report.OneHitWonders, showReason: true)));
+        ContentPanel.Children.Add(Section("Hall of fame", BuildSongs(report.HallOfFame, showReason: true)));
+        ContentPanel.Children.Add(Section("Hall of shame", BuildSongs(report.HallOfShame, showReason: true)));
+        ContentPanel.Children.Add(Section("Most divisive", BuildSongs(report.MostDivisive, showReason: true)));
+        ContentPanel.Children.Add(Section("Faded out", BuildSongs(report.FastestFaders, showReason: true)));
+        ContentPanel.Children.Add(Section("Rediscovered", BuildSongs(report.Rediscovered, showReason: true)));
+        ContentPanel.Children.Add(Section("Newly embraced", BuildSongs(report.NewlyEmbraced, showReason: true)));
+        ContentPanel.Children.Add(Section("Positively rated the longest", BuildSongs(report.LongestVoted, showReason: true)));
+        ContentPanel.Children.Add(Section("When you listen", BuildRhythm(report.Rhythm)));
+        ContentPanel.Children.Add(Section("Sittings", BuildSessions(report.Sessions)));
 
         if (report.Months.Count > 0)
-            contentPanel.Children.Add(Section("Month by month", BuildMonths(report.Months)));
+            ContentPanel.Children.Add(Section("Month by month", BuildMonths(report.Months)));
 
         if (report.LoyalSongs.Count > 0)
-            contentPanel.Children.Add(Section("Songs that never left", BuildLoyalty(report.LoyalSongs)));
+            ContentPanel.Children.Add(Section("Songs that never left", BuildLoyalty(report.LoyalSongs)));
 
         if (report.Phases.Count > 0)
-            contentPanel.Children.Add(Section("Phases (stretches with their own character)", BuildPhases(report.Phases)));
+            ContentPanel.Children.Add(Section("Phases (stretches with their own character)", BuildPhases(report.Phases)));
 
         if (report.AudioProfile.AnalysedSongs > 0)
         {
-            contentPanel.Children.Add(Section("How your music sounds", BuildAudioProfile(report.AudioProfile)));
-            contentPanel.Children.Add(Section("Your sound worlds", BuildClusters(report.SoundClusters)));
+            ContentPanel.Children.Add(Section("How your music sounds", BuildAudioProfile(report.AudioProfile)));
+            ContentPanel.Children.Add(Section("Your sound worlds", BuildClusters(report.SoundClusters)));
         }
 
         if (report.SignatureSong != null)
-            contentPanel.Children.Add(Section("The song that sounds most like your period", BuildSongs([report.SignatureSong], showReason: true)));
+            ContentPanel.Children.Add(Section("The song that sounds most like your period", BuildSongs([report.SignatureSong], showReason: true)));
 
         if (report.OutlierSong != null)
-            contentPanel.Children.Add(Section("The odd one out", BuildSongs([report.OutlierSong], showReason: true)));
+            ContentPanel.Children.Add(Section("The odd one out", BuildSongs([report.OutlierSong], showReason: true)));
 
         if (report.ReleaseYears.Count > 0)
-            contentPanel.Children.Add(Section("Release years (from the online lookup)", BuildReleaseYears(report.ReleaseYears)));
+            ContentPanel.Children.Add(Section("Release years (from the online lookup)", BuildReleaseYears(report.ReleaseYears)));
 
         if (report.Keys.Count > 0)
-            contentPanel.Children.Add(Section("Keys", BuildKeys(report.Keys)));
+            ContentPanel.Children.Add(Section("Keys", BuildKeys(report.Keys)));
     }
 
     // ---- section builders ----
