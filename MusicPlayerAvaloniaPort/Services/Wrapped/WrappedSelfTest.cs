@@ -75,6 +75,9 @@ public static class WrappedSelfTest
         if (mode == "cache")
             return RunAudioCacheCheck();
 
+        if (mode == "clusters")
+            return RunClusterAnalysis();
+
         failures += RunXamlNameCheck();
         failures += RunFftCheck();
 
@@ -266,6 +269,39 @@ public static class WrappedSelfTest
 
         Console.WriteLine(failures == 0 ? "  audio cache: OK" : $"  audio cache: {failures} failure(s)");
         return failures;
+    }
+
+    /// <summary>
+    /// Runs the clustering over a real analysis cache and prints the whole k sweep, so "only two sound
+    /// worlds" can be told apart from "the choice of k is wrong". This is the test that answers whether the
+    /// grouping is a property of the music or of the code, on the actual library rather than a fixture.
+    /// </summary>
+    static int RunClusterAnalysis()
+    {
+        Console.WriteLine("\n--- sound clustering over a real cache ---");
+
+        string? dataDirectory = Environment.GetEnvironmentVariable(DataDirectoryEnvironmentVariableName);
+        if (!string.IsNullOrWhiteSpace(dataDirectory))
+            Persistence.PersistenceLocations.Configure(Persistence.PersistenceLocations.DefaultAppName, () => dataDirectory);
+        else
+        {
+            Console.WriteLine($"Set {DataDirectoryEnvironmentVariableName} to the folder holding wrapped/audio-analysis.json.");
+            return 1;
+        }
+
+        var cache = new WrappedAudioCache();
+        Console.WriteLine($"cache entries: {cache.Count}");
+
+        var features = cache.DumpFeatures();
+        Console.WriteLine($"loaded feature sets: {features.Count}");
+        if (features.Count < 8)
+        {
+            Console.WriteLine("not enough analysed songs to cluster");
+            return 1;
+        }
+
+        Services.Wrapped.WrappedAudioCrossAnalyzer.DumpClusterAnalysis(features, Console.Out);
+        return 0;
     }
 
     /// <summary>

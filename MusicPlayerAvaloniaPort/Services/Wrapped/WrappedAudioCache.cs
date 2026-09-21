@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using MusicPlayerAvaloniaPort.Persistence;
@@ -240,6 +241,18 @@ public sealed class WrappedAudioCache
             Console.WriteLine($"Could not read the wrapped audio cache (recomputing): {ex.Message}");
             return new Dictionary<string, CachedAudioFeatures>(StringComparer.Ordinal);
         }
+    }
+
+    /// <summary>
+    /// Every cached feature set, for diagnostics (the cluster analysis runs over a real library this way).
+    /// </summary>
+    public List<AudioFeatures> DumpFeatures()
+    {
+        lock (sync)
+            return entries.Values
+                .Where(entry => entry.Features.AnalyzedSeconds > 0)
+                .Select(entry => entry.Features)
+                .ToList();
     }
 
     /// <summary>

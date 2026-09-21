@@ -609,9 +609,18 @@ public sealed class WrappedService
             cancellationToken);
 
         matched = matchedCount;
-        if (budgetExhausted)
+        if (service.LastError.Length > 0)
+        {
+            // The important distinction: the lookup *failed* rather than found nothing. Without this the
+            // report says "no song could be matched", which reads like the matching is broken.
+            notes.Add($"The online lookup failed after {service.RequestsSent} request(s) ({service.LastError}). " +
+                      "Nothing was matched because the requests did not get an answer - check the machine's internet access, then run it again.");
+        }
+        else if (budgetExhausted)
+        {
             notes.Add($"The online lookup was stopped after {options.OnlineRequestBudget} requests (MusicBrainz allows one per second); " +
                       "run it again to continue - everything already found is cached.");
+        }
 
         return matched;
     }

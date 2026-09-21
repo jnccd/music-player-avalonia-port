@@ -17,8 +17,12 @@ namespace MusicPlayerAvaloniaPort.Services.Wrapped;
 /// </summary>
 public sealed class WrappedReport
 {
-    /// <summary>Schema version of the persisted report; older files are recomputed rather than parsed.</summary>
-    public const int SchemaVersion = 1;
+    /// <summary>
+    /// Schema version of the persisted report; older files are recomputed rather than parsed. Bumped
+    /// whenever the report grows a field that changes what a section means, so a stale file cannot render
+    /// as a report with missing numbers (recomputing is cheap once the audio cache is warm).
+    /// </summary>
+    public const int SchemaVersion = 2;
 
     public int Version { get; set; } = SchemaVersion;
 
@@ -312,6 +316,17 @@ public sealed class WrappedSoundCluster
     public float Separation { get; set; }
     /// <summary>How many groups the clustering settled on, so the UI can say why it stopped there.</summary>
     public int ClusterCount { get; set; }
+    /// <summary>
+    /// How many independent directions of the measured sound the grouping ran on. Reported because it is
+    /// the difference between "these groups are one aspect of the sound" and "these groups combine several".
+    /// </summary>
+    public int ComponentsUsed { get; set; }
+    /// <summary>
+    /// The separation a split into <see cref="ClusterCount"/>+1 groups achieved. Shown next to the chosen
+    /// one, so "only two groups" is explainable: a finer split scoring lower means the library genuinely
+    /// does not divide further, not that the number of groups was capped.
+    /// </summary>
+    public float NextSplitSeparation { get; set; }
 }
 
 /// <summary>Library-wide audio statistics, the baseline every song is compared against.</summary>

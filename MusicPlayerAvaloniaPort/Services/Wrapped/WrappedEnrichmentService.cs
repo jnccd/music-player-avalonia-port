@@ -83,6 +83,16 @@ public sealed class WrappedEnrichmentService
     public int CachedMisses => misses.Count;
 
     /// <summary>
+    /// Why the last run stopped early ("" when it finished normally). Surfaced into the report: a lookup
+    /// that fails at the very first request produces exactly the same "nothing was matched" as a lookup that
+    /// genuinely found nothing, and those two need very different reactions from the user.
+    /// </summary>
+    public string LastError { get; private set; } = "";
+
+    /// <summary>Requests actually sent to MusicBrainz in the last run (a failed request counts).</summary>
+    public int RequestsSent { get; private set; }
+
+    /// <summary>
     /// Looks up the given songs, at most <paramref name="budget"/> requests. Returns how many songs ended
     /// up with release information and whether the budget ran out.
     /// </summary>
@@ -95,6 +105,8 @@ public sealed class WrappedEnrichmentService
         int matched = 0;
         int requests = 0;
         int processed = 0;
+        LastError = "";
+        RequestsSent = 0;
 
         foreach (var song in songs)
         {
@@ -122,6 +134,7 @@ public sealed class WrappedEnrichmentService
                 return (matched, true);
 
             requests++;
+            RequestsSent = requests;
             processed++;
             try
             {
@@ -145,9 +158,11 @@ public sealed class WrappedEnrichmentService
             }
             catch (Exception ex)
             {
-                // Offline, rate limited, malformed answer: the wrapped simply goes without release years.
-                // One message is enough - a per-song log for a 3 500 song library would be noise.
-                Console.WriteLine($"Wrapped: online enrichment stopped after {(requests)} request(s): {ex.Message}");
+                // Offline, rate limited, blocked by a proxy, malformed answer: the wrapped simply goes
+                // without release years. The reason is recorded because "0 of 3445 matched" otherwise looks
+                // like a matching problem when it is really a network one.
+                LastError = $"{ex.GetType().Name}: {ex.Message}";
+                Console.WriteLine($"Wrapped: online enrichment stopped after {requests} request(s): {LastError}");
                 Save();
                 return (matched, true);
             }

@@ -703,19 +703,35 @@ public partial class WrappedView : UserControl
         var panel = new StackPanel { Spacing = 12 };
         panel.Children.Add(Info("These groups come from the measured sound of your library (tempo, timbre, key, loudness) - " +
                                 "no online genre database is involved, so the labels describe what the music measurably is."));
-        // The grouping is a measurement, so the number it was chosen by is shown: with a low separation the
-        // honest reading is "your library does not split into more than this", not "you only listen to two
-        // kinds of music".
+        // The grouping is a measurement, so the numbers it was chosen by are shown. That matters most when
+        // there are only a few groups: "your library is two kinds of music" and "two is as far as this
+        // library separates" look identical without them.
+        //
+        // The verdict is deliberately derived from the comparison between the chosen split and the next
+        // finer one rather than from absolute thresholds: the score's scale depends on the library size and
+        // on how many directions the grouping ran on (it was in the hundreds for the raw features and in
+        // the single digits in component space), so a fixed cutoff would call the same grouping "clear"
+        // or "overlapping" depending only on which space it was computed in.
         if (clusters[0].ClusterCount > 0 && clusters[0].Separation > 0)
         {
-            float separation = clusters[0].Separation;
-            string verdict = separation >= 400
-                ? "clearly separate groups"
-                : separation >= 150
-                    ? "reasonably separate groups"
-                    : "groups that overlap a lot - this library does not split into more distinct kinds than this";
-            panel.Children.Add(Info($"The library split into {clusters[0].ClusterCount} groups by itself (separation score {separation:0} - {verdict}). " +
-                                    "A finer split would have to be measurably better separated than this one to be used."));
+            panel.Children.Add(Info($"The library split into {clusters[0].ClusterCount} groups by itself (separation score {clusters[0].Separation:0.#})."));
+
+            if (clusters[0].NextSplitSeparation > 0)
+            {
+                bool worse = clusters[0].NextSplitSeparation < clusters[0].Separation;
+                panel.Children.Add(Info($"Splitting it into {clusters[0].ClusterCount + 1} groups scores {clusters[0].NextSplitSeparation:0.#} - " +
+                    (worse
+                        ? "worse. The finer split is not better separated, so more groups would divide these by accident rather than by sound."
+                        : "better separated, but not by enough to be worth the extra groups.")));
+            }
+            else
+            {
+                panel.Children.Add(Info("No finer split was measurably better separated."));
+            }
+
+            if (clusters[0].ComponentsUsed > 0)
+                panel.Children.Add(Info($"The grouping was made on {clusters[0].ComponentsUsed} independent directions of the measured sound, " +
+                                        "so one property of the sound (brightness, for example) cannot decide the whole split by itself."));
         }
 
         foreach (var cluster in clusters)
