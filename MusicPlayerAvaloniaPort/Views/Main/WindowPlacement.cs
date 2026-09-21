@@ -7,13 +7,14 @@ namespace MusicPlayerAvaloniaPort.Views.Main;
 /// <summary>
 /// Keeps the main window inside the working area of the screen it is on.
 ///
-/// The subtlety that makes this more than a rectangle clamp: on Windows the value of <see cref="Window.Position"/>
-/// is the origin of the window FRAME, while what the user sees - and what has to touch the screen edge - is the
-/// CLIENT area, which sits <c>(13, 1)</c> physical pixels inside that frame at 200% scaling (on 100% scaling it
-/// is a few pixels on the left and one pixel on top). Clamping the frame position to the working area therefore
-/// leaves exactly that offset as a visible gap along the top and left edge, which is what the clamp did before.
-/// So the visible rectangle is the one that gets clamped, and the frame offset is translated back out of the
-/// result (see <see cref="VisibleOriginOffset"/>).
+/// The subtlety that makes this more than a rectangle clamp: <see cref="Window.Position"/> is the origin of the
+/// window FRAME as the platform defines it, not the origin of the content the user sees. The two differ by a
+/// per-platform, per-scaling amount - measured (13, 1) physical pixels at 200% and (7, 1) at 100% on Windows,
+/// and the window manager's border thickness on X11 - and on Wayland <see cref="Window.Position"/> cannot be set
+/// at all (the compositor owns window placement, see <see cref="VisibleOriginOffset"/>). Clamping the window
+/// position to the working area therefore leaves exactly that offset as a visible gap along the top and left
+/// edge, which is what the clamp did before. So the visible rectangle is the one that gets clamped, and the
+/// frame offset is translated back out of the result.
 ///
 /// Everything here is in physical pixels: the working area comes from Avalonia already in physical pixels, and
 /// window and screen geometry in device independent pixels is converted with the window's render scaling.
@@ -118,14 +119,24 @@ public static class WindowPlacement
 
     /// <summary>
     /// Offset from the window frame origin (<see cref="Window.Position"/>) to the origin of the visible client
-    /// area, in physical pixels - the correction the clamp has to apply so the visible content, not the
-    /// invisible frame border, ends up flush with the working area.
+    /// area, in physical pixels - the correction the clamp has to apply so the visible content, not the frame
+    /// border, ends up flush with the working area.
     ///
-    /// Measured, not derived: <see cref="Visual.PointToScreen(Point)"/> at the client origin returns that
-    /// origin's screen position in physical pixels, so the offset is simply its distance to
-    /// <see cref="Window.Position"/>. Deriving it from <see cref="Window.FrameSize"/> is NOT equivalent - the
-    /// frame border is not split evenly (on Windows at 200% scaling the frame is 26x14 physical pixels larger
-    /// than the client area, but the client origin only sits 13,1 pixels inside it).
+    /// Measured, not derived, so it follows whatever convention the current backend uses:
+    /// <list type="bullet">
+    /// <item>Win32: <see cref="Window.Position"/> is the outer frame, the client origin sits the DWM resize
+    /// border inside it - measured (13, 1) physical pixels at 200% scaling on this machine.</item>
+    /// <item>X11: the backend already converts its internal client position by the <c>_NET_FRAME_EXTENTS</c>
+    /// border, and its PointToScreen returns that same client origin, so the same subtraction yields the window
+    /// manager's border thickness (zero for a borderless frame).</item>
+    /// <item>Wayland: <see cref="Window.Position"/> is always (0, 0) and <c>Move</c> is a documented no-op
+    /// ("Not supported by Wayland"), <see cref="Window.FrameSize"/> is null, so this returns (0, 0) and the
+    /// clamp degenerates to a rectangle clamp whose result the compositor ignores - the platform does not let a
+    /// client place its own windows, and nothing here can change that.</item>
+    /// </list>
+    /// Deriving it from <see cref="Window.FrameSize"/> instead is NOT equivalent on Win32: the frame border is
+    /// not split evenly (the frame is 26x14 physical pixels larger than the client area at 200%, but the client
+    /// origin only sits 13,1 pixels inside it).
     /// </summary>
     public static PixelPoint VisibleOriginOffset(Window window)
     {
