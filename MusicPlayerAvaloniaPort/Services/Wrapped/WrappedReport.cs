@@ -22,7 +22,7 @@ public sealed class WrappedReport
     /// whenever the report grows a field that changes what a section means, so a stale file cannot render
     /// as a report with missing numbers (recomputing is cheap once the audio cache is warm).
     /// </summary>
-    public const int SchemaVersion = 2;
+    public const int SchemaVersion = 3;
 
     public int Version { get; set; } = SchemaVersion;
 
@@ -95,7 +95,99 @@ public sealed class WrappedReport
     public WrappedSong? OutlierSong { get; set; }
     public List<WrappedReleaseYear> ReleaseYears { get; set; } = [];
     public List<WrappedKeyCount> Keys { get; set; } = [];
+    /// <summary>
+    /// How this period compares with the one before it. Only filled for a single calendar year (an
+    /// all-time report has nothing to compare against).
+    /// </summary>
+    public WrappedYearComparison? Comparison { get; set; }
     public List<string> Highlights { get; set; } = [];
+}
+
+/// <summary>
+/// One period measured against the one before it: the year-over-year view.
+/// <para>
+/// Every entry carries both values and the size of the change, so the UI can show the movement rather than
+/// just the new number - and so an increase is never silently presented for a value where a decrease is the
+/// interesting story.
+/// </para>
+/// </summary>
+public sealed class WrappedYearComparison
+{
+    /// <summary>The period this is compared against, e.g. 2024 for a 2025 report.</summary>
+    public int PreviousYear { get; set; }
+    public int CurrentYear { get; set; }
+
+    /// <summary>The headline numbers, current vs. previous and the change between them.</summary>
+    public List<WrappedComparisonMetric> Metrics { get; set; } = [];
+
+    /// <summary>Artists whose play count grew the most compared with the previous period.</summary>
+    public List<WrappedArtistShift> ArtistGains { get; set; } = [];
+    /// <summary>Artists whose play count fell the most compared with the previous period.</summary>
+    public List<WrappedArtistShift> ArtistLosses { get; set; } = [];
+
+    /// <summary>Artists listened to this period that were not listened to at all in the previous one.</summary>
+    public List<string> NewArtists { get; set; } = [];
+    /// <summary>Artists that were played before, were absent for the previous period, and came back now.</summary>
+    public List<string> ReturningArtists { get; set; } = [];
+
+    /// <summary>Sentences describing the most interesting movements, for the highlights list.</summary>
+    public List<string> Highlights { get; set; } = [];
+}
+
+/// <summary>
+/// One measured quantity in two periods. <see cref="Delta"/> is <c>Current - Previous</c>, so its sign is
+/// the direction of the change and the UI can pick the wording from it.
+/// </summary>
+public sealed class WrappedComparisonMetric
+{
+    public string Label { get; set; } = "";
+    /// <summary>The value in the earlier period, formatted for display.</summary>
+    public string PreviousText { get; set; } = "";
+    /// <summary>The value in the later period, formatted for display.</summary>
+    public string CurrentText { get; set; } = "";
+    public double Previous { get; set; }
+    public double Current { get; set; }
+    public double Delta { get; set; }
+    /// <summary>
+    /// For percentage metrics (a vote ratio, an average): the comparison is in points, not a relative
+    /// change, so "up 4 points" is the honest reading rather than "up 12%".
+    /// </summary>
+    public bool IsPercentagePoints { get; set; }
+    /// <summary>Unit shown next to the change ("plays", "hours", "%", "songs", ...).</summary>
+    public string Unit { get; set; } = "";
+    /// <summary>
+    /// Decimal places the value is displayed with. Carried explicitly (rather than inferred from the
+    /// formatted text) so the change is shown at the same precision as the values it was computed from -
+    /// a loudness of 0.124 must not get a change of "0" next to it, and the decimal separator differs
+    /// between cultures, so it cannot be read back out of the string.
+    /// </summary>
+    public int Decimals { get; set; }
+    /// <summary>
+    /// Show the change as a percentage of the previous value instead of an absolute difference. Right for
+    /// level-like measurements, where the absolute difference is meaningless to a reader: "average loudness
+    /// 0.110 -> 0.118" is not helpfully described as "up 0.008", while "up 7%" says it.
+    /// </summary>
+    public bool RelativeChange { get; set; }
+    /// <summary>
+    /// True when an increase is the "more" direction people would expect to hear about as growth. Set to
+    /// false for things like skipped songs, so the UI can word a rise neutrally instead of as an
+    /// achievement.
+    /// </summary>
+    public bool RiseIsPositive { get; set; } = true;
+
+    // NOTE: the wording of a change deliberately lives in one place only - WrappedView.DescribeChange -
+    // because it needs the precision and the relative/absolute decision above. A second formatter here
+    // (which this class used to have) silently disagreed with the one the window rendered, so the exported
+    // text and the UI could describe the same change differently.
+}
+
+/// <summary>One artist's play count in two periods.</summary>
+public sealed class WrappedArtistShift
+{
+    public string Name { get; set; } = "";
+    public int PreviousPlays { get; set; }
+    public int CurrentPlays { get; set; }
+    public int Delta { get; set; }
 }
 
 /// <summary>The headline numbers of a wrapped.</summary>

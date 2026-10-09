@@ -500,6 +500,26 @@ public static class WrappedSelfTest
         foreach (var report in reports)
             PrintReport(report);
 
+        // The comparison is worded by the view's own formatter, so the text export is printed as well: it
+        // is the check that what the window shows agrees with what the numbers mean.
+        var compared = reports.FirstOrDefault(report => report.Comparison != null);
+        if (compared != null)
+        {
+            Console.WriteLine($"\n=== {compared.PeriodLabel} as the window words it ===");
+            var export = Views.Wrapped.WrappedView.RenderReportAsText(compared);
+            bool inComparison = false;
+            foreach (string line in export.Split('\n'))
+            {
+                if (line.StartsWith("COMPARED WITH", StringComparison.Ordinal))
+                    inComparison = true;
+                else if (inComparison && line.StartsWith("MOST PLAYED", StringComparison.Ordinal))
+                    break;
+
+                if (inComparison && line.Trim().Length > 0)
+                    Console.WriteLine("  " + line.TrimEnd());
+            }
+        }
+
         // Round trip through the store, so a broken schema shows up here rather than on the next start.
         var store = new Services.Wrapped.WrappedStore();
         int reloaded = 0;

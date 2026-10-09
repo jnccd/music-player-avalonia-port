@@ -668,37 +668,8 @@ public sealed class WrappedService
             .ToList();
 
         var songsById = snapshot.Songs.ToDictionary(song => song.SongId);
-        var inputs = new List<WrappedSongInput>();
-        var eventsBySong = periodEvents
-            .Where(entry => entry.SongId is not null && songsById.ContainsKey(entry.SongId.Value))
-            .GroupBy(entry => entry.SongId!.Value);
-
-        foreach (var group in eventsBySong)
-        {
-            var song = songsById[group.Key];
-            snapshot.PathsBySongId.TryGetValue(song.SongId, out string? path);
-            inputs.Add(new WrappedSongInput
-            {
-                SongId = song.SongId,
-                Name = song.Name,
-                StoredArtist = song.Artist,
-                Album = song.Album,
-                FilePath = path ?? "",
-                // The library scan is the authority on what exists: asking the filesystem here would mean
-                // one stat per song against a folder that may be a NAS.
-                HasFile = !string.IsNullOrEmpty(path),
-                Score = song.Score,
-                Streak = song.Streak,
-                TotalLikes = song.TotalLikes,
-                TotalDislikes = song.TotalDislikes,
-                Volume = song.Volume,
-                DateAdded = song.DateAdded,
-                Events = group
-                    .OrderBy(entry => entry.Date)
-                    .Select(entry => new WrappedEvent(entry.Date, entry.ScoreChange))
-                    .ToList(),
-            });
-        }
+        var built = BuildSongInputs(snapshot, songsById, periodEvents);
+        var inputs = built.Inputs;
 
         var libraryInputs = snapshot.Songs
             .Select(song => new WrappedSongInput
@@ -736,8 +707,191 @@ public sealed class WrappedService
             periodEvents.Count,
             snapshot.Events.Count);
 
-        _ = features;
+        // Only a single calendar year has something meaningful to compare against.
+        if (year is int comparedYear)
+        {
+            report.Comparison = BuildComparison(snapshot, comparedYear, periodEvents, features);
+
+            // The movement against last year is the first thing most people look for, so it leads the
+            // headline highlights rather than sitting only in its own section.
+            var comparisonHighlights = report.Comparison?.Highlights;
+            if (comparisonHighlights is { Count: > 0 })
+                report.Highlights.InsertRange(0, comparisonHighlights);
+        }
+
         return report;
+    }
+
+    /// <summary>
+    /// Builds the year-over-year comparison for a yearly report: the same numbers for the previous calendar
+    /// year, plus which artists moved and which are new.
+    /// <para>
+    /// Everything is recomputed from the history rows rather than read from the previous year's report, so
+    /// the comparison is still there when that report was never computed, was deleted, or was written by an
+    /// older version.
+    /// </para>
+    /// </summary>
+    WrappedYearComparison? BuildComparison(
+        LibrarySnapshot snapshot,
+        int year,
+        List<SongHistoryEntry> currentPeriodEvents,
+        Dictionary<Guid, AudioFeatures> features)
+    {
+        // Calendar years in the listener's own time: a "2025" that is a UTC 2025 would move a song played
+        // late on New Year's Eve into the wrong year.
+        DateTimeOffset previousStart = new DateTimeOffset(new DateTime(year - 1, 1, 1, 0, 0, 0, DateTimeKind.Local));
+        DateTimeOffset previousEnd = new DateTimeOffset(new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Local));
+
+        var previousEvents = snapshot.Events
+            .Where(entry => entry.Date >= previousStart && entry.Date < previousEnd)
+            .ToList();
+        var beforeThat = snapshot.Events
+            .Where(entry => entry.Date < previousStart)
+            .ToList();
+
+        // Nothing was listened to in the previous year, so every delta would read as "+everything, from
+        // nothing". That is arithmetic, not insight - the report says there is nothing to compare with
+        // instead of presenting one year's own totals as growth.
+        if (previousEvents.Count == 0)
+            return null;
+
+        var songsById = snapshot.Songs.ToDictionary(song => song.SongId);
+        var currentInputs = BuildSongInputs(snapshot, songsById, currentPeriodEvents);
+        var previousInputs = BuildSongInputs(snapshot, songsById, previousEvents);
+
+        var comparison = WrappedComparisonAnalyzer.Build(
+            year - 1,
+            year,
+            currentInputs.Inputs,
+            currentInputs.Events,
+            previousInputs.Inputs,
+            previousInputs.Events,
+            BuildSongInputs(snapshot, songsById, beforeThat).Events,
+            song => features.TryGetValue(song.SongId, out var songFeatures) ? songFeatures.DurationSeconds : 0);
+
+        AddAudioTrendMetrics(comparison, snapshot, currentPeriodEvents, previousEvents, features);
+        return comparison;
+    }
+
+    /// <summary>
+    /// Adds the "your taste shifted" numbers: the average tempo, loudness and brightness of what was played
+    /// in each of the two years. Only the songs whose audio was measured can contribute, and the count of
+    /// those is stated on the metric label so a partial analysis cannot be mistaken for a full one.
+    /// </summary>
+    static void AddAudioTrendMetrics(
+        WrappedYearComparison comparison,
+        LibrarySnapshot snapshot,
+        IReadOnlyList<SongHistoryEntry> currentEvents,
+        IReadOnlyList<SongHistoryEntry> previousEvents,
+        Dictionary<Guid, AudioFeatures> features)
+    {
+        if (features.Count == 0)
+            return;
+
+        (double Tempo, double Loudness, double Brightness, int Count, bool Complete) Profile(IReadOnlyList<SongHistoryEntry> events)
+        {
+            var perSong = events
+                .Where(entry => entry.SongId is not null && features.ContainsKey(entry.SongId.Value))
+                .GroupBy(entry => entry.SongId!.Value)
+                .Select(group => (Features: features[group.Key], Plays: group.Count()))
+                .ToList();
+
+            if (perSong.Count == 0)
+                return (0, 0, 0, 0, false);
+
+            double plays = perSong.Sum(entry => entry.Plays);
+            int distinctSongs = events.Where(entry => entry.SongId is not null).Select(entry => entry.SongId!.Value).Distinct().Count();
+            return (
+                perSong.Sum(entry => entry.Features.Bpm * entry.Plays) / plays,
+                perSong.Sum(entry => entry.Features.LoudnessMean * entry.Plays) / plays,
+                perSong.Sum(entry => entry.Features.SpectralCentroidHz * entry.Plays) / plays,
+                perSong.Count,
+                perSong.Count == distinctSongs);
+        }
+
+        var current = Profile(currentEvents);
+        var previous = Profile(previousEvents);
+        if (current.Count == 0 || previous.Count == 0)
+            return;
+
+        void AddAudio(string label, double previousValue, double currentValue, string unit, string format, int decimals, bool relative, string note)
+        {
+            comparison.Metrics.Add(new WrappedComparisonMetric
+            {
+                Label = $"{label} {note}",
+                Previous = previousValue,
+                Current = currentValue,
+                Delta = currentValue - previousValue,
+                PreviousText = previousValue.ToString(format),
+                CurrentText = currentValue.ToString(format),
+                Unit = unit,
+                Decimals = decimals,
+                RelativeChange = relative,
+            });
+        }
+
+        string note = current.Complete && previous.Complete ? "" : " (measured songs only)";
+        AddAudio("Average tempo of what you played", previous.Tempo, current.Tempo, "BPM", "0.#", 1, false, note);
+        // Loudness and brightness are level-like: their absolute difference means nothing to a reader, so
+        // they are compared as a percentage of the previous value.
+        AddAudio("Average loudness of what you played", previous.Loudness, current.Loudness, "", "0.000", 3, true, note);
+        AddAudio("Average brightness of what you played", previous.Brightness, current.Brightness, "Hz", "0", 0, true, note);
+
+        _ = snapshot;
+    }
+
+    /// <summary>
+    /// Turns the history rows of one period into the analysis inputs: one entry per song, carrying that
+    /// song's in-period events. Shared by the report and the comparison so both resolve song identity and
+    /// artist the same way.
+    /// </summary>
+    (List<WrappedSongInput> Inputs, List<(WrappedSongInput Song, WrappedEvent Event)> Events) BuildSongInputs(
+        LibrarySnapshot snapshot,
+        Dictionary<Guid, UpvotedSong> songsById,
+        IReadOnlyList<SongHistoryEntry> events)
+    {
+        var inputs = new List<WrappedSongInput>();
+        var flattened = new List<(WrappedSongInput Song, WrappedEvent Event)>();
+
+        var bySong = events
+            .Where(entry => entry.SongId is not null && songsById.ContainsKey(entry.SongId.Value))
+            .GroupBy(entry => entry.SongId!.Value);
+
+        foreach (var group in bySong)
+        {
+            var song = songsById[group.Key];
+            snapshot.PathsBySongId.TryGetValue(song.SongId, out string? path);
+
+            var orderedEvents = group
+                .OrderBy(entry => entry.Date)
+                .Select(entry => new WrappedEvent(entry.Date, entry.ScoreChange))
+                .ToList();
+
+            var input = new WrappedSongInput
+            {
+                SongId = song.SongId,
+                Name = song.Name,
+                StoredArtist = song.Artist,
+                Album = song.Album,
+                FilePath = path ?? "",
+                // The library scan is the authority on what exists: asking the filesystem here would mean
+                // one stat per song against a folder that may be a NAS.
+                HasFile = !string.IsNullOrEmpty(path),
+                Score = song.Score,
+                Streak = song.Streak,
+                TotalLikes = song.TotalLikes,
+                TotalDislikes = song.TotalDislikes,
+                Volume = song.Volume,
+                DateAdded = song.DateAdded,
+                Events = orderedEvents,
+            };
+
+            inputs.Add(input);
+            foreach (var wrappedEvent in orderedEvents)
+                flattened.Add((input, wrappedEvent));
+        }
+
+        return (inputs, flattened);
     }
 
     /// <summary>

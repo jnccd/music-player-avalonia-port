@@ -422,6 +422,11 @@ public partial class WrappedView : UserControl
         ContentPanel.Children.Add(Section("What went into this", scope));
 
         ContentPanel.Children.Add(Section("The numbers", BuildHeadline(report.Headline)));
+
+        var comparison = report.Comparison;
+        if (comparison != null)
+            ContentPanel.Children.Add(Section($"Compared with {comparison.PreviousYear}", BuildComparison(comparison)));
+
         ContentPanel.Children.Add(Section("Top artists", BuildArtists(report.TopArtists)));
         ContentPanel.Children.Add(Section("Most played songs", BuildSongs(report.TopSongs, showReason: true)));
         ContentPanel.Children.Add(Section("Obsessions (plays per day of listening)", BuildSongs(report.Obsessions, showReason: true)));
@@ -485,8 +490,149 @@ public partial class WrappedView : UserControl
         return grid;
     }
 
-    Control BuildArtists(List<WrappedArtist> artists)
+    /// <summary>
+    /// Renders the year-over-year section: the headline movements, a table of every measured quantity in
+    /// both years, and which artists moved.
+    /// </summary>
+    Control BuildComparison(WrappedYearComparison comparison)
     {
+        var panel = new StackPanel { Spacing = 10 };
+
+        if (comparison.Metrics.Count == 0 && comparison.ArtistGains.Count == 0 && comparison.ArtistLosses.Count == 0)
+        {
+            panel.Children.Add(Info($"There is no listening recorded before {comparison.CurrentYear}, so there is nothing to compare with yet."));
+            return panel;
+        }
+
+        if (comparison.Highlights.Count > 0)
+        {
+            var highlights = new StackPanel { Spacing = 3 };
+            foreach (string highlight in comparison.Highlights)
+                highlights.Children.Add(new TextBlock { Text = "• " + highlight, TextWrapping = TextWrapping.Wrap });
+            panel.Children.Add(highlights);
+        }
+
+        // Every quantity in both years side by side, so the movement can be checked rather than trusted.
+        var grid = NewGrid(4);
+        AddHeader(grid, "Measure", comparison.PreviousYear.ToString(), comparison.CurrentYear.ToString(), "Change");
+        int row = 1;
+        foreach (var metric in comparison.Metrics)
+        {
+            AddCells(grid, row, metric.Label, metric.PreviousText, metric.CurrentText, "");
+            // The change is coloured and arrowed from its own sign, so a fall is never shown as growth.
+            var change = new TextBlock
+            {
+                Text = DescribeChange(metric),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 12, 2),
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = ChangeBrush(metric),
+            };
+            Grid.SetColumn(change, 3);
+            Grid.SetRow(change, row);
+            grid.Children.Add(change);
+            grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            row++;
+        }
+        panel.Children.Add(grid);
+
+        AddArtistShift(panel, $"Artists you played more than in {comparison.PreviousYear}", comparison.ArtistGains, gained: true);
+        AddArtistShift(panel, $"Artists you played less than in {comparison.PreviousYear}", comparison.ArtistLosses, gained: false);
+
+        if (comparison.NewArtists.Count > 0)
+        {
+            var newArtists = new StackPanel { Spacing = 2 };
+            newArtists.Children.Add(new TextBlock { Text = "New to you this year", FontWeight = FontWeight.SemiBold });
+            newArtists.Children.Add(Info(string.Join(", ", comparison.NewArtists)));
+            panel.Children.Add(newArtists);
+        }
+
+        if (comparison.ReturningArtists.Count > 0)
+        {
+            var returning = new StackPanel { Spacing = 2 };
+            returning.Children.Add(new TextBlock { Text = $"Back after a break (not played in {comparison.PreviousYear})", FontWeight = FontWeight.SemiBold });
+            returning.Children.Add(Info(string.Join(", ", comparison.ReturningArtists)));
+            panel.Children.Add(returning);
+        }
+
+        return panel;
+    }
+
+    /// <summary>A change, worded from its own sign and unit ("+42 plays", "-3.2 points", "no change").</summary>
+    static string DescribeChange(WrappedComparisonMetric metric)
+    {
+        if (Math.Abs(metric.Delta) < 1e-9)
+            return "no change";
+
+        string sign = metric.Delta > 0 ? "+" : "-";
+
+        // A level-like value is compared relatively: "average loudness 0.136 -> 0.124" is "down 9%", which
+        // says something, while its absolute difference is 0.012 and means nothing to a reader.
+        if (metric.RelativeChange)
+        {
+            if (Math.Abs(metric.Previous) < 1e-9)
+                return "no comparison possible";
+            double relativePercent = 100.0 * metric.Delta / Math.Abs(metric.Previous);
+            return $"{sign}{Math.Abs(relativePercent):0.#}%";
+        }
+
+        double magnitude = Math.Abs(metric.Delta);
+
+        // The change is shown at the precision the metric itself is displayed with, so "0,124 -> 0,125"
+        // reads "up 0.001" and not "up 0" - a real movement must never be displayed as no movement. When the
+        // difference is smaller still, extra decimals are added rather than rounding it away.
+        int decimals = Math.Clamp(metric.Decimals, 0, 3);
+        if (decimals == 0)
+            return WordChange(sign, magnitude.ToString("#,0"), metric);
+
+        while (decimals <= 6 && Math.Round(magnitude, decimals) == 0.0)
+            decimals++;
+        decimals = Math.Min(decimals, 6);
+
+        // Trailing zeros are dropped, so a difference of exactly 2 is shown as "2" at one decimal.
+        string number = magnitude.ToString("0." + new string('#', decimals));
+        return WordChange(sign, number, metric);
+    }
+
+    /// <summary>Attaches the sign and unit to an already formatted magnitude.</summary>
+    static string WordChange(string sign, string number, WrappedComparisonMetric metric)
+    {
+        if (metric.IsPercentagePoints)
+            return $"{sign}{number} points";
+        // Units that are words get a space ("-3 days"); symbols stay attached ("+12%").
+        if (metric.Unit.Length == 0)
+            return $"{sign}{number}";
+        return char.IsLetter(metric.Unit[0]) ? $"{sign}{number} {metric.Unit}" : $"{sign}{number}{metric.Unit}";
+    }
+
+    /// <summary>
+    /// The colour of a change. A rise is green only where a rise is the expected "more" direction; for
+    /// anything else (a shrinking library, a rising skip rate) it stays neutral rather than congratulating
+    /// the listener for a change that may not be what they wanted.
+    /// </summary>
+    static IBrush ChangeBrush(WrappedComparisonMetric metric)
+    {
+        if (Math.Abs(metric.Delta) < 1e-9)
+            return new SolidColorBrush(Color.Parse("#99FFFFFF"));
+
+        bool rise = metric.Delta > 0;
+        bool good = rise == metric.RiseIsPositive;
+        return new SolidColorBrush(Color.Parse(good ? "#8CE99A" : "#FFC9C9"));
+    }
+
+    static void AddArtistShift(StackPanel panel, string title, List<WrappedArtistShift> shifts, bool gained)
+    {
+        if (shifts.Count == 0)
+            return;
+
+        var block = new StackPanel { Spacing = 2 };
+        block.Children.Add(new TextBlock { Text = title, FontWeight = FontWeight.SemiBold });
+        foreach (var shift in shifts)
+            block.Children.Add(Info($"{shift.Name}: {shift.PreviousPlays} -> {shift.CurrentPlays} plays ({(gained ? "+" : "")}{shift.Delta})"));
+        panel.Children.Add(block);
+    }
+
+    Control BuildArtists(List<WrappedArtist> artists)    {
         if (artists.Count == 0)
             return Info("No artist could be determined for the songs of this period (the file names carry no artist).");
 
@@ -935,6 +1081,19 @@ public partial class WrappedView : UserControl
         text.AppendLine();
 
         AppendSongs(text, "MOST PLAYED", report.TopSongs);
+
+        var exportedComparison = report.Comparison;
+        if (exportedComparison != null)
+        {
+            text.AppendLine($"COMPARED WITH {exportedComparison.PreviousYear}");
+            foreach (var metric in exportedComparison.Metrics)
+                text.AppendLine($"  {metric.Label}: {metric.PreviousText} -> {metric.CurrentText} ({DescribeChange(metric)})");
+            if (exportedComparison.NewArtists.Count > 0)
+                text.AppendLine($"  new to you: {string.Join(", ", exportedComparison.NewArtists)}");
+            if (exportedComparison.ReturningArtists.Count > 0)
+                text.AppendLine($"  back after a break: {string.Join(", ", exportedComparison.ReturningArtists)}");
+            text.AppendLine();
+        }
         AppendSongs(text, "OBSESSIONS", report.Obsessions);
         AppendSongs(text, "HALL OF FAME", report.HallOfFame);
         AppendSongs(text, "HALL OF SHAME", report.HallOfShame);
