@@ -26,10 +26,22 @@ public class SongPlaybackService
     // Guards the progress bar value against out-of-order writes from the parallel scan tasks.
     readonly object progressLock = new();
 
+    /// <summary>
+    /// One runtime playback history entry: the song and whether THIS entry was upvoted while it was the
+    /// current one. Navigating back and forth never rewrites entries, so a song that was just liked stays
+    /// the newest entry; without the flag, skipping to an older song and coming back would run the
+    /// "the newest song was skipped" downvote again and turn the like into a dislike (streak 1 -> -1).
+    /// </summary>
+    sealed class PlaybackHistoryEntry(AvailableSong song)
+    {
+        public AvailableSong Song { get; set; } = song;
+        public bool Upvoted { get; set; }
+    }
+
     int RuntimePlayHistoryIndex = 0;
-    readonly List<AvailableSong> RuntimePlayHistory = [];
+    readonly List<PlaybackHistoryEntry> RuntimePlayHistory = [];
     public AvailableSong? CurrentlyPlaying => RuntimePlayHistoryIndex >= 0 && RuntimePlayHistoryIndex < RuntimePlayHistory.Count ?
-        RuntimePlayHistory[RuntimePlayHistoryIndex] :
+        RuntimePlayHistory[RuntimePlayHistoryIndex].Song :
         null;
     public bool UpvoteLockedIn
     {
@@ -285,9 +297,11 @@ public class SongPlaybackService
 
         lock (RuntimePlayHistory)
         {
+            // Only the song of the entry is swapped: the upvote flag belongs to the entry and must survive
+            // the rename, so replaying a renamed entry stays protected from the skip downvote as well.
             for (int i = 0; i < RuntimePlayHistory.Count; i++)
-                if (pathMap.ContainsKey(RuntimePlayHistory[i].FilePath))
-                    RuntimePlayHistory[i] = new AvailableSong(pathMap[RuntimePlayHistory[i].FilePath], RuntimePlayHistory[i].UpvotedSongId);
+                if (pathMap.TryGetValue(RuntimePlayHistory[i].Song.FilePath, out string? newPath))
+                    RuntimePlayHistory[i].Song = new AvailableSong(newPath, RuntimePlayHistory[i].Song.UpvotedSongId);
         }
 
         SongChoosingService.CreateSongChoosingDataStructure(AvailableSongs);
@@ -353,7 +367,7 @@ public class SongPlaybackService
     {
         lock (RuntimePlayHistory)
         {
-            RuntimePlayHistory.Add(songToQueue);
+            RuntimePlayHistory.Add(new PlaybackHistoryEntry(songToQueue));
         }
     }
 
@@ -374,12 +388,11 @@ public class SongPlaybackService
         lock (RuntimePlayHistory)
         {
             AvailableSong? current = CurrentlyPlaying;
-            RuntimePlayHistory.RemoveAll(song => song.UpvotedSongId is Guid removedId && removedIds.Contains(removedId));
+            RuntimePlayHistory.RemoveAll(entry => entry.Song.UpvotedSongId is Guid removedId && removedIds.Contains(removedId));
 
             // Keep the index on the same song instance if it survived, otherwise clamp to the new end.
-            RuntimePlayHistoryIndex = current != null && RuntimePlayHistory.Contains(current)
-                ? RuntimePlayHistory.IndexOf(current)
-                : Math.Max(0, RuntimePlayHistory.Count - 1);
+            int currentIndex = current == null ? -1 : RuntimePlayHistory.FindIndex(entry => entry.Song == current);
+            RuntimePlayHistoryIndex = currentIndex >= 0 ? currentIndex : Math.Max(0, RuntimePlayHistory.Count - 1);
         }
 
         SongChoosingService.CreateSongChoosingDataStructure(AvailableSongs);
@@ -390,7 +403,7 @@ public class SongPlaybackService
         lock (RuntimePlayHistory)
         {
             // Update RuntimePlayHistory
-            RuntimePlayHistory.Add(availableSong);
+            RuntimePlayHistory.Add(new PlaybackHistoryEntry(availableSong));
             RuntimePlayHistoryIndex = RuntimePlayHistory.Count - 1;
 
             // Invoke Events
@@ -401,6 +414,25 @@ public class SongPlaybackService
                 AudioLibWrapper.PlayProgress = secondToStartAt / AudioLibWrapper.SongDurationSeconds;
         }
     }
+
+    /// <summary>
+    /// True when the entry that is playing right now was upvoted in this runtime history. Such an entry
+    /// is never downvoted by a skip: leaving it is exactly what cast the like in the first place, and a
+    /// later skip (after navigating away and back to it) must not flip that like into a dislike.
+    /// </summary>
+    bool IsCurrentHistoryEntryUpvoted() =>
+        RuntimePlayHistoryIndex >= 0 && RuntimePlayHistoryIndex < RuntimePlayHistory.Count && RuntimePlayHistory[RuntimePlayHistoryIndex].Upvoted;
+
+    /// <summary>
+    /// Remembers on the playing entry that its like was cast (see <see cref="PlaybackHistoryEntry"/>), so
+    /// the skip that ends this entry can never vote it down later.
+    /// </summary>
+    void MarkCurrentHistoryEntryUpvoted()
+    {
+        if (RuntimePlayHistoryIndex >= 0 && RuntimePlayHistoryIndex < RuntimePlayHistory.Count)
+            RuntimePlayHistory[RuntimePlayHistoryIndex].Upvoted = true;
+    }
+
     public void GetNextSong()
     {
         lock (RuntimePlayHistory)
@@ -411,10 +443,12 @@ public class SongPlaybackService
                 SongVotingService.UpvoteSong(CurrentlyPlaying
                     ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"),
                     AvailableSongs);
+                MarkCurrentHistoryEntryUpvoted();
                 UpvoteLockedIn = false;
             }
             else if (RuntimePlayHistoryIndex > 0
                 && RuntimePlayHistoryIndex == RuntimePlayHistory.Count - 1 // Last Song in filled RuntimePlayHistory
+                && !IsCurrentHistoryEntryUpvoted() // ...and not liked already (a skip must not dislike a liked song)
                 && (1 - AudioLibWrapper.PlayProgress) * AudioLibWrapper.SongDurationSeconds > 1)
             {
                 SongVotingService.DownvoteSong(CurrentlyPlaying
@@ -427,7 +461,7 @@ public class SongPlaybackService
             while (RuntimePlayHistoryIndex >= RuntimePlayHistory.Count)
             {
                 var nextSong = ChooseNextSong();
-                RuntimePlayHistory.Add(nextSong);
+                RuntimePlayHistory.Add(new PlaybackHistoryEntry(nextSong));
             }
 
             // Invoke Events
@@ -445,6 +479,7 @@ public class SongPlaybackService
                 SongVotingService.UpvoteSong(CurrentlyPlaying
                     ?? throw new InvalidDataException("No currently playing song in GetNextSong()!"),
                     AvailableSongs);
+                MarkCurrentHistoryEntryUpvoted();
                 UpvoteLockedIn = false;
             }
 
@@ -453,7 +488,7 @@ public class SongPlaybackService
             while (RuntimePlayHistoryIndex < 0)
             {
                 var newPreviousSong = ChooseNextSong();
-                RuntimePlayHistory.Insert(0, newPreviousSong);
+                RuntimePlayHistory.Insert(0, new PlaybackHistoryEntry(newPreviousSong));
                 RuntimePlayHistoryIndex++;
             }
 
