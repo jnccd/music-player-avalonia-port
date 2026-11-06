@@ -164,6 +164,15 @@ public partial class MainView : UserControl
             RoutingStrategies.Bubble | RoutingStrategies.Tunnel,
             handledEventsToo: true
         );
+        // Seeking with Left/Right gets its own handler that only listens to the bubble pass. A handler
+        // registered for Tunnel|Bubble (like the two above) is invoked once per pass, which would apply the
+        // seek step twice per key press (see UserControl_SeekKeyDown).
+        this.AddHandler(
+            InputElement.KeyDownEvent,
+            UserControl_SeekKeyDown,
+            RoutingStrategies.Bubble,
+            handledEventsToo: true
+        );
         audioLibWrapper.PlaybackStateChanged += (e, s) =>
         {
             RefreshCustomControls();
@@ -347,5 +356,28 @@ public partial class MainView : UserControl
         {
             QuickPlaySong();
         }
+    }
+
+    /// <summary>
+    /// Seconds one Left/Right key press seeks inside the current song.
+    /// </summary>
+    const double SeekStepSeconds = 5;
+
+    /// <summary>
+    /// Seek within the song that is playing instead of switching songs: Left goes 5 seconds back, Right 5
+    /// seconds forward. The DxMGP client bound these two keys to previous/next song; both clients seek now.
+    /// <see cref="SongPlaybackService.SeekBySeconds"/> keeps the target inside the song, so pressing Left at
+    /// the very start stays at the start (it never switches to the previous song) and pressing Right near
+    /// the end stops at the end. Does nothing while no song is loaded - there is no progress to seek from.
+    /// A held key auto-repeats, which arrives as one KeyDown per repeat, so it seeks in 5 second steps.
+    /// </summary>
+    private void UserControl_SeekKeyDown(object? sender, Avalonia.Input.KeyEventArgs e)
+    {
+        if (e.Key != Key.Left && e.Key != Key.Right)
+            return;
+
+        // Handled, so the arrows cannot move the keyboard focus around the window instead.
+        e.Handled = true;
+        songPlaybackService.SeekBySeconds(e.Key == Key.Right ? SeekStepSeconds : -SeekStepSeconds);
     }
 }

@@ -416,6 +416,34 @@ public class SongPlaybackService
     }
 
     /// <summary>
+    /// Seeks within the song that is playing right now by the given amount of seconds - negative seeks
+    /// backwards, positive forwards (see the Left/Right hotkeys of the desktop client, and the DxMGP port's
+    /// SongManager.SeekBySeconds, which does the same).
+    /// <para>
+    /// The target stays inside the song: it is clamped to [0,1] of the playback progress, so seeking
+    /// backwards at the start just stays at the start (it never switches to the previous song) and seeking
+    /// past the end stays at the end. While no song is loaded the progress is null, and there is nothing
+    /// to seek either - the call then simply does nothing instead of deriving a seek from a null position.
+    /// </para>
+    /// </summary>
+    /// <param name="seconds">Amount to seek, positive = forward, negative = backward.</param>
+    public void SeekBySeconds(double seconds)
+    {
+        if (AudioLibWrapper.PlayProgress is not float progress
+            || AudioLibWrapper.SongDurationSeconds is not float duration
+            || !(duration > 0)
+            || !float.IsFinite(progress))
+            return;
+
+        // Duration is in seconds, so this is the seek converted into the [0,1] playback progress.
+        float step = (float)(seconds / duration);
+        if (!float.IsFinite(step))
+            return;
+
+        AudioLibWrapper.PlayProgress = Math.Clamp(progress + step, 0f, 1f);
+    }
+
+    /// <summary>
     /// True when the entry that is playing right now was upvoted in this runtime history. Such an entry
     /// is never downvoted by a skip: leaving it is exactly what cast the like in the first place, and a
     /// later skip (after navigating away and back to it) must not flip that like into a dislike.

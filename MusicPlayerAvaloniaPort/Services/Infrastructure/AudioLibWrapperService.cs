@@ -102,19 +102,34 @@ public class AudioLibWrapperService : IAudioPlaybackService
         }
     } = 0;
     /// <summary>
-    /// [0,1]
+    /// Playback position in [0,1]. Setting it seeks and records the seeked distance in
+    /// <see cref="SeekedPlayProgress"/>, which the vote scoring needs to tell "listened through" from
+    /// "skipped/sought". The value is clamped to the song, and writes are ignored while no song is loaded
+    /// (the getter is null then): a seek on the arrow key hotkeys or through MPRIS must never throw or
+    /// leave the seeked-distance accounting in a broken state.
     /// </summary>
     public float? PlayProgress
     {
         get => soundPlayer?.Time / soundPlayer?.Duration;
         set
         {
-            if (value != null)
-            {
-                SeekedPlayProgress += value.Value - (PlayProgress
-                    ?? throw new InvalidDataException($"{nameof(PlayProgress)} is null!"));
-                soundPlayer?.Seek(value.Value * soundPlayer.Duration);
-            }
+            var player = soundPlayer;
+            if (value is not float newProgress || player is null)
+                return;
+
+            // No known duration -> nothing to seek to (the player exists but its stream is still opening, or
+            // the song was switched away).
+            float duration = player.Duration;
+            if (!(duration > 0))
+                return;
+
+            float currentProgress = PlayProgress ?? 0;
+            if (!float.IsFinite(currentProgress))
+                currentProgress = 0;
+
+            newProgress = Math.Clamp(newProgress, 0f, 1f);
+            SeekedPlayProgress += newProgress - currentProgress;
+            player.Seek(newProgress * duration);
         }
     }
     public float? SongDurationSeconds => soundPlayer?.Duration;
