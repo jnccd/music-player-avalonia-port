@@ -2,7 +2,6 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -130,23 +129,32 @@ public partial class MainView : UserControl
         });
     }
 
+    /// <summary>
+    /// Shortest gap between two wheel seeks. A high resolution wheel or a trackpad delivers several events
+    /// for what the user feels as one notch, so this collapses those into a single 5 second step - while a
+    /// deliberate spin (notch after notch) still seeks repeatedly, about ten steps per second.
+    /// </summary>
+    const int WheelSeekDebounceMilliseconds = 100;
+
     DateTime lastPointerWheelChangedEvent = DateTime.MinValue;
+
+    /// <summary>
+    /// Mouse wheel seeks inside the current song: wheel up 5 seconds forward, wheel down 5 seconds back. The
+    /// wheel used to switch to the next/previous song; a seek is a cheap in-place operation, so unlike that
+    /// song switch it runs directly on the UI thread (no file has to be opened). The song bounds are enforced
+    /// by <see cref="SongPlaybackService.SeekBySeconds"/>, exactly like for the arrow keys.
+    /// </summary>
     private void MainView_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
     {
-        if ((DateTime.Now - lastPointerWheelChangedEvent).TotalSeconds > 3)
-        {
-            Debug.WriteLine($"Scrollwheel event! {e.Delta.Y}");
-            lastPointerWheelChangedEvent = DateTime.Now;
-            // Run the switch off the UI thread: starting a song opens its file (and two decoder streams) on
-            // the song library, which can be a NAS that has to spin up first. Blocking the UI thread there
-            // froze the window and made it impossible to even show the loading indicator (see
-            // MainView.OnSongChangeStarted). GetNextSong/GetPreviousSong serialize on the runtime play
-            // history lock, so concurrent switches stay ordered exactly like the sequential UI calls did.
-            if (e.Delta.Y > 0)
-                Task.Run(() => Program.WrapInTry(songPlaybackService.GetNextSong));
-            else if (e.Delta.Y < 0)
-                Task.Run(() => Program.WrapInTry(songPlaybackService.GetPreviousSong));
-        }
+        if (e.Delta.Y == 0)
+            return;
+        if ((DateTime.Now - lastPointerWheelChangedEvent).TotalMilliseconds < WheelSeekDebounceMilliseconds)
+            return;
+        lastPointerWheelChangedEvent = DateTime.Now;
+
+        // Handled, so nothing above the main view scrolls along with a wheel seek.
+        e.Handled = true;
+        songPlaybackService.SeekBySeconds(e.Delta.Y > 0 ? SeekStepSeconds : -SeekStepSeconds);
     }
 
     void ButtonUpvote_Click(object? sender, RoutedEventArgs e)
